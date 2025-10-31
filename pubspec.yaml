@@ -1,0 +1,50 @@
+name: yemchi_wyji
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.7.0 <4.0.0"   # Contrainte de version Dart (garde proche de ta version actuelle)
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Reseau / Modeles (a utiliser dans ton app)
+  dio: ^5.7.0
+  json_annotation: ^4.9.0
+  freezed_annotation: ^3.1.0
+
+  # Icones iOS
+  cupertino_icons: ^1.0.8
+  provider: ^6.1.2
+  flutter_map: ^8.2.2
+  latlong2: ^0.9.1
+  geolocator: ^14.0.2
+  flutter_compass: ^0.8.0
+  flutter_secure_storage: ^9.2.4
+  shared_preferences: ^2.3.2
+  
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # Lints
+  flutter_lints: ^5.0.0
+
+  # Generation de code (seulement en dev)
+  build_runner: ^2.4.9
+  json_serializable: ^6.8.0
+  freezed: ^3.1.0
+  
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+
+  # Docommente si tu ajoutes des fonts custom
+  # fonts:
+  #   - family: YourFont
+  #     fonts:
+  #       - asset: assets/fonts/YourFont-Regular.ttf
