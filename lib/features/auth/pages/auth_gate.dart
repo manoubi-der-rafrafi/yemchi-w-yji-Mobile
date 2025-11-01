@@ -1,7 +1,9 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:yemchi_wyji/core/models/utilisateur.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
 import 'package:yemchi_wyji/features/auth/pages/login_page.dart';
+import 'package:yemchi_wyji/features/client/client_home_navbar.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/home_coursier_page.dart';
 
 class AuthGate extends StatefulWidget {
@@ -35,8 +37,13 @@ class _AuthGateState extends State<AuthGate> {
     return ValueListenableBuilder(
       valueListenable: auth.currentUser,
       builder: (context, user, _) {
-        if (user == null) return LoginPage();
-        return HomeCoursierPage();
+        if (user == null ) return LoginPage();
+        else if (user.role == Role.client) {
+          return ClientHome();
+        } else if (user.role == Role.transporteur) {
+          return HomeCoursierPage();
+        }
+        else return LoginPage();
       },
     );
   }
