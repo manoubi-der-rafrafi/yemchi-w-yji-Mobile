@@ -103,4 +103,42 @@ class ProduitService {
       return source; // laisser le ApiException afficher le body brut dans les logs
     }
   }
+  // =======================================
+// Extensions Angular portées en Flutter
+// =======================================
+
+// Récupérer tous les produits d'une commande donnée
+Future<List<Produit>> getByCommande(String idCommande) async {
+  final r = await _api.get('$_base/commande/$idCommande');
+  final body = _safeJsonDecode(r.body);
+
+  if (body is List) {
+    return body
+        .map((e) => ProduitDTO.fromMap(e as Map<String, dynamic>).toModel())
+        .toList();
+  }
+
+  throw ApiException(r.statusCode, 'Format inattendu pour GET $_base/commande/$idCommande');
+}
+
+// Recherche de produits (nom / type)
+Future<List<Produit>> search({String? nom, String? type}) async {
+  final Map<String, String> params = {};
+  if (nom != null && nom.trim().isNotEmpty) params['nom'] = nom;
+  if (type != null && type.trim().isNotEmpty) params['type'] = type;
+
+  final query = _buildQuery(params);
+  final r = await _api.get('$_base/search$query');
+  final body = _safeJsonDecode(r.body);
+
+  if (body is List) {
+    return body
+        .map((e) => ProduitDTO.fromMap(e as Map<String, dynamic>).toModel())
+        .toList();
+  }
+
+  throw ApiException(r.statusCode, 'Format inattendu pour la recherche de produits');
+}
+
+
 }

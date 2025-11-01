@@ -1,28 +1,26 @@
-// lib/core/models/produit.dart
 import 'dart:convert';
 
-/// Modèle Produit pour le front Flutter
-/// Aligné sur le backend Spring Boot (MongoDB):
-/// champs connus: id, nom, type, image1, image2, image3, prix(BigDecimal), commandeId
+/// Modele Produit pour le front Flutter.
+/// Aligne sur le backend Spring Boot (MongoDB).
 class Produit {
-  // Identifiant MongoDB
   final String id;
 
-  // Métadonnées
+  // Metadonnees
   final String? nom;
   final String? type;
 
-  // Médias
+  // Medias
   final String? image1;
   final String? image2;
   final String? image3;
 
-  // Prix (BigDecimal côté Java) – on le représente en double ici
-  // Astuce: si vous voulez une meilleure précision, utilisez int (centimes)
-  // et convertissez à l'affichage.
+  // Prix (BigDecimal cote Java) represente ici en double
   final double? prix;
 
-  // Lien vers la commande associée
+  // Quantite commandee (optionnelle)
+  final int? quantite;
+
+  // Lien vers la commande associee
   final String? commandeId;
 
   const Produit({
@@ -33,10 +31,10 @@ class Produit {
     this.image2,
     this.image3,
     this.prix,
+    this.quantite,
     this.commandeId,
   });
 
-  /// Copie immuable
   Produit copyWith({
     String? id,
     String? nom,
@@ -45,6 +43,7 @@ class Produit {
     String? image2,
     String? image3,
     double? prix,
+    int? quantite,
     String? commandeId,
   }) {
     return Produit(
@@ -55,26 +54,29 @@ class Produit {
       image2: image2 ?? this.image2,
       image3: image3 ?? this.image3,
       prix: prix ?? this.prix,
+      quantite: quantite ?? this.quantite,
       commandeId: commandeId ?? this.commandeId,
     );
   }
 
-  // =========================
-  //        JSON / Map
-  // =========================
-
-  /// fromMap compatible avec JSON décodé
   factory Produit.fromMap(Map<String, dynamic> map) {
-    // le champ id peut arriver sous la forme "_id" (Mongo) ou "id"
-    final id = (map['_id'] ?? map['id']).toString();
+    final dynamic rawId = map['_id'] ?? map['id'];
+    final String id = rawId != null ? rawId.toString() : '';
 
-    // prix peut être num, String ou null -> on uniformise en double?
-    double? _parsePrix(dynamic v) {
-      if (v == null) return null;
-      if (v is num) return v.toDouble();
-      final s = v.toString().trim();
+    double? parsePrix(dynamic value) {
+      if (value == null) return null;
+      if (value is num) return value.toDouble();
+      final s = value.toString().trim();
       if (s.isEmpty) return null;
       return double.tryParse(s.replaceAll(',', '.'));
+    }
+
+    int? parseQuantite(dynamic value) {
+      if (value == null) return null;
+      if (value is num) return value.toInt();
+      final s = value.toString().trim();
+      if (s.isEmpty) return null;
+      return int.tryParse(s);
     }
 
     return Produit(
@@ -84,7 +86,8 @@ class Produit {
       image1: map['image1'] as String?,
       image2: map['image2'] as String?,
       image3: map['image3'] as String?,
-      prix: _parsePrix(map['prix']),
+      prix: parsePrix(map['prix']),
+      quantite: parseQuantite(map['quantite'] ?? map['quantity']),
       commandeId: map['commandeId'] as String?,
     );
   }
@@ -98,6 +101,7 @@ class Produit {
       'image2': image2,
       'image3': image3,
       'prix': prix,
+      'quantite': quantite,
       'commandeId': commandeId,
     };
   }
@@ -105,15 +109,12 @@ class Produit {
   factory Produit.fromJson(String source) =>
       Produit.fromMap(json.decode(source) as Map<String, dynamic>);
 
-  String toJson({bool includeId = true}) => json.encode(toMap(includeId: includeId));
-
-  // =========================
-  //     Helpers & Equality
-  // =========================
+  String toJson({bool includeId = true}) =>
+      json.encode(toMap(includeId: includeId));
 
   @override
   String toString() {
-    return 'Produit(id: '"$id"', nom: '"$nom"', type: '"$type"', prix: '"$prix"', commandeId: '"$commandeId"')';
+    return 'Produit(id: $id, nom: $nom, type: $type, prix: $prix, quantite: $quantite, commandeId: $commandeId)';
   }
 
   @override
@@ -127,6 +128,7 @@ class Produit {
         other.image2 == image2 &&
         other.image3 == image3 &&
         other.prix == prix &&
+        other.quantite == quantite &&
         other.commandeId == commandeId;
   }
 
@@ -139,6 +141,7 @@ class Produit {
         image2,
         image3,
         prix,
+        quantite,
         commandeId,
       );
 }

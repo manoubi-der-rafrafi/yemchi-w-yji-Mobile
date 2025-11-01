@@ -1,9 +1,6 @@
-// lib/features/produit/dto/produit_dto.dart
-
 import 'package:yemchi_wyji/core/models/produit.dart';
 
-/// ProduitDTO : classe de transfert entre l’API et le modèle Flutter.
-/// Inspirée de commande_dto.dart — même logique.
+/// ProduitDTO : classe de transfert entre l'API et le modele Flutter.
 class ProduitDTO {
   final String? id;
   final String? nom;
@@ -12,9 +9,10 @@ class ProduitDTO {
   final String? image2;
   final String? image3;
   final double? prix;
+  final int? quantite;
   final String? commandeId;
 
-  ProduitDTO({
+  const ProduitDTO({
     this.id,
     this.nom,
     this.type,
@@ -22,10 +20,10 @@ class ProduitDTO {
     this.image2,
     this.image3,
     this.prix,
+    this.quantite,
     this.commandeId,
   });
 
-  /// Convertit le DTO en modèle métier Flutter
   Produit toModel() {
     return Produit(
       id: id ?? '',
@@ -35,11 +33,11 @@ class ProduitDTO {
       image2: image2,
       image3: image3,
       prix: prix,
+      quantite: quantite,
       commandeId: commandeId,
     );
   }
 
-  /// Crée un DTO à partir du modèle Flutter
   factory ProduitDTO.fromModel(Produit produit) {
     return ProduitDTO(
       id: produit.id,
@@ -49,47 +47,58 @@ class ProduitDTO {
       image2: produit.image2,
       image3: produit.image3,
       prix: produit.prix,
+      quantite: produit.quantite,
       commandeId: produit.commandeId,
     );
   }
 
-  /// Crée un DTO à partir d’une Map (JSON)
   factory ProduitDTO.fromMap(Map<String, dynamic> map) {
-    double? _parsePrix(dynamic v) {
-      if (v == null) return null;
-      if (v is num) return v.toDouble();
-      return double.tryParse(v.toString().replaceAll(',', '.'));
+    double? parsePrix(dynamic value) {
+      if (value == null) return null;
+      if (value is num) return value.toDouble();
+      return double.tryParse(value.toString().replaceAll(',', '.'));
+    }
+
+    int? parseQuantite(dynamic value) {
+      if (value == null) return null;
+      if (value is num) return value.toInt();
+      final s = value.toString().trim();
+      if (s.isEmpty) return null;
+      return int.tryParse(s);
     }
 
     return ProduitDTO(
       id: map['_id']?.toString() ?? map['id']?.toString(),
-      nom: map['nom'],
-      type: map['type'],
-      image1: map['image1'],
-      image2: map['image2'],
-      image3: map['image3'],
-      prix: _parsePrix(map['prix']),
-      commandeId: map['commandeId'],
+      nom: map['nom'] as String?,
+      type: map['type'] as String?,
+      image1: map['image1'] as String?,
+      image2: map['image2'] as String?,
+      image3: map['image3'] as String?,
+      prix: parsePrix(map['prix']),
+      quantite: parseQuantite(map['quantite'] ?? map['quantity']),
+      commandeId: map['commandeId'] as String?,
     );
   }
 
-  /// Convertit en Map (pour envoi API)
   Map<String, dynamic> toMap({bool includeId = false}) {
-    final map = {
+    final map = <String, dynamic>{
       'nom': nom,
       'type': type,
       'image1': image1,
       'image2': image2,
       'image3': image3,
       'prix': prix,
+      'quantite': quantite,
       'commandeId': commandeId,
     };
-    if (includeId && id != null) map['id'] = id;
+    if (includeId && id != null) {
+      map['id'] = id;
+    }
     return map;
   }
 
   @override
   String toString() {
-    return 'ProduitDTO(id: $id, nom: $nom, type: $type, prix: $prix)';
+    return 'ProduitDTO(id: $id, nom: $nom, type: $type, prix: $prix, quantite: $quantite)';
   }
 }
