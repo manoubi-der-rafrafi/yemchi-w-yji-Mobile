@@ -255,19 +255,70 @@ class MapViewState extends State<MapView> {
 
   void _handleCommandeTap(Commande commande) {
     if (!mounted) return;
-    context.read<HomeController>().selectCommande(commande);
-    _loadRouteForCommande(commande);
+    final homeCtrl = context.read<HomeController>();
+    final bool isMine =
+        homeCtrl.mesCommandes.any((c) => c.id == commande.id);
+    homeCtrl.selectCommande(commande);
+    _loadRouteForSelectedCommande(commande, isMine: isMine);
   }
 
-  Future<void> _loadRouteForCommande(Commande commande) async {
-    final startLat = commande.latitudeDepart;
-    final startLng = commande.longitudeDepart;
-    final endLat = commande.latitudeDestination;
-    final endLng = commande.longitudeDestination;
-    if (startLat == null ||
-        startLng == null ||
-        endLat == null ||
-        endLng == null) {
+  void _loadRouteForSelectedCommande(
+    Commande commande, {
+    required bool isMine,
+  }) {
+    final currentPos = _myPos;
+    if (isMine && currentPos != null) {
+      final bool goToArrival = commande.qrCodeDepartScanne == true;
+      final double? targetLat = goToArrival
+          ? commande.latitudeDestination
+          : commande.latitudeDepart;
+      final double? targetLng = goToArrival
+          ? commande.longitudeDestination
+          : commande.longitudeDepart;
+      if (targetLat != null && targetLng != null) {
+        _loadRouteForCommande(
+          commande,
+          startOverride: currentPos,
+          endOverride: LatLng(targetLat, targetLng),
+        );
+        return;
+      }
+    }
+
+    final hasDepart =
+        commande.latitudeDepart != null && commande.longitudeDepart != null;
+    final hasDestination = commande.latitudeDestination != null &&
+        commande.longitudeDestination != null;
+
+    if (hasDepart && hasDestination) {
+      _loadRouteForCommande(commande);
+      return;
+    }
+
+    setState(() {
+      _routePoints = null;
+      _routeCommande = null;
+    });
+  }
+
+  Future<void> _loadRouteForCommande(
+    Commande commande, {
+    LatLng? startOverride,
+    LatLng? endOverride,
+  }) async {
+    LatLng? start = startOverride;
+    LatLng? end = endOverride;
+
+    start ??= (commande.latitudeDepart != null &&
+            commande.longitudeDepart != null)
+        ? LatLng(commande.latitudeDepart!, commande.longitudeDepart!)
+        : null;
+    end ??= (commande.latitudeDestination != null &&
+            commande.longitudeDestination != null)
+        ? LatLng(commande.latitudeDestination!, commande.longitudeDestination!)
+        : null;
+
+    if (start == null || end == null) {
       setState(() {
         _routePoints = null;
         _routeCommande = null;
@@ -275,27 +326,29 @@ class MapViewState extends State<MapView> {
       return;
     }
 
-    final start = LatLng(startLat, startLng);
-    final end = LatLng(endLat, endLng);
+    final LatLng routeStart = start;
+    final LatLng routeEnd = end;
 
     setState(() {
       _routeCommande = commande;
     });
 
     try {
-      final route = await _routeService.fetchRoute(start: start, end: end);
+      final route =
+          await _routeService.fetchRoute(start: routeStart, end: routeEnd);
       if (!mounted) return;
+      final points =
+          route.isEmpty ? <LatLng>[routeStart, routeEnd] : route;
       setState(() {
-        _routePoints = route.isEmpty ? [start, end] : route;
+        _routePoints = points;
       });
-      _fitCameraToBounds(
-        LatLngBounds.fromPoints(_routePoints!),
-      );
+      _fitCameraToBounds(LatLngBounds.fromPoints(points));
     } catch (e) {
       if (!mounted) return;
       debugPrint('Route fetch error: $e');
       setState(() {
-        _routePoints = [start, end];
+        _routePoints = [routeStart, routeEnd];
+        _routeCommande = commande;
       });
       _fitCameraToBounds(LatLngBounds.fromPoints(_routePoints!));
     }
@@ -328,7 +381,7 @@ class MapViewState extends State<MapView> {
   @override
   Widget build(BuildContext context) {
     final homeCtrl = context.watch<HomeController>();
-    final commandes = homeCtrl.commandes;
+    final commandes = homeCtrl.activeCommandes;
     final selectedCommande = homeCtrl.selectedCommande;
     final selectedId = selectedCommande?.id;
 
@@ -337,18 +390,37 @@ class MapViewState extends State<MapView> {
       selectedCommandeId: selectedId,
     );
 
+    final bool selectedIsMine = selectedCommande != null &&
+        homeCtrl.mesCommandes.any((c) => c.id == selectedCommande.id);
+    final currentPos = _myPos;
+    final bool hasDepartCoords = selectedCommande?.latitudeDepart != null &&
+        selectedCommande?.longitudeDepart != null;
+    final bool hasDestinationCoords =
+        selectedCommande?.latitudeDestination != null &&
+            selectedCommande?.longitudeDestination != null;
+    final bool hasCustomData = selectedCommande != null &&
+        selectedIsMine &&
+        currentPos != null &&
+        ((selectedCommande.qrCodeDepartScanne == true
+                ? hasDestinationCoords
+                : hasDepartCoords));
+    final bool hasDefaultData =
+        selectedCommande != null && hasDepartCoords && hasDestinationCoords;
+
     if (selectedCommande != null &&
         selectedCommande.id != _routeCommande?.id &&
         _pendingRouteCommandeId != selectedCommande.id &&
-        selectedCommande.latitudeDepart != null &&
-        selectedCommande.longitudeDepart != null &&
-        selectedCommande.latitudeDestination != null &&
-        selectedCommande.longitudeDestination != null) {
-      _pendingRouteCommandeId = selectedCommande.id;
+        (hasCustomData || hasDefaultData)) {
+      final commandeToLoad = selectedCommande;
+      final bool isMineForLoad = selectedIsMine;
+      _pendingRouteCommandeId = commandeToLoad.id;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _pendingRouteCommandeId = null;
-        _loadRouteForCommande(selectedCommande);
+        _loadRouteForSelectedCommande(
+          commandeToLoad,
+          isMine: isMineForLoad,
+        );
       });
     } else if (selectedCommande == null && _routePoints != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

@@ -1,6 +1,7 @@
 // lib/features/coursier/pages/home/home_coursier_page.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
 import 'controllers/home_controller.dart';
 import 'widgets/top_bar.dart';
 import 'widgets/map_view.dart';
@@ -16,7 +17,7 @@ class HomeCoursierPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => HomeController(),
+      create: (context) => HomeController(context.read<AuthController>()),
       child: Scaffold(
         drawer: const CourierDrawer(), // ← ajout du Drawer ici
         body: Stack(

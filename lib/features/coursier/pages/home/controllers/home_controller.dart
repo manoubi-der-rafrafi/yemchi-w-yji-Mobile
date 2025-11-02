@@ -1,30 +1,42 @@
 // home_controller.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // si déjà utilisé ailleurs
 import 'package:yemchi_wyji/core/models/commande.dart';
-import 'package:yemchi_wyji/features/commande/data/commande_service.dart';
 import 'package:yemchi_wyji/core/network/api.dart';
+import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
+import 'package:yemchi_wyji/features/commande/data/commande_service.dart';
 
 enum AppLang { ar, en }
+enum CommandTab { mes, envoyees }
 
 class HomeController extends ChangeNotifier {
+  HomeController(this._authController);
+
+  final AuthController _authController;
+
   AppLang currentLang = AppLang.en;
 
   // --- ÉTAT COMMANDES & ZONE COURANTE ---
   final List<Commande> _commandes = [];
+  final List<Commande> _mesCommandes = [];
+
   List<Commande> get commandes => List.unmodifiable(_commandes);
+  List<Commande> get mesCommandes => List.unmodifiable(_mesCommandes);
+  List<Commande> get activeCommandes =>
+      _commandTab == CommandTab.mes ? mesCommandes : commandes;
 
   String? _currentZone; // ex: "GRAND_TUNIS"
   String? get currentZone => _currentZone;
+
   Commande? _selectedCommande;
   Commande? get selectedCommande => _selectedCommande;
 
+  CommandTab _commandTab = CommandTab.mes;
+  CommandTab get commandTab => _commandTab;
+
   // --- RAFRAÎCHISSEMENT AUTO ---
   Timer? _refreshTimer;
-  Duration autoRefreshEvery = const Duration(
-    seconds: 30,
-  ); // règle l’intervalle ici
+  Duration autoRefreshEvery = const Duration(seconds: 30);
 
   // --- AUTRES (existant) ---
   final List<Map<String, String>> notifications = [
@@ -45,7 +57,20 @@ class HomeController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Lance/relance le timer silencieux
+  void setCommandTab(CommandTab tab) {
+    if (_commandTab == tab) return;
+    _commandTab = tab;
+    if (_selectedCommande != null) {
+      final currentList =
+          _commandTab == CommandTab.mes ? _mesCommandes : _commandes;
+      if (!currentList.any((c) => c.id == _selectedCommande!.id)) {
+        _selectedCommande = null;
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Lance/relance le timer silencieux.
   void _ensureAutoRefreshTimer() {
     _refreshTimer?.cancel();
     if (_currentZone == null) return; // pas de zone -> pas de timer
@@ -55,10 +80,9 @@ class HomeController extends ChangeNotifier {
     });
   }
 
-  /// À appeler quand la zone détectée change OU au premier démarrage
+  /// À appeler quand la zone détectée change OU au premier démarrage.
   Future<void> setZoneAndRefresh(String zone, {bool silent = false}) async {
     if (_currentZone == zone) {
-      // même zone: on peut décider de forcer un fetch quand même si besoin
       await refreshByZone(zone, silent: silent);
       return;
     }
@@ -68,16 +92,25 @@ class HomeController extends ChangeNotifier {
   }
 
   /// Appelle le backend: GET /commandes/zone/{zone}
-  // home_controller.dart
   Future<void> refreshByZone(String zone, {bool silent = false}) async {
     try {
       final service = CommandeService(Api());
       final list = await service.getByZone(zone);
 
-      // 👉 LOG CONSOLE UNIQUEMENT
-      print('---- [REFRESH] Commandes pour zone $zone : ${list.length} ----');
+      final transporteurId = _authController.currentUser.value?.id;
+      if (transporteurId != null && transporteurId.isNotEmpty) {
+        final mes = await service.getCommandesByTransporteur(transporteurId);
+        _mesCommandes
+          ..clear()
+          ..addAll(mes);
+      } else {
+        _mesCommandes.clear();
+      }
+
+      // LOG CONSOLE UNIQUEMENT
+      debugPrint('---- [REFRESH] Commandes pour zone $zone : ${list.length} ----');
       for (final c in list) {
-        print(
+        debugPrint(
           'Commande ${c.id} | depart=${c.zonePrincipaleDepart} | arrivee=${c.zonePrincipaleArrivee}',
         );
       }
@@ -91,16 +124,15 @@ class HomeController extends ChangeNotifier {
         _selectedCommande = null;
       }
 
-      // Pas de loader/snackbar => on peut même ne PAS notifier si tu veux rester 100% invisible
       if (!silent) {
         notifyListeners();
         return;
       }
 
-      // Mode silencieux : pas de feedback UI, mais on force quand même un rebuild pour la carte/listes.
+      // Mode silencieux : pas de feedback UI, mais on force quand même un rebuild.
       notifyListeners();
     } catch (e) {
-      print('❌ refreshByZone($zone) failed: $e');
+      debugPrint('⚠️ refreshByZone($zone) failed: $e');
     }
   }
 

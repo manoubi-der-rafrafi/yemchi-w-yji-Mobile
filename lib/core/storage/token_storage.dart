@@ -7,26 +7,37 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class TokenStorage {
   static const _kAccess = 'access_token';
   static const _kRefresh = 'refresh_token';
+  static const _kUserId = 'user_id';
   static const FlutterSecureStorage _s = FlutterSecureStorage();
 
   /// Sauvegarde (rotation possible)
-  static Future<void> save({required String access, String? refresh}) async {
+  static Future<void> save({
+    required String access,
+    String? refresh,
+    String? userId,
+  }) async {
     await _s.write(key: _kAccess, value: access);
     if (refresh != null && refresh.isNotEmpty) {
       await _s.write(key: _kRefresh, value: refresh);
+    }
+    if (userId != null && userId.isNotEmpty) {
+      await _s.write(key: _kUserId, value: userId);
     }
   }
 
   static Future<String?> access()  => _s.read(key: _kAccess);
   static Future<String?> refresh() => _s.read(key: _kRefresh);
+  static Future<String?> userId()  => _s.read(key: _kUserId);
 
   static Future<bool> hasAccess() async => (await access())?.isNotEmpty == true;
   static Future<bool> hasRefresh() async => (await refresh())?.isNotEmpty == true;
+  static Future<bool> hasUserId() async => (await userId())?.isNotEmpty == true;
 
   /// Efface tout (logout)
   static Future<void> clear() async {
     await _s.delete(key: _kAccess);
     await _s.delete(key: _kRefresh);
+    await _s.delete(key: _kUserId);
   }
 
   /// --------- Aides JWT (facultatif mais utile) ---------

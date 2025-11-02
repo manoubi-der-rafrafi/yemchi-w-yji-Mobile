@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:yemchi_wyji/core/models/commande.dart';
 import 'package:yemchi_wyji/core/models/produit.dart';
+import 'package:yemchi_wyji/core/network/api.dart';
+import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
+import 'package:yemchi_wyji/features/commande/data/commande_service.dart';
 import 'package:yemchi_wyji/features/produit/data/produit_service.dart';
 
 class CommandeDetailsSheet extends StatefulWidget {
@@ -53,9 +57,30 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
     debugPrint('Afficher le detail du produit ${produit.id}');
   }
 
-  void _onAccepter() {
-    Navigator.of(context).maybePop(true);
+  void _onAccepter() async {
+  final auth = context.read<AuthController>();
+  final currentUserId = auth.currentUser.value?.id;
+
+  if (currentUserId == null) {
+    debugPrint('Aucun utilisateur courant -> assignation impossible.');
+    return;
   }
+
+  try {
+    final api = context.read<Api>();
+    final service = CommandeService(api);
+
+    await service.assignerTransporteur(
+      widget.commande.id,
+      currentUserId,
+    );
+
+    if (!mounted) return;
+    Navigator.of(context).maybePop(true);
+  } catch (e) {
+    debugPrint('Erreur assignation transporteur: $e');
+  }
+}
 
   void _onRefuser() {
     Navigator.of(context).maybePop(false);

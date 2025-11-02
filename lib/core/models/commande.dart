@@ -50,6 +50,12 @@ class Commande {
   final String? zonePrincipaleDepart;
   final String? zonePrincipaleArrivee;
 
+  final bool? qrCodeDepartScanne;
+  final DateTime? dateScanDepart;
+
+  final bool? qrCodeReceptionScanne;
+  final DateTime? dateScanReception;
+
   const Commande({
     required this.id,
     this.clientId,
@@ -76,6 +82,10 @@ class Commande {
     this.sousZoneArrivee,
     this.zonePrincipaleDepart,
     this.zonePrincipaleArrivee,
+    this.qrCodeDepartScanne,
+    this.dateScanDepart,
+    this.qrCodeReceptionScanne,
+    this.dateScanReception,
   });
 
   // -------- Helpers de parsing sûrs --------
@@ -157,6 +167,10 @@ class Commande {
       zonePrincipaleArrivee: _toStringOrNull(
         _pick(raw, ['zonePrincipaleArrivee', 'zone_principale_arrivee']),
       ),
+      qrCodeDepartScanne: _pick(raw, ['qrCodeDepartScanne', 'qr_code_depart_scanne']) as bool?,
+      dateScanDepart: _toDate(_pick(raw, ['dateScanDepart', 'date_scan_depart'])),
+      qrCodeReceptionScanne: _pick(raw, ['qrCodeReceptionScanne', 'qr_code_reception_scanne']) as bool?,
+      dateScanReception: _toDate(_pick(raw, ['dateScanReception', 'date_scan_reception'])),
     );
   }
 
@@ -197,6 +211,10 @@ class Commande {
         'sousZoneArrivee': sousZoneArrivee,
         'zonePrincipaleDepart': zonePrincipaleDepart,
         'zonePrincipaleArrivee': zonePrincipaleArrivee,
+        'qrCodeDepartScanne': qrCodeDepartScanne,
+        'dateScanDepart': dateScanDepart?.toIso8601String(),
+        'qrCodeReceptionScanne': qrCodeReceptionScanne,
+        'dateScanReception': dateScanReception?.toIso8601String(),
       };
 
   static Commande fromJsonString(String jsonStr) =>
@@ -228,6 +246,10 @@ class Commande {
     String? sousZoneArrivee,
     String? zonePrincipaleDepart,
     String? zonePrincipaleArrivee,
+    bool? qrCodeDepartScanne,
+    DateTime? dateScanDepart,
+    bool? qrCodeReceptionScanne,
+    DateTime? dateScanReception,
   }) {
     return Commande(
       id: id ?? this.id,
@@ -257,6 +279,11 @@ class Commande {
           zonePrincipaleDepart ?? this.zonePrincipaleDepart,
       zonePrincipaleArrivee:
           zonePrincipaleArrivee ?? this.zonePrincipaleArrivee,
+      qrCodeDepartScanne: qrCodeDepartScanne ?? this.qrCodeDepartScanne,
+      dateScanDepart: dateScanDepart ?? this.dateScanDepart,
+      qrCodeReceptionScanne: qrCodeReceptionScanne ?? this.qrCodeReceptionScanne,
+      dateScanReception: dateScanReception ?? this.dateScanReception,
+
     );
   }
 }

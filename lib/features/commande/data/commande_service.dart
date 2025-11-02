@@ -4,7 +4,8 @@ import 'dart:convert';
 import 'package:yemchi_wyji/core/models/commande.dart';
 import 'package:yemchi_wyji/core/network/api.dart';
 import 'package:yemchi_wyji/features/commande/dto/commande_dto.dart';
-
+import 'package:provider/provider.dart';
+import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
 class CommandeService {
   final Api api;
   CommandeService(this.api);
@@ -122,9 +123,9 @@ class CommandeService {
   /// Retourne toutes les commandes dont zonePrincipaleDepart = zonePrincipaleArrivee = {zone}
   /// Exemple: zone = "GRAND_TUNIS", "COTIER_NORD", "CENTRE_EST", "SFAX", "SUD_EST", "INTERIEUR"
   Future<List<Commande>> getByZone(String zone) async {
-    final res = await api.get('$_base/zone/$zone');
+    final res = await api.get('$_base/zone/$zone/confirmees');
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('GET $_base/zone/$zone -> ${res.statusCode}: ${res.body}');
+      throw Exception('GET $_base/zone/$zone/confirmees -> ${res.statusCode}: ${res.body}');
     }
     final decoded = json.decode(res.body);
     if (decoded is List) {
@@ -132,4 +133,26 @@ class CommandeService {
     }
     return const <Commande>[];
   }
+  Future<Commande> assignerTransporteur(String idCommande, String idTransporteur) async {
+  final res = await api.put('/commandes/$idCommande/assigner/$idTransporteur', body: '{}');
+  if (res.statusCode < 200 || res.statusCode >= 300) {
+    throw Exception('PUT /commandes/$idCommande/assigner/$idTransporteur -> ${res.statusCode}: ${res.body}');
+  }
+  final map = json.decode(res.body) as Map<String, dynamic>;
+  return Commande.fromJson(map);
+}
+Future<List<Commande>> getCommandesByTransporteur(String idTransporteur) async {
+  final response = await api.get('/commandes/transporteur/$idTransporteur');
+
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw Exception(
+      'Erreur lors du chargement des commandes du transporteur : '
+      '${response.statusCode} - ${response.body}',
+    );
+  }
+
+  final List<dynamic> data = json.decode(response.body);
+  return data.map((jsonItem) => Commande.fromJson(jsonItem)).toList();
+}
+
 }

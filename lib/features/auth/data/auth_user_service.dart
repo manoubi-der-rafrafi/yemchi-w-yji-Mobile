@@ -164,6 +164,16 @@ class AuthUserService {
       throw ApiException(r.statusCode, 'Échec de mise à jour localisation');
     }
   }
+  Future<Utilisateur> meById(String id) async {
+    final r = await api.get('$_me?id=$id');
+    final m = json.decode(r.body);
+
+    final data = (m is Map && m['user'] is Map)
+        ? m['user'] as Map<String, dynamic>
+        : (m as Map<String, dynamic>);
+
+    return Utilisateur.fromJson(data);
+  }
 }
 
 // ---------- DTO résultat de login ----------

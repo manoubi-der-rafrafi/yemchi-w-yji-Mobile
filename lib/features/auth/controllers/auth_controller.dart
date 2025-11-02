@@ -18,7 +18,7 @@ class AuthController {
     loading.value = true; error.value = null;
     try {
       final res = await _svc.login(email: email, password: password);
-      await TokenStorage.save(access: res.token);
+      await TokenStorage.save(access: res.token, userId: res.user.id);
       currentUser.value = res.user;
       return true;
     } catch (e) {
@@ -31,11 +31,17 @@ class AuthController {
 
   /// Si un token existe déjà, tenter /me pour restaurer la session.
   Future<void> loadMeIfToken() async {
-    if (await TokenStorage.hasAccess()) {
-      try {
-        currentUser.value = await _svc.me();
-      } catch (_) {}
+    if (!await TokenStorage.hasAccess()) return;
+
+    final storedUserId = await TokenStorage.userId();
+    if (storedUserId != null && storedUserId.isNotEmpty) {
+      final user = await fetchUserById(storedUserId);
+      if (user != null) return;
     }
+
+    try {
+      currentUser.value = await _svc.me();
+    } catch (_) {}
   }
 
   /// Mettre à jour mon profil (PUT /me) puis rafraîchir l'état courant.
@@ -154,5 +160,19 @@ class AuthController {
   Future<void> logout() async {
     await TokenStorage.clear();
     currentUser.value = null;
+  }
+  Future<Utilisateur?> fetchUserById(String id) async {
+    loading.value = true;
+    error.value = null;
+    try {
+      final user = await _svc.meById(id);
+      currentUser.value = user;
+      return user;
+    } catch (e) {
+      error.value = e.toString();
+      return null;
+    } finally {
+      loading.value = false;
+    }
   }
 }
