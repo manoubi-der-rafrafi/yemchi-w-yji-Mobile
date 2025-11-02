@@ -10,6 +10,7 @@ import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
 import 'package:yemchi_wyji/features/auth/pages/auth_gate.dart';
 import 'package:yemchi_wyji/features/auth/pages/login_page.dart';
 import 'package:yemchi_wyji/features/auth/pages/signup_page.dart';
+import 'package:yemchi_wyji/features/client/client_home_navbar.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/home_coursier_page.dart';
 
 void main() {
@@ -49,6 +50,7 @@ class MyApp extends StatelessWidget {
           '/login': (_) => LoginPage(),
           '/signup': (_) => SignUpPage(),
           '/home_coursier': (_) => HomeCoursierPage(),
+          '/home_client': (_) => ClientHome(),
         },
       ),
     );
