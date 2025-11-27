@@ -21,6 +21,12 @@ class Utilisateur {
   // Adresse / image
   final String? adresse;
   final String? image;
+  final String? imageCarteIdentiteFace;
+  final String? imageCarteIdentiteArriere;
+  final String? imagePermis;
+  final String? imageCarteGrise;
+  final String? imageAssurance;
+  final TypeVehicule? typeVehicule;
 
   // Connexion / timestamps
   final DateTime? dateCreation;
@@ -40,10 +46,16 @@ class Utilisateur {
     this.dateNaissance,
     this.email,
     this.telephone,
-    this.role = Role.client,
+    required this.role,
     this.statut = Statut.actif,
     this.adresse,
     this.image,
+    this.imageCarteIdentiteFace,
+    this.imageCarteIdentiteArriere,
+    this.imagePermis,
+    this.imageCarteGrise,
+    this.imageAssurance,
+    this.typeVehicule,
     this.dateCreation,
     this.lastSeen,
     this.online,
@@ -65,6 +77,12 @@ class Utilisateur {
     Statut? statut,
     String? adresse,
     String? image,
+    String? imageCarteIdentiteFace,
+    String? imageCarteIdentiteArriere,
+    String? imagePermis,
+    String? imageCarteGrise,
+    String? imageAssurance,
+    TypeVehicule? typeVehicule,
     DateTime? dateCreation,
     DateTime? lastSeen,
     bool? online,
@@ -84,6 +102,14 @@ class Utilisateur {
       statut: statut ?? this.statut,
       adresse: adresse ?? this.adresse,
       image: image ?? this.image,
+      imageCarteIdentiteFace:
+          imageCarteIdentiteFace ?? this.imageCarteIdentiteFace,
+      imageCarteIdentiteArriere:
+          imageCarteIdentiteArriere ?? this.imageCarteIdentiteArriere,
+      imagePermis: imagePermis ?? this.imagePermis,
+      imageCarteGrise: imageCarteGrise ?? this.imageCarteGrise,
+      imageAssurance: imageAssurance ?? this.imageAssurance,
+      typeVehicule: typeVehicule ?? this.typeVehicule,
       dateCreation: dateCreation ?? this.dateCreation,
       lastSeen: lastSeen ?? this.lastSeen,
       online: online ?? this.online,
@@ -121,6 +147,12 @@ class Utilisateur {
       statut: _statutFromString(json['statut']),
       adresse: json['adresse'] as String?,
       image: json['image'] as String?,
+      imageCarteIdentiteFace: json['imageCarteIdentiteFace'] as String?,
+      imageCarteIdentiteArriere: json['imageCarteIdentiteArriere'] as String?,
+      imagePermis: json['imagePermis'] as String?,
+      imageCarteGrise: json['imageCarteGrise'] as String?,
+      imageAssurance: json['imageAssurance'] as String?,
+      typeVehicule: _typeVehiculeFromString(json['typeVehicule']),
       dateCreation: _parseDate(json['dateCreation']),
       lastSeen: _parseDate(json['lastSeen']),
       online: json['online'] as bool?,
@@ -146,6 +178,12 @@ class Utilisateur {
       'statut': statut.name,   // "actif"  | "inactif"      | "banni"
       'adresse': adresse,
       'image': image,
+      'imageCarteIdentiteFace': imageCarteIdentiteFace,
+      'imageCarteIdentiteArriere': imageCarteIdentiteArriere,
+      'imagePermis': imagePermis,
+      'imageCarteGrise': imageCarteGrise,
+      'imageAssurance': imageAssurance,
+      'typeVehicule': typeVehicule?.name,
       'dateCreation': _dateToIso(dateCreation),
       'lastSeen': _dateToIso(lastSeen),
       'online': online,
@@ -171,7 +209,8 @@ class Utilisateur {
   String toString() =>
       'Utilisateur(id: $id, nom: $nom, prenom: $prenom, email: $email, '
       'role: ${role.name}, statut: ${statut.name}, '
-      'lat: $latitude, lng: $longitude, sousZone: ${sousZone?.name}, zone: ${zone?.name})';
+      'lat: $latitude, lng: $longitude, sousZone: ${sousZone?.name}, zone: ${zone?.name}, '
+      'typeVehicule: ${typeVehicule?.name})';
 
   // ---------------- ENUM HELPERS ----------------
 
@@ -218,6 +257,15 @@ class Utilisateur {
       orElse: () => SousZone.TUNIS_CENTRE,
     );
   }
+
+  static TypeVehicule? _typeVehiculeFromString(dynamic v) {
+    if (v == null) return null;
+    final s = v.toString().toUpperCase();
+    return TypeVehicule.values.firstWhere(
+      (tv) => tv.name.toUpperCase() == s,
+      orElse: () => TypeVehicule.DEUX_ROUES_MOTORISES,
+    );
+  }
 }
 
 // ---------------- ENUMS ----------------
@@ -262,4 +310,12 @@ enum SousZone {
 
   // Intérieur
   KAIROUAN,
+}
+
+enum TypeVehicule {
+  DEUX_ROUES_MOTORISES,
+  VEHICULE_PARTICULIER,
+  VEHICULE_UTILITAIRE_LEGER,
+  FOURGON_MINIBUS,
+  GROS_UTILITAIRE,
 }

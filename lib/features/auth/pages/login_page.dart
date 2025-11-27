@@ -87,26 +87,31 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Widget _narrow() {
-    
-    return Column(
-      children: [
-        const SizedBox(height: 170),
-        const _BrandLockup(centered: true),
-        const SizedBox(height: 18),
-        _CardForm(
-          formKey: _formKey,
-          idCtrl: _idCtrl,
-          pwdCtrl: _pwdCtrl,
-          obscure: _obscure,
-          remember: _remember,
-          loading: _loading,
-          error: _error,
-          onToggleObscure: () => setState(() => _obscure = !_obscure),
-          onToggleRemember: (v) => setState(() => _remember = v),
-          onSubmit: _submit,
-        ),
-        const SizedBox(height: 24),
-      ],
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return SingleChildScrollView(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 170),
+          const _BrandLockup(centered: true),
+          const SizedBox(height: 18),
+          _CardForm(
+            formKey: _formKey,
+            idCtrl: _idCtrl,
+            pwdCtrl: _pwdCtrl,
+            obscure: _obscure,
+            remember: _remember,
+            loading: _loading,
+            error: _error,
+            onToggleObscure: () => setState(() => _obscure = !_obscure),
+            onToggleRemember: (v) => setState(() => _remember = v),
+            onSubmit: _submit,
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
     );
   }
 
@@ -364,7 +369,7 @@ class _CardForm extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text("Vous n'avez pas de compte ?"),
+                  const Text("Sign up"),
                   TextButton(
                     onPressed: () => Navigator.of(context).pushNamed('/signup'),
                     child: const Text('Créer un compte'),

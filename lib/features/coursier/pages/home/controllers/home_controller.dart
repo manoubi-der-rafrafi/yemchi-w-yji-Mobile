@@ -1,6 +1,7 @@
 // home_controller.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:yemchi_wyji/core/models/commande.dart';
 import 'package:yemchi_wyji/core/network/api.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
@@ -8,11 +9,13 @@ import 'package:yemchi_wyji/features/commande/data/commande_service.dart';
 
 enum AppLang { ar, en }
 enum CommandTab { mes, envoyees }
+enum RoutePointOrigin { depart, destination, courier }
 
 class HomeController extends ChangeNotifier {
   HomeController(this._authController);
 
   final AuthController _authController;
+  static const double kAverageCourierSpeedKmh = 28;
 
   AppLang currentLang = AppLang.en;
 
@@ -28,11 +31,42 @@ class HomeController extends ChangeNotifier {
   String? _currentZone; // ex: "GRAND_TUNIS"
   String? get currentZone => _currentZone;
 
-  Commande? _selectedCommande;
-  Commande? get selectedCommande => _selectedCommande;
+  String? selectedCommandeId;
+  bool isPanelOpen = false;
+  Commande? get selectedCommande => _findCommandeById(selectedCommandeId);
+  bool get isSelectedCommandeMine {
+    final id = selectedCommandeId;
+    if (id == null) return false;
+    return _mesCommandes.any((commande) => commande.id == id);
+  }
 
   CommandTab _commandTab = CommandTab.mes;
   CommandTab get commandTab => _commandTab;
+
+  bool _isNavigationMode = false;
+  bool get isNavigationMode => _isNavigationMode;
+
+  void setNavigationMode(bool enabled) {
+    if (_isNavigationMode == enabled) return;
+    _isNavigationMode = enabled;
+    notifyListeners();
+  }
+
+  void toggleNavigationMode() => setNavigationMode(!_isNavigationMode);
+
+  LatLng? selectedStart;
+  LatLng? selectedEnd;
+  RoutePointOrigin? _selectedStartOrigin;
+  RoutePointOrigin? _selectedEndOrigin;
+  RoutePointOrigin? get selectedEndOrigin => _selectedEndOrigin;
+  List<LatLng>? _currentPolyline;
+  List<LatLng>? get currentPolyline =>
+      _currentPolyline == null ? null : List.unmodifiable(_currentPolyline!);
+  double? _currentRouteDistanceMeters;
+  Duration? _currentRouteEta;
+  double? get currentRouteDistanceMeters => _currentRouteDistanceMeters;
+  Duration? get currentRouteEta => _currentRouteEta;
+  final Distance _distanceCalculator = const Distance();
 
   // --- RAFRAÎCHISSEMENT AUTO ---
   Timer? _refreshTimer;
@@ -52,19 +86,75 @@ class HomeController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void selectCommande(Commande? commande) {
-    _selectedCommande = commande;
+  void selectCommande(Commande? commande, {bool openPanel = true}) {
+    if (commande == null) {
+      clearSelection();
+      return;
+    }
+    final idChanged = selectedCommandeId != commande.id;
+    selectedCommandeId = commande.id;
+    isPanelOpen = openPanel;
+    if (idChanged) {
+      resetRoute();
+    }
     notifyListeners();
+  }
+
+  void clearSelection({bool notify = true}) {
+    selectedCommandeId = null;
+    isPanelOpen = false;
+    resetRoute();
+    if (notify) {
+      notifyListeners();
+    }
+  }
+
+  void resetRoute({bool notify = false}) {
+    selectedStart = null;
+    selectedEnd = null;
+    _currentPolyline = null;
+    _selectedStartOrigin = null;
+    _selectedEndOrigin = null;
+    _currentRouteDistanceMeters = null;
+    _currentRouteEta = null;
+    if (notify) {
+      notifyListeners();
+    }
+  }
+
+  void setRouteData({
+    required LatLng start,
+    required LatLng end,
+    required RoutePointOrigin startOrigin,
+    required RoutePointOrigin endOrigin,
+    required List<LatLng> polyline,
+    double? distanceMeters,
+    Duration? duration,
+  }) {
+    selectedStart = start;
+    selectedEnd = end;
+    _selectedStartOrigin = startOrigin;
+    _selectedEndOrigin = endOrigin;
+    _currentPolyline = List<LatLng>.from(polyline);
+    _currentRouteDistanceMeters =
+        distanceMeters ?? _computePolylineDistanceMeters(_currentPolyline);
+    _currentRouteEta =
+        duration ?? _estimateEtaFromDistance(_currentRouteDistanceMeters);
+    notifyListeners();
+  }
+
+  void clearRouteOnly() {
+    resetRoute(notify: true);
   }
 
   void setCommandTab(CommandTab tab) {
     if (_commandTab == tab) return;
     _commandTab = tab;
-    if (_selectedCommande != null) {
+    if (selectedCommandeId != null) {
       final currentList =
           _commandTab == CommandTab.mes ? _mesCommandes : _commandes;
-      if (!currentList.any((c) => c.id == _selectedCommande!.id)) {
-        _selectedCommande = null;
+      if (!currentList.any((c) => c.id == selectedCommandeId)) {
+        clearSelection(notify: false);
       }
     }
     notifyListeners();
@@ -119,21 +209,127 @@ class HomeController extends ChangeNotifier {
         ..clear()
         ..addAll(list);
 
-      if (_selectedCommande != null &&
-          !_commandes.any((c) => c.id == _selectedCommande!.id)) {
-        _selectedCommande = null;
+      if (silent) {
+      // Silent mode: keep data without resetting visible UI state.
       }
 
-      if (!silent) {
-        notifyListeners();
-        return;
-      }
+      _handleSelectionAfterRefresh();
 
-      // Mode silencieux : pas de feedback UI, mais on force quand même un rebuild.
       notifyListeners();
     } catch (e) {
       debugPrint('⚠️ refreshByZone($zone) failed: $e');
     }
+  }
+
+  Commande? _findCommandeById(String? id) {
+    if (id == null) return null;
+    for (final c in _commandes) {
+      if (c.id == id) {
+        return c;
+      }
+    }
+    for (final c in _mesCommandes) {
+      if (c.id == id) {
+        return c;
+      }
+    }
+    return null;
+  }
+
+  void _handleSelectionAfterRefresh() {
+    final id = selectedCommandeId;
+    if (id == null) return;
+    final commande = _findCommandeById(id);
+    if (commande == null) {
+      clearSelection(notify: false);
+      return;
+    }
+
+    if (_didRoutePointsChange(commande)) {
+      resetRoute();
+    }
+  }
+
+  bool _didRoutePointsChange(Commande commande) {
+    final startChanged = _didPointChange(
+      previous: selectedStart,
+      origin: _selectedStartOrigin,
+      commande: commande,
+    );
+    final endChanged = _didPointChange(
+      previous: selectedEnd,
+      origin: _selectedEndOrigin,
+      commande: commande,
+    );
+    return startChanged || endChanged;
+  }
+
+  bool _didPointChange({
+    required LatLng? previous,
+    required RoutePointOrigin? origin,
+    required Commande commande,
+  }) {
+    if (previous == null || origin == null) {
+      return false;
+    }
+    if (origin == RoutePointOrigin.courier) {
+      return false;
+    }
+    final updated = _latLngFromCommande(origin, commande);
+    if (updated == null) {
+      return true;
+    }
+    return !_sameLatLng(previous, updated);
+  }
+
+  LatLng? _latLngFromCommande(RoutePointOrigin origin, Commande commande) {
+    switch (origin) {
+      case RoutePointOrigin.depart:
+        if (commande.latitudeDepart == null ||
+            commande.longitudeDepart == null) {
+          return null;
+        }
+        return LatLng(commande.latitudeDepart!, commande.longitudeDepart!);
+      case RoutePointOrigin.destination:
+        if (commande.latitudeDestination == null ||
+            commande.longitudeDestination == null) {
+          return null;
+        }
+        return LatLng(
+          commande.latitudeDestination!,
+          commande.longitudeDestination!,
+        );
+      case RoutePointOrigin.courier:
+        return null;
+    }
+  }
+
+  bool _sameLatLng(LatLng a, LatLng b) {
+    const tolerance = 1e-6;
+    return (a.latitude - b.latitude).abs() < tolerance &&
+        (a.longitude - b.longitude).abs() < tolerance;
+  }
+
+  double? _computePolylineDistanceMeters(List<LatLng>? points) {
+    if (points == null || points.length < 2) return null;
+    double total = 0;
+    for (var i = 0; i < points.length - 1; i++) {
+      total += _distanceCalculator.as(
+        LengthUnit.Meter,
+        points[i],
+        points[i + 1],
+      );
+    }
+    return total;
+  }
+
+  Duration? _estimateEtaFromDistance(double? distanceMeters) {
+    if (distanceMeters == null) return null;
+    final distanceKm = distanceMeters / 1000;
+    if (distanceKm <= 0) return Duration.zero;
+    final hours = distanceKm / kAverageCourierSpeedKmh;
+    final seconds = (hours * 3600).round();
+    return Duration(seconds: seconds < 0 ? 0 : seconds);
   }
 
   @override
