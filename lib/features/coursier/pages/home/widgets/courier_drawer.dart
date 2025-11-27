@@ -1,10 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:yemchi_wyji/core/models/utilisateur.dart';
+import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
+import 'package:yemchi_wyji/features/client/pages/profil_page.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/pages/historique_commandes_page.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/controllers/home_controller.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/pages/demandes_a_accepter_page.dart';
 
 class CourierDrawer extends StatelessWidget {
-  const CourierDrawer({super.key});
+  final VoidCallback? onOpenMesCourses;
+
+  const CourierDrawer({super.key, this.onOpenMesCourses});
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.read<AuthController>();
+    final homeController = context.watch<HomeController>();
+    final demandesCount = homeController.commandes.length;
+
     return Drawer(
       elevation: 0,
       child: SafeArea(
@@ -14,35 +27,62 @@ class CourierDrawer extends StatelessWidget {
             // ====== En-tête "compte" façon Google ======
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Row(
-                children: [
-                  const CircleAvatar(
-                    radius: 22,
-                    backgroundImage: AssetImage('assets/avatar_placeholder.png'), // remplace si tu as une vraie image
-                    backgroundColor: Colors.black12,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'Nom du coursier',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              child: ValueListenableBuilder<Utilisateur?>(
+                valueListenable: auth.currentUser,
+                builder: (context, user, _) {
+                  String _safe(String? input) => input?.trim() ?? '';
+
+                  final prenom = _safe(user?.prenom);
+                  final nom = _safe(user?.nom);
+                  final email = _safe(user?.email);
+                  final fullName = [prenom, nom].where((s) => s.isNotEmpty).join(' ').trim();
+                  final displayName = fullName.isNotEmpty ? fullName : 'Nom du coursier';
+                  final displayEmail = email.isNotEmpty ? email : 'courier@yemchi.app';
+                  final initialsSource = (fullName.isNotEmpty ? fullName : displayEmail).trim();
+                  final initial = initialsSource.isNotEmpty ? initialsSource[0].toUpperCase() : 'A';
+
+                  ImageProvider<Object>? avatarImage;
+                  Widget? avatarChild;
+
+                  final imageUrl = _safe(user?.image);
+                  if (imageUrl.isNotEmpty) {
+                    avatarImage = NetworkImage(imageUrl);
+                  } else {
+                    avatarChild = Text(initial);
+                  }
+
+                  return Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 22,
+                        backgroundImage: avatarImage,
+                        backgroundColor: Colors.black12,
+                        child: avatarChild,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              displayName,
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              displayEmail,
+                              style: const TextStyle(color: Colors.black54, fontSize: 13),
+                            ),
+                          ],
                         ),
-                        SizedBox(height: 2),
-                        Text(
-                          'courier@yemchi.app',
-                          style: TextStyle(color: Colors.black54, fontSize: 13),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const CircleAvatar(
-                    radius: 16,
-                    child: Text('A'),
-                  ),
-                ],
+                      ),
+                      CircleAvatar(
+                        radius: 16,
+                        child: Text(initial),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
 
@@ -57,12 +97,22 @@ class CourierDrawer extends StatelessWidget {
             _Item(
               icon: Icons.account_circle_outlined,
               label: "Gérer le compte",
-              onTap: () {},
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ProfilPage(),
+                  ),
+                );
+              },
             ),
             _Item(
               icon: Icons.logout,
               label: "Se déconnecter",
-              onTap: () {},
+              onTap: () async {
+                Navigator.of(context).pop();
+                await auth.logout();
+              },
             ),
 
             const Divider(height: 16),
@@ -72,18 +122,40 @@ class CourierDrawer extends StatelessWidget {
             _Item(
               icon: Icons.route_outlined,
               label: "Courses en cours",
-              onTap: () {},
+              onTap: () {
+                Navigator.of(context).pop();
+                if (onOpenMesCourses != null) {
+                  Future.microtask(onOpenMesCourses!);
+                }
+              },
             ),
             _Item(
               icon: Icons.history,
               label: "Historique des courses",
-              onTap: () {},
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const HistoriqueCommandesPage(),
+                  ),
+                );
+              },
             ),
             _Item(
               icon: Icons.assignment_outlined,
-              label: "Demandes à accepter",
-              trailing: const _Pill("3"), // exemple badge
-              onTap: () {},
+              label: "Demandes a accepter",
+              trailing: demandesCount > 0 ? _Pill('$demandesCount') : null,
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => ChangeNotifierProvider<HomeController>.value(
+                      value: homeController,
+                      child: const DemandesAAccepterPage(),
+                    ),
+                  ),
+                );
+              },
             ),
 
             const Divider(height: 16),

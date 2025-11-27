@@ -9,8 +9,13 @@ import 'package:yemchi_wyji/features/produit/data/produit_service.dart';
 
 class CommandeDetailsSheet extends StatefulWidget {
   final Commande commande;
+  final bool isMine;
 
-  const CommandeDetailsSheet({super.key, required this.commande});
+  const CommandeDetailsSheet({
+    super.key,
+    required this.commande,
+    required this.isMine,
+  });
 
   @override
   State<CommandeDetailsSheet> createState() => _CommandeDetailsSheetState();
@@ -98,6 +103,11 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _ModePaiementBadge(
+              label: _modePaiementLabel(widget.commande.modePaiement),
+              color: _modePaiementColor(widget.commande.modePaiement),
+            ),
+            const SizedBox(height: 16),
             Text(
               'Liste des produits',
               style: textTheme.titleMedium?.copyWith(
@@ -112,62 +122,91 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
               child: _buildProduitsSection(theme),
             ),
             const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _onRefuser,
-                    child: const Text('Refuser'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: _onAccepter,
-                    child: const Text('Accepter'),
-                  ),
-                ),
-              ],
-            ),
+            _buildActionButtons(context),
           ],
         ),
       ),
     );
   }
 
+  Widget _buildActionButtons(BuildContext context) {
+    if (widget.isMine) {
+      return SizedBox(
+        width: double.infinity,
+        child: FilledButton(
+          onPressed: () => Navigator.of(context).maybePop(),
+          child: const Text('Fermer'),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: _onRefuser,
+            child: const Text('Refuser'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: FilledButton(
+            onPressed: _onAccepter,
+            child: const Text('Accepter'),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildProduitsSection(ThemeData theme) {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
+      return const Align(
+        alignment: Alignment.center,
+        heightFactor: 1,
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: CircularProgressIndicator(),
+        ),
       );
     }
 
     if (_errorMessage != null) {
-      return Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            _errorMessage!,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.error,
+      return Align(
+        alignment: Alignment.center,
+        heightFactor: 1,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _errorMessage!,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.error,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextButton.icon(
-            onPressed: _fetchProduits,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Reessayer'),
-          ),
-        ],
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: _fetchProduits,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reessayer'),
+            ),
+          ],
+        ),
       );
     }
 
     if (_produits.isEmpty) {
-      return Center(
-        child: Text(
-          'Aucun produit trouve pour cette commande.',
-          style: theme.textTheme.bodyMedium,
+      return Align(
+        alignment: Alignment.center,
+        heightFactor: 1,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Text(
+            'Aucun produit trouve pour cette commande.',
+            style: theme.textTheme.bodyMedium,
+            textAlign: TextAlign.center,
+          ),
         ),
       );
     }
@@ -186,6 +225,34 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
         );
       },
     );
+  }
+
+  String _modePaiementLabel(String? raw) {
+    final normalized = raw?.trim().toLowerCase();
+    switch (normalized) {
+      case 'en_ligne':
+        return 'payé';
+      case 'depart':
+        return 'depare';
+      case 'arrivee':
+        return 'arriver';
+      default:
+        return 'Mode inconnu';
+    }
+  }
+
+  Color _modePaiementColor(String? raw) {
+    final normalized = raw?.trim().toLowerCase();
+    switch (normalized) {
+      case 'en_ligne':
+        return Colors.green;
+      case 'depart':
+        return Colors.orange;
+      case 'arrivee':
+        return Colors.blueAccent;
+      default:
+        return Colors.grey;
+    }
   }
 }
 
@@ -240,6 +307,47 @@ class _ProduitTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ModePaiementBadge extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _ModePaiementBadge({
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Text(
+          'Mode de paiement :',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: color.withOpacity(0.4)),
+          ),
+          child: Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
