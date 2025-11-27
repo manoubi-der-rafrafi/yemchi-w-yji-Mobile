@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:yemchi_wyji/core/models/utilisateur.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
-import 'package:yemchi_wyji/features/client/pages/profil_page.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/pages/profil_page.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/pages/historique_commandes_page.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/controllers/home_controller.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/pages/demandes_a_accepter_page.dart';
-
 class CourierDrawer extends StatelessWidget {
   final VoidCallback? onOpenMesCourses;
 
