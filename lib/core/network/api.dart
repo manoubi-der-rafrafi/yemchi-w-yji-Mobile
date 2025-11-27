@@ -38,6 +38,17 @@ class Api {
     _throwIfError(r);
     return r;
   }
+  Future<http.Response> delete(String path) async {
+    final r = await _client.delete(_u(path), headers: await _headers());
+    _throwIfError(r);
+    return r;
+  }
+  //patch
+  Future<http.Response> patch(String path, {Object? body}) async {
+    final r = await _client.patch(_u(path), headers: await _headers(), body: body);
+    _throwIfError(r);
+    return r;
+  }
 
   // ✅ Fix: void (et plus Never)
   void _throwIfError(http.Response r) {
@@ -60,6 +71,7 @@ class Api {
       return body;
     }
   }
+
 }
 
 class ApiException implements Exception {

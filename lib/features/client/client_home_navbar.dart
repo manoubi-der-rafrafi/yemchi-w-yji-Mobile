@@ -4,6 +4,7 @@ import 'pages/livrer_page.dart';
 import 'pages/commandes_page.dart';
 import 'pages/amis_page.dart';
 import 'pages/profil_page.dart';
+import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
 
 class ClientHome extends StatefulWidget {
   const ClientHome({super.key});
