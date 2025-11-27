@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
+
 
 class CommandesPage extends StatefulWidget {
   const CommandesPage({super.key});
@@ -13,6 +15,7 @@ class _CommandesPageState extends State<CommandesPage> {
   String status = 'tous';
   bool loading = false;
   String? error;
+  _CommandesPageState();
 
   // Pagination:
   int pageIndex = 1;

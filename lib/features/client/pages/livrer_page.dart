@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
-import '../services/cilent_service.dart'; // Update with your actual path
-import '../models/produit.dart'; // Update with your actual path
+import 'package:provider/provider.dart';
+// Update these paths to match your project structure
+import 'package:yemchi_wyji/features/client/pages/AjoutProduitPage.dart'; 
+import '../services/cilent_service.dart'; // This is the file you just created (ServiceComplet.dart)
+import '../models/produit.dart'; 
+import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
+import 'ConfirmationCommandePage.dart';
 
 class LivrerPage extends StatefulWidget {
   const LivrerPage({super.key});
@@ -13,22 +18,37 @@ class _LivrerPageState extends State<LivrerPage> {
   bool isLoading = false;
   String? loadError;
   List<Produit> produits = [];
+  String? currentCommandeId; // Store the active cart ID here
 
-  final ProduitService _service = ProduitService();
+  // Use the service we created (ensure the file name matches your import)
+  final ProduitService _produitService = ProduitService();
+  final CommandeService _commandeService = CommandeService();
 
   @override
   void initState() {
     super.initState();
-    _loadProduits();
+    _loadData();
   }
 
-  Future<void> _loadProduits() async {
+  Future<void> _loadData() async {
     setState(() {
       isLoading = true;
       loadError = null;
     });
     try {
-      final produitsList = await _service.getAll();
+      final userId = Provider.of<AuthController>(context, listen: false).currentUser.value?.id;
+      if (userId == null) {
+        throw Exception('Utilisateur non connecté.');
+      }
+
+      // 1. Get or create the active command to ensure we have an ID
+      final commande = await _commandeService.getOrCreateActiveCommande(userId);
+      currentCommandeId = commande.id;
+
+      // 2. Fetch products associated with this command
+      // We can use the helper method or fetch directly by ID since we have it now
+      final produitsList = await _produitService.getByCommande(commande.id);
+
       setState(() {
         produits = produitsList;
         isLoading = false;
@@ -43,26 +63,67 @@ class _LivrerPageState extends State<LivrerPage> {
 
   bool hasProduits() => produits.isNotEmpty;
 
-  void GoAjoutProduitClient() {
-    // Example: route to add product page or open dialog
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Ajoutez un produit!")),
-    );
+  void goAjoutProduitClient() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => Padding(
+        padding: EdgeInsets.only(
+          top: 24,
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.95,
+          child: const AjoutProduitPage(),
+        ),
+      ),
+      useSafeArea: true,
+    ).then((_) => _loadData()); // Reload after closing sheet
   }
 
   void detailProduit(Produit produit) {
-    // Example: show product details
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Détail: ${produit.nom}')),
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(produit.nom),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (produit.image1.isNotEmpty)
+              Image.network(
+                produit.image1,
+                height: 150,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 50),
+              ),
+            const SizedBox(height: 10),
+            Text("Type: ${produit.type}"),
+            Text("Quantité: ${produit.quantite}"),
+            //if (produit.poid != null) Text("Poids: ${produit.poid} kg"),
+            // Add other fields if needed
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Fermer"),
+          )
+        ],
+      ),
     );
   }
 
   Future<void> supprimerProduit(Produit produit) async {
     try {
-      await _service.delete(produit.id);
+      await _produitService.delete(produit.id);
       setState(() {
         produits.removeWhere((p) => p.id == produit.id);
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Produit supprimé du panier')),
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Erreur: ${e.toString()}')),
@@ -70,11 +131,86 @@ class _LivrerPageState extends State<LivrerPage> {
     }
   }
 
-  void confirmerCommande() {
-    // Example: call API to confirm order if required
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Commande confirmée!")),
-    );
+  Future<void> updateQuantite(Produit produit, int nouvelleQuantite) async {
+    try {
+      // Optimistic UI update
+      setState(() {
+        produit.quantite = nouvelleQuantite;
+      });
+      
+      // Update on backend
+      // Assuming your backend update expects the full object or partial map
+      // We send the full object with updated quantity
+      await _produitService.update(produit.id, produit.toJson());
+      
+    } catch (e) {
+      // Revert on error (optional, or just show message)
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur maj quantité: ${e.toString()}')),
+      );
+    }
+  }
+
+  Future<void> confirmerCommande() async {
+    if (currentCommandeId == null) return;
+    /*
+    try {
+      setState(() => isLoading = true);
+      await _commandeService.confirmerCommande(currentCommandeId!);
+      
+      setState(() {
+        produits.clear();
+        currentCommandeId = null;
+        isLoading = false;
+      });
+
+      if (!mounted) return;
+      
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Succès"),
+          content: const Text("Votre commande a été confirmée avec succès !"),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _loadData(); // Start a new fresh cart
+              },
+              child: const Text("OK"),
+            )
+          ],
+        ),
+      );
+
+    } catch (e) {
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Erreur confirmation: $e")),
+      );
+    }*/
+    goToConfirmationPage();
+  }
+
+ void goToConfirmationPage() {
+    if (currentCommandeId == null || !hasProduits()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Veuillez ajouter des produits d\'abord.')),
+      );
+      return;
+    }
+
+    // Navigue vers la nouvelle page en passant l'ID de la commande active
+     Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ConfirmationCommandePage(commandeId: currentCommandeId!), 
+      ),
+    ).then((result) {
+      // Si la confirmation finale a réussi sur la page suivante (result est true)
+      if (result == true) { // <-- Si ConfirmationCommandePage pop(true)
+        _loadData(); // <-- Recharge la page
+      }
+    }); 
   }
 
   @override
@@ -83,6 +219,12 @@ class _LivrerPageState extends State<LivrerPage> {
       appBar: AppBar(
         title: const Text('Produits Pour Livrer'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadData,
+          )
+        ],
       ),
       body: isLoading
           ? _buildLoadingState()
@@ -103,7 +245,7 @@ class _LivrerPageState extends State<LivrerPage> {
           SizedBox(height: 18),
           Text("Chargement du panier…", style: TextStyle(fontSize: 24)),
           SizedBox(height: 8),
-          Text("Veuillez patienter.", style: TextStyle(color: Colors.grey)),
+          CircularProgressIndicator(),
         ],
       ),
     );
@@ -111,22 +253,26 @@ class _LivrerPageState extends State<LivrerPage> {
 
   Widget _buildErrorState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text("⚠️", style: TextStyle(fontSize: 48)),
-          const SizedBox(height: 18),
-          const Text("Oups, un problème est survenu",
-              style: TextStyle(fontSize: 24)),
-          const SizedBox(height: 8),
-          Text(loadError ?? "",
-              style: const TextStyle(color: Colors.red, fontSize: 16)),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: GoAjoutProduitClient,
-            child: const Text("Ajouter un produit"),
-          ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text("⚠️", style: TextStyle(fontSize: 48)),
+            const SizedBox(height: 18),
+            const Text("Oups, un problème est survenu",
+                style: TextStyle(fontSize: 24)),
+            const SizedBox(height: 8),
+            Text(loadError ?? "Erreur inconnue",
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red, fontSize: 16)),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _loadData,
+              child: const Text("Réessayer"),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -141,14 +287,17 @@ class _LivrerPageState extends State<LivrerPage> {
           const Text("Votre panier est vide",
               style: TextStyle(fontSize: 24)),
           const SizedBox(height: 8),
-          const Text(
-            "Ajoutez votre premier produit pour démarrer votre commande.\nVous pourrez ensuite ajuster les quantités et confirmer.",
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 32.0),
+            child: Text(
+              "Ajoutez votre premier produit pour démarrer votre commande.\nVous pourrez ensuite ajuster les quantités et confirmer.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
+            ),
           ),
           const SizedBox(height: 20),
           ElevatedButton(
-            onPressed: GoAjoutProduitClient,
+            onPressed: goAjoutProduitClient,
             child: const Text("+ Ajouter un produit"),
           ),
         ],
@@ -160,11 +309,11 @@ class _LivrerPageState extends State<LivrerPage> {
     return Column(
       children: [
         const SizedBox(height: 18),
-        Padding(
-          padding: const EdgeInsets.all(8),
+        const Padding(
+          padding: EdgeInsets.all(8),
           child: Text(
             "Gérez votre commande ici avant de confirmer",
-            style: const TextStyle(color: Colors.grey),
+            style: TextStyle(color: Colors.grey),
             textAlign: TextAlign.center,
           ),
         ),
@@ -174,56 +323,50 @@ class _LivrerPageState extends State<LivrerPage> {
             itemBuilder: (ctx, i) {
               final produit = produits[i];
               return Card(
+                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 child: ListTile(
-                  leading: Image.network(
-                  produit.image1,
-                  width: 48,
-                  height: 48,
-                  errorBuilder: (context, error, stackTrace) =>
-                      Icon(Icons.broken_image, size: 48), // or local asset
-                ),
-                  title: Text(produit.nom),
-                  subtitle: Text(produit.type),
+                  contentPadding: const EdgeInsets.all(8),
+                  leading: ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: Image.network(
+                      produit.image1,
+                      width: 48,
+                      height: 48,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) =>
+                          const Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                    ),
+                  ),
+                  title: Text(produit.nom, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text("${produit.type} \nRef: ${produit.id.substring(0, 4)}..."),
                   trailing: SizedBox(
-                    width: 120,
+                    width: 140,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Flexible(
-                          child: SizedBox(
-                            width: 48,
-                            child: TextFormField(
-                              initialValue: produit.quantite.toString(),
-                              keyboardType: TextInputType.number,
-                              onChanged: (v) async {
-                                final int? n = int.tryParse(v);
-                                if (n != null && n > 0) {
-                                  setState(() {
-                                    produit.quantite = n;
-                                  });
-                                  // If you want to update on server:
-                                  // await _service.update(produit.id, produit.toJson());
-                                }
-                              },
-                              decoration: const InputDecoration(
-                                labelText: "Qté",
-                              ),
-                            ),
-                          ),
+                        IconButton(
+                          icon: const Icon(Icons.remove_circle_outline, color: Colors.grey),
+                          onPressed: () {
+                            if (produit.quantite > 1) {
+                              updateQuantite(produit, produit.quantite - 1);
+                            }
+                          },
+                        ),
+                        Text("${produit.quantite}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        IconButton(
+                          icon: const Icon(Icons.add_circle_outline, color: Colors.blue),
+                          onPressed: () {
+                            updateQuantite(produit, produit.quantite + 1);
+                          },
                         ),
                         IconButton(
-                          icon: const Icon(Icons.info_outline),
-                          tooltip: "DÉTAIL",
-                          onPressed: () => detailProduit(produit),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          tooltip: "SUPPRIMER",
+                          icon: const Icon(Icons.delete_outline, color: Colors.red),
                           onPressed: () => supprimerProduit(produit),
                         ),
                       ],
                     ),
                   ),
+                  onTap: () => detailProduit(produit),
                 ),
               );
             },
@@ -235,25 +378,39 @@ class _LivrerPageState extends State<LivrerPage> {
   }
 
   Widget _buildResumeCommande() {
-    return Padding(
+    return Container(
       padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            offset: const Offset(0, -4),
+            blurRadius: 10,
+          )
+        ],
+      ),
       child: Row(
         children: [
           Expanded(
-            child: ElevatedButton(
-              onPressed: GoAjoutProduitClient,
-              child: const Text("AJOUTER UN PRODUIT"),
+            child: OutlinedButton(
+              onPressed: goAjoutProduitClient,
+              style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+              child: const Text("AJOUTER"),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
+            flex: 2,
             child: ElevatedButton(
-              onPressed: hasProduits() ? confirmerCommande : null,
+              onPressed: hasProduits() ? goToConfirmationPage : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
                 foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                elevation: 2,
               ),
-              child: const Text("CONFIRMER COMMANDE"),
+              child: const Text("CONFIRMER COMMANDE", style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
         ],

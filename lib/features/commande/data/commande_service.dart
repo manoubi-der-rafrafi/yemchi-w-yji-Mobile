@@ -155,4 +155,6 @@ Future<List<Commande>> getCommandesByTransporteur(String idTransporteur) async {
   return data.map((jsonItem) => Commande.fromJson(jsonItem)).toList();
 }
 
+  Future getCommandeEnCoursByClient(String? userId) async {}
+
 }

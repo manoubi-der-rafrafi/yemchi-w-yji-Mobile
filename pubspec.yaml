@@ -25,6 +25,7 @@ dependencies:
   flutter_compass: ^0.8.0
   flutter_secure_storage: ^9.2.4
   shared_preferences: ^2.3.2
+  image_picker: ^1.2.0
   
 dev_dependencies:
   flutter_test:
