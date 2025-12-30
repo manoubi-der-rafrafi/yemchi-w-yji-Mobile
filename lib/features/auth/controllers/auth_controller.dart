@@ -40,7 +40,7 @@ class AuthController {
     }
 
     try {
-      currentUser.value = await _svc.me();
+      currentUser.value = await _svc.me(storedUserId!);
     } catch (_) {}
   }
 
@@ -59,6 +59,7 @@ class AuthController {
     loading.value = true; error.value = null;
     try {
       final u = await _svc.updateMe(
+        id: currentUser.value!.id, // <--- Passer l'ID ici
         nom: nom,
         prenom: prenom,
         adresse: adresse,

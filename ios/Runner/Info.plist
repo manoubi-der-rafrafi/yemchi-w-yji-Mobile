@@ -51,7 +51,9 @@
   </array>
   <key>CADisableMinimumFrameDurationOnPhone</key>
   <true/>
-  <key>UIApplicationSupportsIndirectInputEvents</key>
-  <true/>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Nous utilisons votre position pour remplir automatiquement l'adresse.</string>
 </dict>
 </plist>

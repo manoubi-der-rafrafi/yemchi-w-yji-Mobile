@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'dart:io';
 import '../models/produit.dart';
-import '../models/commande.dart';
+import 'package:yemchi_wyji/core/models/commande.dart';
 import '../../../core/network/api.dart';
 import '../../../core/env.dart';
 import '../../../core/storage/token_storage.dart';
