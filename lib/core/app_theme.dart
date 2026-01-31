@@ -105,7 +105,7 @@ class LogoTitle extends StatelessWidget {
       children: [
         // Place ton asset du logo ici
         Image.asset(
-          'assets/logo_yemchi.png', // ajoute-le dans pubspec.yaml
+          'assets\images\LOGO_YEMCHI W YJI.png', // ajoute-le dans pubspec.yaml
           width: 96,
           height: 96,
           fit: BoxFit.contain,

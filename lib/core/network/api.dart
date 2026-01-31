@@ -9,43 +9,73 @@ class Api {
 
   Uri _u(String path) => Uri.parse('${Env.baseUrl}$path');
 
-  Future<Map<String, String>> _headers() async {
+  Future<Map<String, String>> _headers({bool includeAuth = true}) async {
     final token = await TokenStorage.access();
     final headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
-    if (token != null && token.isNotEmpty) {
+    if (includeAuth && token != null && token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
     }
     return headers;
   }
 
-  Future<http.Response> get(String path) async {
-    final r = await _client.get(_u(path), headers: await _headers());
+  Future<http.Response> get(String path, {bool includeAuth = true}) async {
+    final r = await _client.get(
+      _u(path),
+      headers: await _headers(includeAuth: includeAuth),
+    );
     _throwIfError(r);
     return r;
   }
 
-  Future<http.Response> post(String path, {Object? body}) async {
-    final r = await _client.post(_u(path), headers: await _headers(), body: body);
+  Future<http.Response> post(
+    String path, {
+    Object? body,
+    bool includeAuth = true,
+  }) async {
+    final r = await _client.post(
+      _u(path),
+      headers: await _headers(includeAuth: includeAuth),
+      body: body,
+    );
     _throwIfError(r);
     return r;
   }
 
-  Future<http.Response> put(String path, {Object? body}) async {
-    final r = await _client.put(_u(path), headers: await _headers(), body: body);
+  Future<http.Response> put(
+    String path, {
+    Object? body,
+    bool includeAuth = true,
+  }) async {
+    final r = await _client.put(
+      _u(path),
+      headers: await _headers(includeAuth: includeAuth),
+      body: body,
+    );
     _throwIfError(r);
     return r;
   }
-  Future<http.Response> delete(String path) async {
-    final r = await _client.delete(_u(path), headers: await _headers());
+  Future<http.Response> delete(String path, {bool includeAuth = true}) async {
+    final r = await _client.delete(
+      _u(path),
+      headers: await _headers(includeAuth: includeAuth),
+    );
     _throwIfError(r);
     return r;
   }
   //patch
-  Future<http.Response> patch(String path, {Object? body}) async {
-    final r = await _client.patch(_u(path), headers: await _headers(), body: body);
+  Future<http.Response> patch(
+    String path, {
+    Object? body,
+    bool includeAuth = true,
+  }) async {
+    final r = await _client.patch(
+      _u(path),
+      headers: await _headers(includeAuth: includeAuth),
+      body: body,
+    );
     _throwIfError(r);
     return r;
   }

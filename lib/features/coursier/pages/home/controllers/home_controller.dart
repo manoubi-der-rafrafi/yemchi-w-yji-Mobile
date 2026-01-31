@@ -70,7 +70,7 @@ class HomeController extends ChangeNotifier {
 
   // --- RAFRAÎCHISSEMENT AUTO ---
   Timer? _refreshTimer;
-  Duration autoRefreshEvery = const Duration(seconds: 30);
+  Duration autoRefreshEvery = const Duration(seconds: 3);
 
   // --- AUTRES (existant) ---
   final List<Map<String, String>> notifications = [
@@ -107,6 +107,12 @@ class HomeController extends ChangeNotifier {
     if (notify) {
       notifyListeners();
     }
+  }
+
+  void closePanel() {
+    if (!isPanelOpen) return;
+    isPanelOpen = false;
+    notifyListeners();
   }
 
   void resetRoute({bool notify = false}) {
@@ -181,11 +187,31 @@ class HomeController extends ChangeNotifier {
     await refreshByZone(zone, silent: silent);
   }
 
-  /// Appelle le backend: GET /commandes/zone/{zone}
+  /// Appelle le backend: POST /commandes/sous-zones/vehicule
   Future<void> refreshByZone(String zone, {bool silent = false}) async {
     try {
       final service = CommandeService(Api());
-      final list = await service.getByZone(zone);
+      final user = _authController.currentUser.value;
+      final vehicule = user?.typeVehicule?.name;
+      if (vehicule == null || vehicule.isEmpty) {
+        throw Exception('Type vehicule introuvable pour l\'utilisateur courant');
+      }
+      final zoneDepart = user?.zoneDepart ?? const <String, List<String>>{};
+      final zoneArriver = user?.zoneArriver ?? const <String, List<String>>{};
+      final sousZonesDepart = zoneDepart.values.expand((z) => z).toList();
+      final sousZonesArrivee = zoneArriver.values.expand((z) => z).toList();
+      final bool hasSousZones =
+          sousZonesDepart.isNotEmpty && sousZonesArrivee.isNotEmpty;
+      final list = hasSousZones
+          ? await service.getBySousZonesAndVehicule(
+              sousZonesDepart: sousZonesDepart,
+              sousZonesArrivee: sousZonesArrivee,
+              vehicule: vehicule,
+            )
+          : await service.getByZoneAndVehicule(
+              zone: zone,
+              vehicule: vehicule,
+            );
 
       final transporteurId = _authController.currentUser.value?.id;
       if (transporteurId != null && transporteurId.isNotEmpty) {
@@ -219,6 +245,15 @@ class HomeController extends ChangeNotifier {
     } catch (e) {
       debugPrint('⚠️ refreshByZone($zone) failed: $e');
     }
+  }
+
+  void moveToMesCommandes(Commande commande) {
+    _commandes.removeWhere((c) => c.id == commande.id);
+    final exists = _mesCommandes.any((c) => c.id == commande.id);
+    if (!exists) {
+      _mesCommandes.add(commande);
+    }
+    notifyListeners();
   }
 
   Commande? _findCommandeById(String? id) {
@@ -308,6 +343,25 @@ class HomeController extends ChangeNotifier {
     const tolerance = 1e-6;
     return (a.latitude - b.latitude).abs() < tolerance &&
         (a.longitude - b.longitude).abs() < tolerance;
+  }
+
+  void updateCommande(Commande updated) {
+    final id = updated.id;
+    if (id == null) return;
+    for (var i = 0; i < _commandes.length; i++) {
+      if (_commandes[i].id == id) {
+        _commandes[i] = updated;
+        notifyListeners();
+        return;
+      }
+    }
+    for (var i = 0; i < _mesCommandes.length; i++) {
+      if (_mesCommandes[i].id == id) {
+        _mesCommandes[i] = updated;
+        notifyListeners();
+        return;
+      }
+    }
   }
 
   double? _computePolylineDistanceMeters(List<LatLng>? points) {

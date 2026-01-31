@@ -232,7 +232,7 @@ class _BrandLockup extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Image.asset(
-              'assets/images/LOGO_YEMCHI W YJI.jpg',
+              'assets/images/LOGO_YEMCHI W YJI.png',
               height: 90,
               errorBuilder: (_, __, ___) => const Icon(Icons.local_shipping, size: 90, color: Colors.white),
             ),
@@ -244,7 +244,7 @@ class _BrandLockup extends StatelessWidget {
         Text(
           'Connexion à votre compte',
           style: TextStyle(
-            color: Colors.white.withOpacity(0.9),
+            color: Colors.black,
             fontWeight: FontWeight.w600,
           ),
           textAlign: centered ? TextAlign.center : TextAlign.left,

@@ -93,10 +93,17 @@ class _DemandesAAccepterPageState extends State<DemandesAAccepterPage> {
     setState(() => _isFilterLoading = true);
     try {
       final api = context.read<Api>();
+      final currentUser = context.read<AuthUserService>().currentUser.value;
+      final vehicule = currentUser?.typeVehicule?.name;
+      if (vehicule == null || vehicule.isEmpty) {
+        throw Exception('Type vehicule introuvable pour l\'utilisateur courant');
+      }
       final service = CommandeService(api);
-      final commandes = await service.getBySousZones(
+      final commandes = await service.getBySousZonesAndVehicule(
         sousZonesDepart: departPayload,
         sousZonesArrivee: arriveePayload,
+        vehicule: vehicule,
+        
       );
       if (!mounted) return;
       setState(() => _filteredCommandes = commandes);
@@ -142,12 +149,16 @@ class _DemandesAAccepterPageState extends State<DemandesAAccepterPage> {
   }
 
   Future<void> _showCommandeDetails(Commande commande) async {
+    final homeCtrl = context.read<HomeController>();
     await showModalBottomSheet(
       context: context,
       showDragHandle: true,
-      builder: (_) => CommandeDetailsSheet(
-        commande: commande,
-        isMine: false,
+      builder: (_) => ChangeNotifierProvider<HomeController>.value(
+        value: homeCtrl,
+        child: CommandeDetailsSheet(
+          commande: commande,
+          isMine: false,
+        ),
       ),
     );
     if (!mounted) return;
@@ -674,17 +685,30 @@ class _SousZoneFilters extends StatelessWidget {
 
   static const Map<String, List<SousZone>> _zonesToSousZones = {
     'GRAND TUNIS': [
-      SousZone.TUNIS_CENTRE,
-      SousZone.ARIANA_NORD,
-      SousZone.BEN_AROUS_SUD,
-      SousZone.MANOUBA_OUEST,
+      SousZone.TUNIS,
+      SousZone.ARIANA,
+      SousZone.BEN_AROUS,
+      SousZone.MANOUBA,
     ],
-    'COTIER NORD': [
-      SousZone.BIZERTE_METRO,
-      SousZone.NABEUL_HAMMAMET,
-      SousZone.KELIBIA_MENZEL_TEMIME,
+    'NORD EST': [
+      SousZone.BIZERTE,
+      SousZone.NABEUL,
     ],
-    'CENTRE EST': [
+    'NORD OUEST': [
+      SousZone.BEJA,
+      SousZone.JENDOUBA,
+      SousZone.KEF,
+      SousZone.SILIANA,
+    ],
+    'CENTRE': [
+      SousZone.ZAGHOUAN,
+      SousZone.KAIROUAN,
+    ],
+    'CENTRE OUEST': [
+      SousZone.KASSERINE,
+      SousZone.SIDI_BOUZID,
+    ],
+    'SAHEL': [
       SousZone.SOUSSE,
       SousZone.MONASTIR,
       SousZone.MAHDIA,
@@ -694,10 +718,13 @@ class _SousZoneFilters extends StatelessWidget {
     ],
     'SUD EST': [
       SousZone.GABES,
-      SousZone.DJERBA_ZARZIS,
+      SousZone.MEDENINE,
+      SousZone.TATAOUINE,
     ],
-    'INTERIEUR': [
-      SousZone.KAIROUAN,
+    'SUD OUEST': [
+      SousZone.GAFSA,
+      SousZone.TOZEUR,
+      SousZone.KEBILI,
     ],
   };
 

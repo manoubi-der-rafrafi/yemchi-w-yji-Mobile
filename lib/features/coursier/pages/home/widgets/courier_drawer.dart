@@ -4,8 +4,11 @@ import 'package:yemchi_wyji/core/models/utilisateur.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/pages/profil_page.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/pages/historique_commandes_page.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/pages/zones_service_page.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/controllers/home_controller.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/pages/demandes_a_accepter_page.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/pages/mes_gains_page.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/pages/mes_factures_page.dart';
 class CourierDrawer extends StatelessWidget {
   final VoidCallback? onOpenMesCourses;
 
@@ -161,20 +164,16 @@ class CourierDrawer extends StatelessWidget {
 
             _SectionHeader("CARTE & LOCALISATION"),
             _Item(
-              icon: Icons.my_location_outlined,
-              label: "Ma position",
-              onTap: () {
-                // ex: remonter un event pour centrer la carte
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Centrer sur ma position")),
-                );
-              },
-            ),
-            _Item(
               icon: Icons.map_outlined,
               label: "Zones de service",
-              onTap: () {},
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ZonesServicePage(),
+                  ),
+                );
+              },
             ),
 
             const Divider(height: 16),
@@ -183,12 +182,26 @@ class CourierDrawer extends StatelessWidget {
             _Item(
               icon: Icons.account_balance_wallet_outlined,
               label: "Mes gains",
-              onTap: () {},
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const MesGainsPage(),
+                  ),
+                );
+              },
             ),
             _Item(
               icon: Icons.receipt_long_outlined,
               label: "Paiements & factures",
-              onTap: () {},
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const MesFacturesPage(),
+                  ),
+                );
+              },
             ),
 
             const Divider(height: 16),

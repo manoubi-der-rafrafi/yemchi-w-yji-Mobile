@@ -138,6 +138,12 @@ class _ContactCard extends StatelessWidget {
             ),
             const Divider(height: 24),
             _InfoTile(
+              icon: Icons.badge_outlined,
+              label: 'Identifiant',
+              value: _label(user.identifiant),
+            ),
+            const Divider(height: 24),
+            _InfoTile(
               icon: Icons.mail_outline,
               label: 'E-mail',
               value: _label(user.email),
@@ -270,8 +276,8 @@ class _DocumentPreview extends StatelessWidget {
           const SizedBox(height: 8),
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: AspectRatio(
-              aspectRatio: 4 / 3,
+            child: SizedBox(
+              height: 120,
               child: hasImage
                   ? Image.network(
                       trimmed!,

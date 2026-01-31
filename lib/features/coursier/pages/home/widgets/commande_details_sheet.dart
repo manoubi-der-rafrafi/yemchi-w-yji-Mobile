@@ -6,6 +6,7 @@ import 'package:yemchi_wyji/core/network/api.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
 import 'package:yemchi_wyji/features/commande/data/commande_service.dart';
 import 'package:yemchi_wyji/features/produit/data/produit_service.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/controllers/home_controller.dart';
 
 class CommandeDetailsSheet extends StatefulWidget {
   final Commande commande;
@@ -63,27 +64,45 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
   }
 
   void _onAccepter() async {
-  final auth = context.read<AuthController>();
-  final currentUserId = auth.currentUser.value?.id;
+    final auth = context.read<AuthController>();
+    final currentUserId = auth.currentUser.value?.id;
 
-  if (currentUserId == null) {
-    debugPrint('Aucun utilisateur courant -> assignation impossible.');
-    return;
-  }
+    if (currentUserId == null) {
+      debugPrint('Aucun utilisateur courant -> assignation impossible.');
+      return;
+    }
 
-  try {
-    final api = context.read<Api>();
-    final service = CommandeService(api);
+    try {
+      final api = context.read<Api>();
+      final service = CommandeService(api);
 
-    await service.assignerTransporteur(
-      widget.commande.id,
-      currentUserId,
-    );
+      final updated = await service.assignerTransporteur(
+        widget.commande.id,
+        currentUserId,
+      );
 
-    if (!mounted) return;
-    Navigator.of(context).maybePop(true);
+      if (!mounted) return;
+      final homeCtrl = context.read<HomeController>();
+      homeCtrl.moveToMesCommandes(updated);
+      homeCtrl.setNavigationMode(false);
+      homeCtrl.clearSelection();
+      Navigator.of(context).maybePop(true);
+    } on StateError catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } on ArgumentError catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message.toString())),
+      );
   } catch (e) {
     debugPrint('Erreur assignation transporteur: $e');
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Erreur assignation transporteur.')),
+    );
   }
 }
 
@@ -97,33 +116,32 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
     final textTheme = theme.textTheme;
 
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _ModePaiementBadge(
-              label: _modePaiementLabel(widget.commande.modePaiement),
-              color: _modePaiementColor(widget.commande.modePaiement),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Liste des produits',
-              style: textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.85,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ModePaiementBadge(
+                label: _modePaiementLabel(widget.commande.modePaiement),
+                color: _modePaiementColor(widget.commande.modePaiement),
               ),
-            ),
-            const SizedBox(height: 16),
-            ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.45,
+              const SizedBox(height: 16),
+              Text(
+                'Liste des produits',
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              child: _buildProduitsSection(theme),
-            ),
-            const SizedBox(height: 20),
-            _buildActionButtons(context),
-          ],
+              const SizedBox(height: 16),
+              Expanded(
+                child: _buildProduitsSection(theme),
+              ),
+              const SizedBox(height: 20),
+              _buildActionButtons(context),
+            ],
+          ),
         ),
       ),
     );
@@ -212,7 +230,6 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
     }
 
     return ListView.separated(
-      shrinkWrap: true,
       padding: EdgeInsets.zero,
       physics: const BouncingScrollPhysics(),
       itemCount: _produits.length,

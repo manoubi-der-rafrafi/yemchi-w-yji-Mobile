@@ -4,6 +4,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:yemchi_wyji/core/models/commande.dart';
 import 'package:yemchi_wyji/core/models/utilisateur.dart';
 import 'package:yemchi_wyji/features/auth/data/auth_user_service.dart';
+import 'package:yemchi_wyji/core/network/api.dart';
+import 'package:yemchi_wyji/features/commande/data/commande_service.dart';
 
 import '../controllers/home_controller.dart';
 import 'map_view.dart';
@@ -23,7 +25,7 @@ class NotificationsPanel extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 220),
           child: _CommandeSelectionCard(
@@ -165,6 +167,7 @@ class _CommandeSelectionCardState extends State<_CommandeSelectionCard> {
         : null;
     final bool hasMetrics =
         distanceText != null || durationText != null || priceText != null;
+    final bool showCompleteButton = widget.isMine && widget.isNavigationActive;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
@@ -227,10 +230,42 @@ class _CommandeSelectionCardState extends State<_CommandeSelectionCard> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton(
-                    onPressed: widget.onToggleNavigation,
+                    onPressed: () async {
+                      widget.onToggleNavigation?.call();
+                    },
                     child: Text(widget.isNavigationActive ? 'Arrêter' : 'Démarrer'),
                   ),
                 ),
+                if (showCompleteButton) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () async {
+                        final api = context.read<Api>();
+                        final service = CommandeService(api);
+                        final departScanne = widget.commande.qrCodeDepartScanne == true;
+                        if (departScanne) {
+                          final updated =
+                              await service.marquerReceptionScanne(widget.commande.id);
+                          if (!mounted) return;
+                          homeCtrl.updateCommande(updated);
+                          homeCtrl.setNavigationMode(false);
+                          homeCtrl.clearSelection();
+                          return;
+                        } else {
+                          final updated =
+                              await service.marquerDepartScanne(widget.commande.id);
+                          if (!mounted) return;
+                          homeCtrl.updateCommande(updated);
+                          homeCtrl.setNavigationMode(false);
+                          homeCtrl.clearSelection();
+                          return;
+                        }
+                      },
+                      child: const Text('Terminer'),
+                    ),
+                  ),
+                ],
               ] else ...[
                 Expanded(
                   child: OutlinedButton(
@@ -350,7 +385,7 @@ class _RouteMetrics extends StatelessWidget {
           );
         }
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: theme.colorScheme.surfaceVariant.withOpacity(0.35),
             borderRadius: BorderRadius.circular(16),
@@ -439,7 +474,14 @@ class _InfoLine extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Expanded(child: Text(value, style: theme.textTheme.bodyMedium)),
+          Expanded(
+            child: Text(
+              value,
+              style: theme.textTheme.bodyMedium,
+              overflow: TextOverflow.ellipsis,
+              softWrap: true,
+            ),
+          ),
         ],
       ),
     );
@@ -471,6 +513,9 @@ class _ClientInfos extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!showContactDetails) {
+      return const SizedBox.shrink();
+    }
     final parts = [user?.prenom, user?.nom]
         .whereType<String>()
         .map((s) => s.trim())
@@ -479,7 +524,6 @@ class _ClientInfos extends StatelessWidget {
     final fullName =
         parts.isNotEmpty ? parts.join(' ') : 'Utilisateur inconnu';
 
-    final email = _fallback(user?.email, 'Email indisponible');
     final telDepart =
         _fallback(commande.telDepart, 'Numero depart indisponible');
     final telArrivee =
@@ -554,17 +598,39 @@ class _ClientInfos extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 4),
-              if (showContactDetails) ...[
-                Text(
-                  email,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+              if (showContactDetails)
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    const minColumnWidth = 220.0;
+                    final bool shouldStack =
+                        constraints.maxWidth < minColumnWidth * 2;
+                    if (shouldStack) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _InfoLine(label: 'Tel depart', value: telDepart),
+                          const SizedBox(height: 6),
+                          _InfoLine(label: 'Tel arrivee', value: telArrivee),
+                        ],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        Expanded(
+                          child:
+                              _InfoLine(label: 'Tel depart', value: telDepart),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _InfoLine(
+                            label: 'Tel arrivee',
+                            value: telArrivee,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
-                const SizedBox(height: 6),
-                _InfoLine(label: 'Tel depart', value: telDepart),
-                _InfoLine(label: 'Tel arrivee', value: telArrivee),
-              ],
             ],
           ),
         ),

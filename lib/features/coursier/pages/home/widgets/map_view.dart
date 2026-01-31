@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
@@ -118,6 +118,7 @@ class MapViewState extends State<MapView>
   @override
   void initState() {
     super.initState();
+    print('MapView initState called');
     _homeControllerListener = _handleHomeControllerChanged;
     _cameraAnimationController = AnimationController(
       vsync: this,
@@ -229,6 +230,8 @@ class MapViewState extends State<MapView>
     ).listen((pos) => _updateFromPosition(pos));
     final auth = context.read<AuthController>();
     final zoneInit = auth.currentUser.value?.zone?.name; // ex: "GRAND_TUNIS"
+    debugPrint('zoneInit: $zoneInit');
+
     if (zoneInit != null && zoneInit.isNotEmpty) {
       // Lance le compteur + premier fetch tout de suite
       await context.read<HomeController>().setZoneAndRefresh(
@@ -402,8 +405,8 @@ class MapViewState extends State<MapView>
 
       // --- 2) MISE Ã€ JOUR DE LA SOUS-ZONE SI ELLE CHANGE ---
       final currentSous =
-          auth.currentUser.value?.sousZone?.name; // ex: "TUNIS_CENTRE"
-      final detectedSous = zoneEtSouszone['sousZone']; // ex: "TUNIS_CENTRE"
+          auth.currentUser.value?.sousZone?.name; // ex: "TUNIS"
+      final detectedSous = zoneEtSouszone['sousZone']; // ex: "TUNIS"
 
       if (detectedSous != null &&
           detectedSous.toUpperCase() != (currentSous ?? '').toUpperCase()) {
@@ -1375,6 +1378,7 @@ class MapViewState extends State<MapView>
             onTap: () => _handleCommandeTap(commande),
             pointColor: markerColor,
             labelOverride: markerLabel,
+            showLabel: false,
             rotationListenable: _mapRotationNotifier,
           ),
         ),
@@ -1625,7 +1629,6 @@ class MapViewState extends State<MapView>
     });
 
     homeCtrl.setNavigationMode(true);
-    _showSnack('Suivi en coursâ€¦');
   }
 
   void _showSnack(String message) {
@@ -1706,7 +1709,7 @@ class MapViewState extends State<MapView>
     _mapController.fitCamera(
       CameraFit.bounds(
         bounds: bounds,
-        padding: const EdgeInsets.all(48),
+        padding: const EdgeInsets.fromLTRB(48, 48, 48, 220),
       ),
     );
   }
@@ -1719,9 +1722,12 @@ class MapViewState extends State<MapView>
     await showModalBottomSheet(
       context: context,
       showDragHandle: true,
-      builder: (_) => CommandeDetailsSheet(
-        commande: commande,
-        isMine: isMine,
+      builder: (_) => ChangeNotifierProvider<HomeController>.value(
+        value: homeCtrl,
+        child: CommandeDetailsSheet(
+          commande: commande,
+          isMine: isMine,
+        ),
       ),
     );
   }
@@ -1882,7 +1888,7 @@ class MapViewState extends State<MapView>
       _mapController.fitCamera(
         CameraFit.bounds(
           bounds: bounds,
-          padding: const EdgeInsets.all(48),
+          padding: const EdgeInsets.fromLTRB(48, 48, 48, 220),
         ),
       );
     });
@@ -2038,6 +2044,7 @@ class _CommandeMarker extends StatelessWidget {
   final VoidCallback onTap;
   final Color? pointColor;
   final String? labelOverride;
+  final bool showLabel;
   final ValueListenable<double> rotationListenable;
 
   const _CommandeMarker({
@@ -2045,31 +2052,15 @@ class _CommandeMarker extends StatelessWidget {
     required this.onTap,
     this.pointColor,
     this.labelOverride,
+    this.showLabel = false,
     required this.rotationListenable,
   });
 
   @override
   Widget build(BuildContext context) {
-    final label =
-        labelOverride ?? commande.localisationDepart ?? 'Point pickup';
-
-    final labelChip = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.78),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
+    final String? label = showLabel
+        ? (labelOverride ?? commande.localisationDepart ?? 'Point pickup')
+        : null;
 
     return GestureDetector(
       onTap: onTap,
@@ -2077,19 +2068,36 @@ class _CommandeMarker extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ValueListenableBuilder<double>(
-            valueListenable: rotationListenable,
-            child: labelChip,
-            builder: (_, rotationDegrees, child) {
-              final radians = -rotationDegrees * math.pi / 180;
-              return Transform.rotate(
-                angle: radians,
-                alignment: Alignment.center,
-                child: child,
-              );
-            },
-          ),
-          const SizedBox(height: 4),
+          if (label != null)
+            ValueListenableBuilder<double>(
+              valueListenable: rotationListenable,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.78),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              builder: (_, rotationDegrees, child) {
+                final radians = -rotationDegrees * math.pi / 180;
+                return Transform.rotate(
+                  angle: radians,
+                  alignment: Alignment.center,
+                  child: child,
+                );
+              },
+            ),
+          if (label != null) const SizedBox(height: 4),
           Container(
             width: 34,
             height: 34,
@@ -2189,111 +2197,167 @@ class _LatLngTween extends Tween<LatLng> {
 
 // Table des zones (bornes simples rectangulaires)
 const List<Map<String, Object>> kZones = [
+  // ===================== NORD / GRAND TUNIS =====================
   {
-    "name": "TUNIS_CENTRE",
+    "name": "TUNIS",
     "zone": "GRAND_TUNIS",
-    "latMin": 36.75,
-    "latMax": 36.92,
-    "lngMin": 10.10,
-    "lngMax": 10.30,
+    "latMin": 36.70, "latMax": 36.95,
+    "lngMin": 10.00, "lngMax": 10.45,
   },
   {
-    "name": "ARIANA_NORD",
+    "name": "ARIANA",
     "zone": "GRAND_TUNIS",
-    "latMin": 36.80,
-    "latMax": 36.97,
-    "lngMin": 10.05,
-    "lngMax": 10.20,
+    "latMin": 36.75, "latMax": 37.10,
+    "lngMin": 10.00, "lngMax": 10.45,
   },
   {
-    "name": "BEN_AROUS_SUD",
+    "name": "BEN_AROUS",
     "zone": "GRAND_TUNIS",
-    "latMin": 36.65,
-    "latMax": 36.83,
-    "lngMin": 10.15,
-    "lngMax": 10.35,
+    "latMin": 36.55, "latMax": 36.85,
+    "lngMin": 10.05, "lngMax": 10.45,
   },
   {
-    "name": "MANOUBA_OUEST",
+    "name": "MANOUBA",
     "zone": "GRAND_TUNIS",
-    "latMin": 36.72,
-    "latMax": 36.93,
-    "lngMin": 9.95,
-    "lngMax": 10.12,
+    "latMin": 36.60, "latMax": 36.98,
+    "lngMin": 9.85, "lngMax": 10.25,
+  },
+
+  // ===================== NORD EST / CAP BON & BIZERTE =====================
+  {
+    "name": "BIZERTE",
+    "zone": "NORD_EST",
+    "latMin": 37.00, "latMax": 37.55,
+    "lngMin": 9.30, "lngMax": 10.35,
   },
   {
-    "name": "BIZERTE_METRO",
-    "zone": "COTIER_NORD",
-    "latMin": 37.15,
-    "latMax": 37.32,
-    "lngMin": 9.75,
-    "lngMax": 9.98,
+    "name": "NABEUL",
+    "zone": "NORD_EST",
+    "latMin": 36.15, "latMax": 36.95,
+    "lngMin": 10.25, "lngMax": 11.20,
+  },
+
+  // ===================== NORD OUEST =====================
+  {
+    "name": "BEJA",
+    "zone": "NORD_OUEST",
+    "latMin": 36.50, "latMax": 37.20,
+    "lngMin": 8.60, "lngMax": 9.60,
   },
   {
-    "name": "NABEUL_HAMMAMET",
-    "zone": "COTIER_NORD",
-    "latMin": 36.33,
-    "latMax": 36.50,
-    "lngMin": 10.40,
-    "lngMax": 10.70,
+    "name": "JENDOUBA",
+    "zone": "NORD_OUEST",
+    "latMin": 36.50, "latMax": 37.10,
+    "lngMin": 8.30, "lngMax": 9.20,
   },
   {
-    "name": "SOUSSE",
-    "zone": "CENTRE_EST",
-    "latMin": 35.75,
-    "latMax": 35.90,
-    "lngMin": 10.55,
-    "lngMax": 10.70,
+    "name": "KEF",
+    "zone": "NORD_OUEST",
+    "latMin": 35.90, "latMax": 36.80,
+    "lngMin": 8.20, "lngMax": 9.10,
   },
   {
-    "name": "MONASTIR",
-    "zone": "CENTRE_EST",
-    "latMin": 35.67,
-    "latMax": 35.85,
-    "lngMin": 10.75,
-    "lngMax": 10.95,
+    "name": "SILIANA",
+    "zone": "NORD_OUEST",
+    "latMin": 35.70, "latMax": 36.40,
+    "lngMin": 8.70, "lngMax": 9.80,
   },
+
+  // ===================== CENTRE =====================
   {
-    "name": "MAHDIA",
-    "zone": "CENTRE_EST",
-    "latMin": 35.35,
-    "latMax": 35.60,
-    "lngMin": 10.95,
-    "lngMax": 11.10,
-  },
-  {
-    "name": "SFAX",
-    "zone": "SFAX",
-    "latMin": 34.63,
-    "latMax": 34.83,
-    "lngMin": 10.60,
-    "lngMax": 10.85,
-  },
-  {
-    "name": "GABES",
-    "zone": "SUD_EST",
-    "latMin": 33.80,
-    "latMax": 33.95,
-    "lngMin": 10.00,
-    "lngMax": 10.20,
-  },
-  {
-    "name": "DJERBA_ZARZIS",
-    "zone": "SUD_EST",
-    "latMin": 33.40,
-    "latMax": 33.90,
-    "lngMin": 10.60,
-    "lngMax": 11.20,
+    "name": "ZAGHOUAN",
+    "zone": "CENTRE",
+    "latMin": 36.10, "latMax": 36.60,
+    "lngMin": 9.90, "lngMax": 10.60,
   },
   {
     "name": "KAIROUAN",
-    "zone": "INTERIEUR",
-    "latMin": 35.55,
-    "latMax": 35.75,
-    "lngMin": 10.00,
-    "lngMax": 10.20,
+    "zone": "CENTRE",
+    "latMin": 35.20, "latMax": 36.10,
+    "lngMin": 9.50, "lngMax": 10.50,
+  },
+  {
+    "name": "KASSERINE",
+    "zone": "CENTRE_OUEST",
+    "latMin": 34.80, "latMax": 35.70,
+    "lngMin": 8.20, "lngMax": 9.50,
+  },
+  {
+    "name": "SIDI_BOUZID",
+    "zone": "CENTRE_OUEST",
+    "latMin": 34.60, "latMax": 35.30,
+    "lngMin": 8.90, "lngMax": 10.20,
+  },
+
+  // ===================== SAHEL / CENTRE EST =====================
+  {
+    "name": "SOUSSE",
+    "zone": "SAHEL",
+    "latMin": 35.60, "latMax": 36.20,
+    "lngMin": 10.20, "lngMax": 10.90,
+  },
+  {
+    "name": "MONASTIR",
+    "zone": "SAHEL",
+    "latMin": 35.40, "latMax": 36.00,
+    "lngMin": 10.50, "lngMax": 11.10,
+  },
+  {
+    "name": "MAHDIA",
+    "zone": "SAHEL",
+    "latMin": 35.00, "latMax": 35.65,
+    "lngMin": 10.60, "lngMax": 11.30,
+  },
+
+  // ===================== SFAX =====================
+  {
+    "name": "SFAX",
+    "zone": "SFAX",
+    "latMin": 34.35, "latMax": 35.20,
+    "lngMin": 10.10, "lngMax": 11.10,
+  },
+
+  // ===================== SUD EST =====================
+  {
+    "name": "GABES",
+    "zone": "SUD_EST",
+    "latMin": 33.40, "latMax": 34.20,
+    "lngMin": 9.70, "lngMax": 10.80,
+  },
+  {
+    "name": "MEDENINE",
+    "zone": "SUD_EST",
+    "latMin": 32.50, "latMax": 33.80,
+    "lngMin": 10.00, "lngMax": 11.20,
+  },
+  {
+    "name": "TATAOUINE",
+    "zone": "SUD_EST",
+    "latMin": 31.80, "latMax": 33.20,
+    "lngMin": 9.60, "lngMax": 10.80,
+  },
+
+  // ===================== SUD OUEST =====================
+  {
+    "name": "GAFSA",
+    "zone": "SUD_OUEST",
+    "latMin": 34.00, "latMax": 34.90,
+    "lngMin": 7.80, "lngMax": 9.30,
+  },
+  {
+    "name": "TOZEUR",
+    "zone": "SUD_OUEST",
+    "latMin": 33.60, "latMax": 34.30,
+    "lngMin": 7.50, "lngMax": 8.60,
+  },
+  {
+    "name": "KEBILI",
+    "zone": "SUD_OUEST",
+    "latMin": 32.80, "latMax": 33.90,
+    "lngMin": 7.30, "lngMax": 9.30,
   },
 ];
+
 Map<String, String>? resolveZone(double lat, double lng) {
   for (final z in kZones) {
     final latMin = z["latMin"] as double;

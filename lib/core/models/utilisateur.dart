@@ -9,6 +9,7 @@ class Utilisateur {
   final String? nom;
   final String? prenom;
   final DateTime? dateNaissance;
+  final String? identifiant;
 
   // Auth / contact
   final String? email;
@@ -38,12 +39,15 @@ class Utilisateur {
   final double? longitude;    // Java: Double
   final SousZone? sousZone;   // Java: enum SousZone
   final Zone? zone;           // Java: enum Zone
+  final Map<String, List<String>>? zoneDepart;
+  final Map<String, List<String>>? zoneArriver;
 
   const Utilisateur({
     required this.id,
     this.nom,
     this.prenom,
     this.dateNaissance,
+    this.identifiant,
     this.email,
     this.telephone,
     required this.role,
@@ -63,6 +67,8 @@ class Utilisateur {
     this.longitude,
     this.sousZone,
     this.zone,
+    this.zoneDepart,
+    this.zoneArriver,
   });
 
   /// copyWith pour mises à jour immutables
@@ -71,6 +77,7 @@ class Utilisateur {
     String? nom,
     String? prenom,
     DateTime? dateNaissance,
+    String? identifiant,
     String? email,
     String? telephone,
     Role? role,
@@ -90,12 +97,15 @@ class Utilisateur {
     double? longitude,
     SousZone? sousZone,
     Zone? zone,
+    Map<String, List<String>>? zoneDepart,
+    Map<String, List<String>>? zoneArriver,
   }) {
     return Utilisateur(
       id: id ?? this.id,
       nom: nom ?? this.nom,
       prenom: prenom ?? this.prenom,
       dateNaissance: dateNaissance ?? this.dateNaissance,
+      identifiant: identifiant ?? this.identifiant,
       email: email ?? this.email,
       telephone: telephone ?? this.telephone,
       role: role ?? this.role,
@@ -117,6 +127,8 @@ class Utilisateur {
       longitude: longitude ?? this.longitude,
       sousZone: sousZone ?? this.sousZone,
       zone: zone ?? this.zone,
+      zoneDepart: zoneDepart ?? this.zoneDepart,
+      zoneArriver: zoneArriver ?? this.zoneArriver,
     );
   }
 
@@ -141,6 +153,7 @@ class Utilisateur {
       nom: json['nom'] as String?,
       prenom: json['prenom'] as String?,
       dateNaissance: _parseDate(json['dateNaissance']),
+      identifiant: json['identifiant'] as String?,
       email: json['email'] as String?,
       telephone: json['telephone'] as String?,
       role: _roleFromString(json['role']),
@@ -161,7 +174,23 @@ class Utilisateur {
       longitude: _toDouble(json['longitude']),
       sousZone: _sousZoneFromString(json['sousZone']),
       zone: _zoneFromString(json['zone']),
+      zoneDepart: _parseZoneMap(json['zoneDepart']),
+      zoneArriver:
+          _parseZoneMap(json['zoneArriver'] ?? json['zoneAriver']),
     );
+  }
+
+  static Map<String, List<String>>? _parseZoneMap(dynamic raw) {
+    if (raw is! Map) return null;
+    final result = <String, List<String>>{};
+    raw.forEach((key, value) {
+      final zoneKey = key?.toString();
+      if (zoneKey == null || zoneKey.isEmpty) return;
+      if (value is List) {
+        result[zoneKey] = value.map((e) => e.toString()).toList();
+      }
+    });
+    return result.isEmpty ? null : result;
   }
 
   Map<String, dynamic> toJson({bool includeId = true}) {
@@ -172,6 +201,7 @@ class Utilisateur {
       'nom': nom,
       'prenom': prenom,
       'dateNaissance': _dateToIso(dateNaissance),
+      'identifiant': identifiant,
       'email': email,
       'telephone': telephone,
       'role': role.name,       // "client" | "transporteur" | "admin"
@@ -192,6 +222,8 @@ class Utilisateur {
       'longitude': longitude,
       'sousZone': sousZone?.name,
       'zone': zone?.name,
+      'zoneDepart': zoneDepart,
+      'zoneAriver': zoneArriver,
     };
 
     // n’envoie pas les null (pratique pour PUT partiel)
@@ -208,7 +240,7 @@ class Utilisateur {
   @override
   String toString() =>
       'Utilisateur(id: $id, nom: $nom, prenom: $prenom, email: $email, '
-      'role: ${role.name}, statut: ${statut.name}, '
+      'role: ${role.name}, statut: ${statut.name}, identifiant: $identifiant, '
       'lat: $latitude, lng: $longitude, sousZone: ${sousZone?.name}, zone: ${zone?.name}, '
       'typeVehicule: ${typeVehicule?.name})';
 
@@ -254,7 +286,7 @@ class Utilisateur {
     final s = v.toString().toUpperCase();
     return SousZone.values.firstWhere(
       (sz) => sz.name.toUpperCase() == s,
-      orElse: () => SousZone.TUNIS_CENTRE,
+      orElse: () => SousZone.TUNIS,
     );
   }
 
@@ -276,27 +308,42 @@ enum Statut { actif, inactif, banni }
 // --- Enum pour les grandes zones (régions principales) ---
 enum Zone {
   GRAND_TUNIS,
-  COTIER_NORD,
-  CENTRE_EST,
+  NORD_EST,
+  NORD_OUEST,
+  CENTRE,
+  CENTRE_OUEST,
+  SAHEL,
   SFAX,
   SUD_EST,
-  INTERIEUR,
+  SUD_OUEST,
 }
-
 // --- Enum pour les sous-zones (zones détaillées pour scooters) ---
 enum SousZone {
   // Grand Tunis
-  TUNIS_CENTRE,
-  ARIANA_NORD,
-  BEN_AROUS_SUD,
-  MANOUBA_OUEST,
+  TUNIS,
+  ARIANA,
+  BEN_AROUS,
+  MANOUBA,
 
-  // Côtier Nord
-  BIZERTE_METRO,
-  NABEUL_HAMMAMET,
-  KELIBIA_MENZEL_TEMIME,
+  // Nord Est
+  BIZERTE,
+  NABEUL,
 
-  // Centre Est
+  // Nord Ouest
+  BEJA,
+  JENDOUBA,
+  KEF,
+  SILIANA,
+
+  // Centre
+  ZAGHOUAN,
+  KAIROUAN,
+
+  // Centre Ouest
+  KASSERINE,
+  SIDI_BOUZID,
+
+  // Sahel
   SOUSSE,
   MONASTIR,
   MAHDIA,
@@ -306,10 +353,13 @@ enum SousZone {
 
   // Sud Est
   GABES,
-  DJERBA_ZARZIS,
+  MEDENINE,
+  TATAOUINE,
 
-  // Intérieur
-  KAIROUAN,
+  // Sud Ouest
+  GAFSA,
+  TOZEUR,
+  KEBILI,
 }
 
 enum TypeVehicule {

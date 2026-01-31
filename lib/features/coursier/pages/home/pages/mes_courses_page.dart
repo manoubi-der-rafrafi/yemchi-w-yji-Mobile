@@ -303,6 +303,11 @@ class _CommandeCard extends StatelessWidget {
                     child: const Text('Demarrer'),
                   ),
                 ),
+                const SizedBox(width: 12),
+                OutlinedButton(
+                  onPressed: null,
+                  child: const Text('Terminer'),
+                ),
               ],
             ),
           ],

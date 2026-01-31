@@ -18,6 +18,7 @@ class AuthController {
     loading.value = true; error.value = null;
     try {
       final res = await _svc.login(email: email, password: password);
+      debugPrint('Auth token: ${res.token}');
       await TokenStorage.save(access: res.token, userId: res.user.id);
       currentUser.value = res.user;
       return true;
@@ -148,6 +149,29 @@ class AuthController {
         longitude: longitude,
       );
       // currentUser.value = u;
+      return true;
+    } catch (e) {
+      error.value = e.toString();
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  Future<bool> updateZonesDepartArriver({
+    required Map<String, List<String>> zoneDepart,
+    required Map<String, List<String>> zoneArriver,
+  }) async {
+    if (currentUser.value == null) return false;
+    loading.value = true;
+    error.value = null;
+    try {
+      final u = await _svc.updateZonesDepartArriver(
+        userId: currentUser.value!.id,
+        zoneDepart: zoneDepart,
+        zoneArriver: zoneArriver,
+      );
+      currentUser.value = u;
       return true;
     } catch (e) {
       error.value = e.toString();

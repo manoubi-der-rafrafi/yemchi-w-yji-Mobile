@@ -23,6 +23,8 @@ class AuthUserService {
   
   static String _byId(String id) => '/utilisateur/id/$id';
   static String _updateById(String id) => '/utilisateur/$id';
+  static String _zonesDepartArriver(String id) =>
+      '/utilisateur/$id/zones-depart-arriver';
   static String _statusById(String id) => '/utilisateur/$id/status'; // Added
 
   // ---------- LOGIN ----------
@@ -33,6 +35,7 @@ class AuthUserService {
     final r = await api.post(
       _login,
       body: json.encode({'email': email, 'motDePasse': password}),
+      includeAuth: false,
     );
 
     return _parseAuthResponse(r);
@@ -44,6 +47,7 @@ class AuthUserService {
     final r = await api.post(
       _register,
       body: json.encode(userData),
+      includeAuth: false,
     );
 
     return _parseAuthResponse(r);
@@ -282,6 +286,26 @@ class AuthUserService {
         : (m as Map<String, dynamic>);
 
     return Utilisateur.fromJson(data);
+  }
+
+  Future<Utilisateur> updateZonesDepartArriver({
+    required String userId,
+    required Map<String, List<String>> zoneDepart,
+    required Map<String, List<String>> zoneArriver,
+  }) async {
+    final r = await api.put(
+      _zonesDepartArriver(userId),
+      body: json.encode({
+        'zoneDepart': zoneDepart,
+        'zoneAriver': zoneArriver,
+      }),
+    );
+
+    if (r.statusCode == 200) {
+      return Utilisateur.fromJson(json.decode(r.body));
+    } else {
+      throw ApiException(r.statusCode, 'Échec de mise à jour des zones');
+    }
   }
 }
 
