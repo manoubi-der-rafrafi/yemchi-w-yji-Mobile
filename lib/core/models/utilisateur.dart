@@ -18,6 +18,7 @@ class Utilisateur {
   // Métadonnées de rôle / statut
   final Role role;
   final Statut statut;
+  final EtatIncident etatIncident;
 
   // Adresse / image
   final String? adresse;
@@ -52,6 +53,7 @@ class Utilisateur {
     this.telephone,
     required this.role,
     this.statut = Statut.actif,
+    this.etatIncident = EtatIncident.RIEN,
     this.adresse,
     this.image,
     this.imageCarteIdentiteFace,
@@ -82,6 +84,7 @@ class Utilisateur {
     String? telephone,
     Role? role,
     Statut? statut,
+    EtatIncident? etatIncident,
     String? adresse,
     String? image,
     String? imageCarteIdentiteFace,
@@ -110,6 +113,7 @@ class Utilisateur {
       telephone: telephone ?? this.telephone,
       role: role ?? this.role,
       statut: statut ?? this.statut,
+      etatIncident: etatIncident ?? this.etatIncident,
       adresse: adresse ?? this.adresse,
       image: image ?? this.image,
       imageCarteIdentiteFace:
@@ -158,6 +162,7 @@ class Utilisateur {
       telephone: json['telephone'] as String?,
       role: _roleFromString(json['role']),
       statut: _statutFromString(json['statut']),
+      etatIncident: _etatIncidentFromString(json['etatIncident']),
       adresse: json['adresse'] as String?,
       image: json['image'] as String?,
       imageCarteIdentiteFace: json['imageCarteIdentiteFace'] as String?,
@@ -206,6 +211,7 @@ class Utilisateur {
       'telephone': telephone,
       'role': role.name,       // "client" | "transporteur" | "admin"
       'statut': statut.name,   // "actif"  | "inactif"      | "banni"
+      'etatIncident': etatIncident.name,
       'adresse': adresse,
       'image': image,
       'imageCarteIdentiteFace': imageCarteIdentiteFace,
@@ -298,12 +304,27 @@ class Utilisateur {
       orElse: () => TypeVehicule.DEUX_ROUES_MOTORISES,
     );
   }
+
+  static EtatIncident _etatIncidentFromString(dynamic v) {
+    final s = (v ?? '').toString().toUpperCase();
+    switch (s) {
+      case 'PANNE':
+        return EtatIncident.PANNE;
+      case 'ACCIDENT':
+        return EtatIncident.ACCIDENT;
+      case 'RIEN':
+      default:
+        return EtatIncident.RIEN;
+    }
+  }
+
 }
 
 // ---------------- ENUMS ----------------
 
 enum Role { client, transporteur, admin }
 enum Statut { actif, inactif, banni }
+enum EtatIncident { RIEN, PANNE, ACCIDENT }
 
 // --- Enum pour les grandes zones (régions principales) ---
 enum Zone {

@@ -19,6 +19,7 @@ class Commande {
   // Relations (IDs simples)
   final String? clientId;
   final String? transporteurId; // backend: transporteurId (alias id_transporteur / transporteur_id)
+  final String? transporteurSecoursId;
   final String? idAmie;
 
   // Localisation & géo
@@ -42,6 +43,7 @@ class Commande {
   final DateTime? dateDemande;     // @CreatedDate
   final DateTime? dateDebut;
   final DateTime? dateFin;
+  final DateTime? dateConfirmer;
   final DateTime? majLe;           // @LastModifiedDate
 
   // Zones (enums Java -> String ici)
@@ -52,6 +54,7 @@ class Commande {
 
   final bool? qrCodeDepartScanne;
   final DateTime? dateScanDepart;
+  final bool? relaisTransporteurEffectue;
 
   final bool? qrCodeReceptionScanne;
   final DateTime? dateScanReception;
@@ -60,6 +63,7 @@ class Commande {
     required this.id,
     this.clientId,
     this.transporteurId,
+    this.transporteurSecoursId,
     this.idAmie,
     this.localisationDepart,
     this.destination,
@@ -77,6 +81,7 @@ class Commande {
     this.dateDemande,
     this.dateDebut,
     this.dateFin,
+    this.dateConfirmer,
     this.majLe,
     this.sousZoneDepart,
     this.sousZoneArrivee,
@@ -84,6 +89,7 @@ class Commande {
     this.zonePrincipaleArrivee,
     this.qrCodeDepartScanne,
     this.dateScanDepart,
+    this.relaisTransporteurEffectue,
     this.qrCodeReceptionScanne,
     this.dateScanReception,
   });
@@ -118,6 +124,28 @@ class Commande {
       return null;
     }
 
+    String? _pickTransporteurSecoursId(Map<String, dynamic> m) {
+      final direct = _toStringOrNull(
+        _pick(
+          m,
+          [
+            'transporteurSecoursId',
+            'transporteur_secours_id',
+            'idTransporteurSecours',
+            'id_transporteur_secours',
+          ],
+        ),
+      );
+      if (direct != null && direct.isNotEmpty) {
+        return direct;
+      }
+      final nested = m['transporteurSecours'] ?? m['transporteur_secours'];
+      if (nested is Map) {
+        return _toStringOrNull(nested['id'] ?? nested['_id']);
+      }
+      return null;
+    }
+
     return Commande(
       id: _pickId(raw),
 
@@ -126,6 +154,7 @@ class Commande {
       transporteurId: _toStringOrNull(
         _pick(raw, ['transporteurId', 'transporteur_id', 'id_transporteur']),
       ),
+      transporteurSecoursId: _pickTransporteurSecoursId(raw),
       idAmie: _toStringOrNull(_pick(raw, ['idAmie', 'id_amie'])),
 
       // Localisation & géo
@@ -154,6 +183,8 @@ class Commande {
       dateDemande: _toDate(_pick(raw, ['dateDemande', 'date_demande'])),
       dateDebut: _toDate(_pick(raw, ['dateDebut', 'date_debut'])),
       dateFin: _toDate(_pick(raw, ['dateFin', 'date_fin'])),
+      dateConfirmer:
+          _toDate(_pick(raw, ['dateConfirmer', 'date_confirmer'])),
       majLe: _toDate(_pick(raw, ['majLe'])),
 
       // Zones
@@ -169,6 +200,10 @@ class Commande {
       ),
       qrCodeDepartScanne: _pick(raw, ['qrCodeDepartScanne', 'qr_code_depart_scanne']) as bool?,
       dateScanDepart: _toDate(_pick(raw, ['dateScanDepart', 'date_scan_depart'])),
+      relaisTransporteurEffectue: _pick(
+        raw,
+        ['relaisTransporteurEffectue', 'relais_transporteur_effectue'],
+      ) as bool?,
       qrCodeReceptionScanne: _pick(raw, ['qrCodeReceptionScanne', 'qr_code_reception_scanne']) as bool?,
       dateScanReception: _toDate(_pick(raw, ['dateScanReception', 'date_scan_reception'])),
     );
@@ -181,6 +216,7 @@ class Commande {
         // Relations
         'clientId': clientId,
         'transporteurId': transporteurId,
+        'transporteurSecoursId': transporteurSecoursId,
         'idAmie': idAmie,
 
         // Localisation & géo
@@ -204,6 +240,7 @@ class Commande {
         'dateDemande': dateDemande?.toIso8601String(),
         'dateDebut': dateDebut?.toIso8601String(),
         'dateFin': dateFin?.toIso8601String(),
+        'dateConfirmer': dateConfirmer?.toIso8601String(),
         'majLe': majLe?.toIso8601String(),
 
         // Zones
@@ -213,6 +250,7 @@ class Commande {
         'zonePrincipaleArrivee': zonePrincipaleArrivee,
         'qrCodeDepartScanne': qrCodeDepartScanne,
         'dateScanDepart': dateScanDepart?.toIso8601String(),
+        'relaisTransporteurEffectue': relaisTransporteurEffectue,
         'qrCodeReceptionScanne': qrCodeReceptionScanne,
         'dateScanReception': dateScanReception?.toIso8601String(),
       };
@@ -224,6 +262,7 @@ class Commande {
     String? id,
     String? clientId,
     String? transporteurId,
+    String? transporteurSecoursId,
     String? idAmie,
     String? localisationDepart,
     String? destination,
@@ -241,6 +280,7 @@ class Commande {
     DateTime? dateDemande,
     DateTime? dateDebut,
     DateTime? dateFin,
+    DateTime? dateConfirmer,
     DateTime? majLe,
     String? sousZoneDepart,
     String? sousZoneArrivee,
@@ -248,6 +288,7 @@ class Commande {
     String? zonePrincipaleArrivee,
     bool? qrCodeDepartScanne,
     DateTime? dateScanDepart,
+    bool? relaisTransporteurEffectue,
     bool? qrCodeReceptionScanne,
     DateTime? dateScanReception,
   }) {
@@ -255,6 +296,7 @@ class Commande {
       id: id ?? this.id,
       clientId: clientId ?? this.clientId,
       transporteurId: transporteurId ?? this.transporteurId,
+      transporteurSecoursId: transporteurSecoursId ?? this.transporteurSecoursId,
       idAmie: idAmie ?? this.idAmie,
       localisationDepart: localisationDepart ?? this.localisationDepart,
       destination: destination ?? this.destination,
@@ -272,6 +314,7 @@ class Commande {
       dateDemande: dateDemande ?? this.dateDemande,
       dateDebut: dateDebut ?? this.dateDebut,
       dateFin: dateFin ?? this.dateFin,
+      dateConfirmer: dateConfirmer ?? this.dateConfirmer,
       majLe: majLe ?? this.majLe,
       sousZoneDepart: sousZoneDepart ?? this.sousZoneDepart,
       sousZoneArrivee: sousZoneArrivee ?? this.sousZoneArrivee,
@@ -281,6 +324,8 @@ class Commande {
           zonePrincipaleArrivee ?? this.zonePrincipaleArrivee,
       qrCodeDepartScanne: qrCodeDepartScanne ?? this.qrCodeDepartScanne,
       dateScanDepart: dateScanDepart ?? this.dateScanDepart,
+      relaisTransporteurEffectue:
+          relaisTransporteurEffectue ?? this.relaisTransporteurEffectue,
       qrCodeReceptionScanne: qrCodeReceptionScanne ?? this.qrCodeReceptionScanne,
       dateScanReception: dateScanReception ?? this.dateScanReception,
 

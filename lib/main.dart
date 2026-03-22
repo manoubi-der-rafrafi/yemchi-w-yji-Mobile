@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:yemchi_wyji/core/network/api.dart';
 import 'package:yemchi_wyji/features/auth/data/auth_user_service.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
+import 'package:yemchi_wyji/features/presence/data/presence_service.dart';
 
 // 🧭 Pages
 import 'package:yemchi_wyji/features/auth/pages/auth_gate.dart';
@@ -32,6 +33,9 @@ class MyApp extends StatelessWidget {
         ),
         Provider<AuthController>(
           create: (ctx) => AuthController(ctx.read<AuthUserService>()),
+        ),
+        Provider<PresenceService>(
+          create: (ctx) => PresenceService(ctx.read<Api>()),
         ),
       ],
       child: MaterialApp(

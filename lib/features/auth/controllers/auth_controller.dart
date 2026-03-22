@@ -158,6 +158,61 @@ class AuthController {
     }
   }
 
+  Future<bool> marquerTransporteurEnPanne() async {
+    if (currentUser.value == null) return false;
+    loading.value = true;
+    error.value = null;
+    try {
+      final u = await _svc.marquerTransporteurEnPanne(currentUser.value!.id);
+      currentUser.value = u;
+      return true;
+    } catch (e) {
+      error.value = e.toString();
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  Future<bool> marquerTransporteurEnAccident() async {
+    if (currentUser.value == null) return false;
+    loading.value = true;
+    error.value = null;
+    try {
+      final u = await _svc.marquerTransporteurEnAccident(currentUser.value!.id);
+      currentUser.value = u;
+      return true;
+    } catch (e) {
+      error.value = e.toString();
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  Future<bool> declarerAccidentAvecProduits({
+    required Map<String, int> produitsAffectes,
+    required List<String> produitsNonAffectes,
+  }) async {
+    if (currentUser.value == null) return false;
+    loading.value = true;
+    error.value = null;
+    try {
+      final u = await _svc.declarerAccidentAvecProduits(
+        userId: currentUser.value!.id,
+        produitsAffectes: produitsAffectes,
+        produitsNonAffectes: produitsNonAffectes,
+      );
+      currentUser.value = u;
+      return true;
+    } catch (e) {
+      error.value = e.toString();
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  }
+
   Future<bool> updateZonesDepartArriver({
     required Map<String, List<String>> zoneDepart,
     required Map<String, List<String>> zoneArriver,

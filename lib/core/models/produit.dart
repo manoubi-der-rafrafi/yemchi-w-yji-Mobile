@@ -19,6 +19,8 @@ class Produit {
 
   // Quantite commandee (optionnelle)
   final int? quantite;
+  final bool affecter;
+  final int? quantiteAffecter;
 
   // Lien vers la commande associee
   final String? commandeId;
@@ -32,6 +34,8 @@ class Produit {
     this.image3,
     this.prix,
     this.quantite,
+    this.affecter = false,
+    this.quantiteAffecter,
     this.commandeId,
   });
 
@@ -44,6 +48,8 @@ class Produit {
     String? image3,
     double? prix,
     int? quantite,
+    bool? affecter,
+    int? quantiteAffecter,
     String? commandeId,
   }) {
     return Produit(
@@ -55,6 +61,8 @@ class Produit {
       image3: image3 ?? this.image3,
       prix: prix ?? this.prix,
       quantite: quantite ?? this.quantite,
+      affecter: affecter ?? this.affecter,
+      quantiteAffecter: quantiteAffecter ?? this.quantiteAffecter,
       commandeId: commandeId ?? this.commandeId,
     );
   }
@@ -88,6 +96,8 @@ class Produit {
       image3: map['image3'] as String?,
       prix: parsePrix(map['prix']),
       quantite: parseQuantite(map['quantite'] ?? map['quantity']),
+      affecter: map['affecter'] as bool? ?? false,
+      quantiteAffecter: parseQuantite(map['quantiteAffecter']),
       commandeId: map['commandeId'] as String?,
     );
   }
@@ -102,6 +112,8 @@ class Produit {
       'image3': image3,
       'prix': prix,
       'quantite': quantite,
+      'affecter': affecter,
+      'quantiteAffecter': quantiteAffecter,
       'commandeId': commandeId,
     };
   }
@@ -114,7 +126,7 @@ class Produit {
 
   @override
   String toString() {
-    return 'Produit(id: $id, nom: $nom, type: $type, prix: $prix, quantite: $quantite, commandeId: $commandeId)';
+    return 'Produit(id: $id, nom: $nom, type: $type, prix: $prix, quantite: $quantite, affecter: $affecter, quantiteAffecter: $quantiteAffecter, commandeId: $commandeId)';
   }
 
   @override
@@ -129,6 +141,8 @@ class Produit {
         other.image3 == image3 &&
         other.prix == prix &&
         other.quantite == quantite &&
+        other.affecter == affecter &&
+        other.quantiteAffecter == quantiteAffecter &&
         other.commandeId == commandeId;
   }
 
@@ -142,6 +156,8 @@ class Produit {
         image3,
         prix,
         quantite,
+        affecter,
+        quantiteAffecter,
         commandeId,
       );
 }

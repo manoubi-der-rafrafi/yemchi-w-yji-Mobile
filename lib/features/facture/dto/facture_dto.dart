@@ -8,7 +8,7 @@ class FactureDto {
   final String? image;
   final String? idLivreur;
   final FactureType? type;
-  final bool? confirmer;
+  final FactureConfirmation? confirmer;
 
   const FactureDto({
     this.id,
@@ -28,7 +28,7 @@ class FactureDto {
       image: image,
       idLivreur: idLivreur ?? '',
       type: type ?? FactureType.entrepriseVerseLivreur,
-      confirmer: confirmer ?? false,
+      confirmer: confirmer ?? FactureConfirmation.nonTraiter,
     );
   }
 
@@ -61,7 +61,7 @@ class FactureDto {
       idLivreur:
           (map['id_livreur'] ?? map['idLivreur'] ?? '').toString(),
       type: FactureTypeX.fromValue(map['type']?.toString()),
-      confirmer: map['confirmer'] == true,
+      confirmer: FactureConfirmationX.fromDynamic(map['confirmer']),
     );
   }
 
@@ -72,7 +72,7 @@ class FactureDto {
       'image': image,
       'id_livreur': idLivreur,
       'type': type?.value,
-      'confirmer': confirmer,
+      'confirmer': confirmer?.value,
     };
     if (includeId && id != null) {
       map['id'] = id;

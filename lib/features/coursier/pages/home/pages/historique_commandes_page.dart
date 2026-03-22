@@ -1,9 +1,16 @@
+import 'dart:math' as math;
+import 'dart:math' as math;
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:yemchi_wyji/core/models/commande.dart';
+import 'package:yemchi_wyji/core/models/facture.dart';
 import 'package:yemchi_wyji/core/network/api.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
 import 'package:yemchi_wyji/features/commande/data/commande_service.dart';
+import 'package:yemchi_wyji/features/facture/data/facture_service.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/pages/commande_details_page.dart';
 
 class HistoriqueCommandesPage extends StatefulWidget {
@@ -13,46 +20,88 @@ class HistoriqueCommandesPage extends StatefulWidget {
   State<HistoriqueCommandesPage> createState() => _HistoriqueCommandesPageState();
 }
 
-class _HistoriqueCommandesPageState extends State<HistoriqueCommandesPage> {
+class _HistoriqueCommandesPageState extends State<HistoriqueCommandesPage>
+    with SingleTickerProviderStateMixin {
   bool _isLoading = true;
   String? _error;
-  List<Commande> _commandes = const <Commande>[];
-  List<Commande> _filteredCommandes = const <Commande>[];
-  double? _minPrice;
-  double? _maxPrice;
+  double _totalEnLigne = 0;
+  double _totalHorsLigne = 0;
+  double _montantVertEntreprise = 0;
+  double _montantVertLivreur = 0;
+  Map<String, double> _pourcentageParSousZone = {};
+  List<Commande> _commandesLivrees = [];
+  List<Facture> _factures = [];
+  int? _selectedSousZoneIndex;
+  int? _hoveredSousZoneIndex;
+  String? _modePaiementFilter;
   DateTimeRange? _dateRange;
-  String? _selectedZone;
+  FactureType? _factureTypeFilter;
+  DateTimeRange? _factureDateRange;
+  late final AnimationController _donutController;
+  late final Animation<double> _donutAnim;
 
-  bool get _hasFilters =>
-      _minPrice != null ||
-      _maxPrice != null ||
-      _dateRange != null ||
-      (_selectedZone != null && _selectedZone!.isNotEmpty);
+  double get _diff =>
+      (_totalHorsLigne - _totalEnLigne) * 0.5 -
+      (_montantVertEntreprise - _montantVertLivreur);
+  bool get _isCreditLivreur => _diff >= 0;
+  double get _soldeLivreur =>
+      _diff.abs().clamp(0, 800);
+  double get _totalRevenue => _totalEnLigne + _totalHorsLigne;
 
   @override
   void initState() {
     super.initState();
-    _fetchHistorique();
+    _donutController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _donutAnim = CurvedAnimation(
+      parent: _donutController,
+      curve: Curves.easeOutCubic,
+    );
+    _fetchGains();
   }
 
-  Future<void> _fetchHistorique() async {
+  Future<void> _fetchGains() async {
     setState(() {
       _isLoading = true;
       _error = null;
     });
-    try {
+    try { 
       final auth = context.read<AuthController>();
       final transporteurId = auth.currentUser.value?.id;
       if (transporteurId == null || transporteurId.isEmpty) {
         throw Exception('Utilisateur non connecte');
       }
-      final service = CommandeService(Api());
-      final data = await service.getCommandesByTransporteur(transporteurId);
+      final commandeService = CommandeService(Api());
+      final factureService = FactureService();
+      final results = await Future.wait<Object>([
+        commandeService.getSommePrixLivreeEnLigneByTransporteur(transporteurId),
+        commandeService.getSommePrixLivreeHorsLigneByTransporteur(transporteurId),
+        commandeService
+            .getPourcentageRevenuParSousZoneLivreeByTransporteur(transporteurId),
+        commandeService.getCommandesLivreesByTransporteur(transporteurId),
+        factureService.listByLivreurId(transporteurId),
+      ]);
       setState(() {
-        _commandes = data;
-        _applyFilters();
+        _totalEnLigne = results[0] as double;
+        _totalHorsLigne = results[1] as double;
+        _pourcentageParSousZone = results[2] as Map<String, double>;
+        _commandesLivrees = results[3] as List<Commande>;
+        _factures = results[4] as List<Facture>;
+        final facturesConfirmees = _factures
+            .where((f) => f.confirmer == FactureConfirmation.acceter);
+        _montantVertEntreprise = facturesConfirmees
+            .where((f) => f.type == FactureType.livreurVerseEntreprise)
+            .fold<double>(0, (sum, f) => sum + f.montant);
+        _montantVertLivreur = facturesConfirmees
+            .where((f) => f.type == FactureType.entrepriseVerseLivreur)
+            .fold<double>(0, (sum, f) => sum + f.montant);
         _isLoading = false;
       });
+      if (mounted) {
+        _donutController.forward(from: 0);
+      }
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -61,492 +110,1253 @@ class _HistoriqueCommandesPageState extends State<HistoriqueCommandesPage> {
     }
   }
 
-  void _applyFilters() {
-    final list = _commandes.where((commande) => _matchesFilters(commande)).toList();
-    _filteredCommandes = list;
-  }
-
-  bool _matchesFilters(Commande commande) {
-    final prix = commande.prix;
-    if (_minPrice != null) {
-      if (prix == null || prix < _minPrice!) return false;
-    }
-    if (_maxPrice != null) {
-      if (prix == null || prix > _maxPrice!) return false;
-    }
-
-    if (_dateRange != null) {
-      final date = commande.dateDemande ?? commande.dateDebut ?? commande.dateFin;
-      if (date == null) return false;
-      final start = DateUtils.dateOnly(_dateRange!.start);
-      final end = DateUtils.dateOnly(_dateRange!.end);
-      final target = DateUtils.dateOnly(date);
-      if (target.isBefore(start) || target.isAfter(end)) {
-        return false;
-      }
-    }
-
-    if (_selectedZone != null && _selectedZone!.isNotEmpty) {
-      final zone = _selectedZone!;
-      final depart = commande.zonePrincipaleDepart ?? '';
-      final arrivee = commande.zonePrincipaleArrivee ?? '';
-      if (depart != zone && arrivee != zone) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  Future<void> _openFilters() async {
-    final filters = await showModalBottomSheet<_HistoriqueFilters>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _FilterSheet(
-        initialMinPrice: _minPrice,
-        initialMaxPrice: _maxPrice,
-        initialDateRange: _dateRange,
-        initialZone: _selectedZone,
-        zones: _availableZones,
-      ),
-    );
-    if (filters == null) return;
-    setState(() {
-      _minPrice = filters.minPrice;
-      _maxPrice = filters.maxPrice;
-      _dateRange = filters.dateRange;
-      _selectedZone = filters.zone;
-      _applyFilters();
-    });
-  }
-
-  List<String> get _availableZones {
-    final set = <String>{};
-    for (final c in _commandes) {
-      if (c.zonePrincipaleDepart != null && c.zonePrincipaleDepart!.isNotEmpty) {
-        set.add(c.zonePrincipaleDepart!);
-      }
-      if (c.zonePrincipaleArrivee != null && c.zonePrincipaleArrivee!.isNotEmpty) {
-        set.add(c.zonePrincipaleArrivee!);
-      }
-    }
-    final list = set.toList()..sort();
-    return list;
+  @override
+  void dispose() {
+    _donutController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final sousZoneBreakdown = _buildSousZoneBreakdown();
+    final hasSousZoneData =
+        sousZoneBreakdown.any((z) => z.percent > 0.01);
+    final activeSousZoneIndex =
+        _selectedSousZoneIndex ?? _hoveredSousZoneIndex;
+    final activeZoneLabel = (activeSousZoneIndex != null &&
+            activeSousZoneIndex >= 0 &&
+            activeSousZoneIndex < sousZoneBreakdown.length)
+        ? sousZoneBreakdown[activeSousZoneIndex].name
+        : null;
+    final availableModes = _buildModePaiementOptions();
+    final selectedMode = _modePaiementFilter ?? 'Tous';
+    final filteredLivrees = _filteredCommandes(
+      activeZoneLabel,
+      selectedMode,
+      _dateRange,
+    );
+    final gaugeRatio = (_soldeLivreur / 800).clamp(0.0, 1.0);
+    final gaugeColor =
+        Color.lerp(const Color(0xFF2E7D32), Colors.red, gaugeRatio) ??
+            theme.colorScheme.primary;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Historique des commandes'),
         actions: [
           IconButton(
-            onPressed: _openFilters,
-            icon: const Icon(Icons.search),
-            color: _hasFilters ? theme.colorScheme.secondary : null,
-            tooltip: 'Filtrer',
+            onPressed: _fetchGains,
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Actualiser',
           ),
         ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: _buildBody(),
-      ),
-    );
-  }
-
-  Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_error != null) {
-      return _HistoriqueError(
-        error: _error!,
-        onRetry: _fetchHistorique,
-      );
-    }
-    if (_filteredCommandes.isEmpty) {
-      return const _HistoriqueEmpty();
-    }
-    return _HistoriqueTable(
-      commandes: _filteredCommandes,
-      onDetails: (commande) => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => CommandeDetailsPage(commande: commande),
-        ),
-      ),
-    );
-  }
-}
-
-class _HistoriqueTable extends StatelessWidget {
-  final List<Commande> commandes;
-  final ValueChanged<Commande> onDetails;
-
-  const _HistoriqueTable({
-    required this.commandes,
-    required this.onDetails,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final totalKm = commandes.fold<double>(
-      0,
-      (sum, c) => sum + (c.distanceKm ?? 0),
-    );
-    final totalPrix = commandes.fold<double>(
-      0,
-      (sum, c) => sum + (c.prix ?? 0),
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _HistoriqueSummary(
-          totalCommandes: commandes.length,
-          totalKm: totalKm,
-          totalPrix: totalPrix,
-        ),
-        const SizedBox(height: 16),
-        Expanded(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final bool isCompact = constraints.maxWidth < 720;
-              if (isCompact) {
-                return _HistoriqueCardList(
-                  commandes: commandes,
-                  onDetails: onDetails,
-                );
-              }
-              return Scrollbar(
-                thumbVisibility: true,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.vertical,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columnSpacing: 28,
-                      columns: const [
-                        DataColumn(label: _ColumnHeader(icon: Icons.flight_takeoff, label: 'Depart')),
-                        DataColumn(label: _ColumnHeader(icon: Icons.flag, label: 'Arrivee')),
-                        DataColumn(label: _ColumnHeader(icon: Icons.route, label: 'Trajet')),
-                        DataColumn(label: _ColumnHeader(icon: Icons.qr_code_2, label: 'Reception')),
-                        DataColumn(label: _ColumnHeader(icon: Icons.payments, label: 'Prix')),
-                        DataColumn(label: _ColumnHeader(icon: Icons.open_in_new, label: 'Actions')),
-                      ],
-                      rows: List<DataRow>.generate(commandes.length, (index) {
-                        final commande = commandes[index];
-                        final bool isEven = index.isEven;
-                        return DataRow(
-                          color: MaterialStateProperty.resolveWith(
-                            (states) => isEven
-                                ? theme.colorScheme.surfaceVariant.withOpacity(0.35)
-                                : null,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+                ? _GainsError(error: _error!, onRetry: _fetchGains)
+                : ListView(
+                    children: [
+                      Card(
+                        elevation: 0.5,
+                        color: const Color(0xFFF7F7F2),
+                        surfaceTintColor: Colors.transparent,
+                        shadowColor: Colors.black.withOpacity(0.06),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(18),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _MiniStatCard(
+                                      label: 'Total revenue',
+                                      value: _formatMoney(_totalRevenue),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _MiniStatCard(
+                                      label: 'Total enligne',
+                                      value: _formatMoney(_totalEnLigne),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _MiniStatCard(
+                                      label: 'Total non enligne',
+                                      value: _formatMoney(_totalHorsLigne),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF6F7F0),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: Colors.black.withOpacity(0.06),
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.04),
+                                      blurRadius: 18,
+                                      offset: const Offset(0, 10),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            'Revenu par sous-zone',
+                                            style: theme
+                                                .textTheme.titleMedium
+                                                ?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                              color: const Color(0xFF1F1F1F),
+                                            ),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFE9EFE6),
+                                            borderRadius:
+                                                BorderRadius.circular(999),
+                                            border: Border.all(
+                                              color:
+                                                  Colors.black.withOpacity(0.05),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            'Ce mois',
+                                            style: theme.textTheme.labelSmall
+                                                ?.copyWith(
+                                              color: const Color(0xFF5E6B62),
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    hasSousZoneData
+                                        ? AnimatedBuilder(
+                                            animation: _donutAnim,
+                                            builder: (context, _) {
+                                              return _SousZoneRingWithMetrics(
+                                                segments: sousZoneBreakdown,
+                                                activeIndex:
+                                                    activeSousZoneIndex,
+                                                progress: _donutAnim.value,
+                                                onSegmentTap: (index) {
+                                                  setState(() {
+                                                    _selectedSousZoneIndex =
+                                                        index;
+                                                  });
+                                                },
+                                                onSegmentHover: (index) {
+                                                  setState(() {
+                                                    _hoveredSousZoneIndex =
+                                                        index;
+                                                  });
+                                                },
+                                                onHoverExit: () {
+                                                  setState(() {
+                                                    _hoveredSousZoneIndex =
+                                                        null;
+                                                  });
+                                                },
+                                              );
+                                            },
+                                          )
+                                        : Text(
+                                            'Aucune donnee disponible.',
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                              color:
+                                                  const Color(0xFF6B776E),
+                                            ),
+                                          ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              _CommandesLivreesSection(
+                                commandes: filteredLivrees,
+                                modes: availableModes,
+                                selectedMode: selectedMode,
+                                onModeChanged: (value) {
+                                  setState(() {
+                                    _modePaiementFilter =
+                                        value == 'Tous' ? null : value;
+                                  });
+                                },
+                                dateRange: _dateRange,
+                                onPickDateRange: _pickDateRange,
+                                onClearDateRange: () {
+                                  setState(() {
+                                    _dateRange = null;
+                                  });
+                                },
+                              ),
+                            ],
                           ),
-                          cells: [
-                            DataCell(_ZoneCell(
-                              title: commande.zonePrincipaleDepart,
-                              subtitle: commande.sousZoneDepart,
-                            )),
-                            DataCell(_ZoneCell(
-                              title: commande.zonePrincipaleArrivee,
-                              subtitle: commande.sousZoneArrivee,
-                            )),
-                            DataCell(Text(
-                              commande.distanceKm != null
-                                  ? '${commande.distanceKm!.toStringAsFixed(1)} km'
-                                  : '-',
-                              style: theme.textTheme.bodyMedium,
-                            )),
-                            DataCell(
-                              _QrStatusBadge(
-                                scanned: commande.qrCodeReceptionScanne ?? false,
-                              ),
-                            ),
-                            DataCell(Text(
-                              commande.prix != null
-                                  ? '${commande.prix!.toStringAsFixed(2)} DT'
-                                  : '-',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            )),
-                            DataCell(
-                              FilledButton.tonalIcon(
-                                onPressed: () => onDetails(commande),
-                                icon: const Icon(Icons.visibility_outlined),
-                                label: const Text('Details'),
-                              ),
-                            ),
-                          ],
-                        );
-                      }),
-                    ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ZoneCell extends StatelessWidget {
-  final String? title;
-  final String? subtitle;
-
-  const _ZoneCell({required this.title, required this.subtitle});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            title ?? '-',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle ?? '-',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
       ),
     );
   }
-}
 
-class _HistoriqueSummary extends StatelessWidget {
-  final int totalCommandes;
-  final double totalKm;
-  final double totalPrix;
+  String _formatMoney(double value) => '${value.toStringAsFixed(2)} DT';
 
-  const _HistoriqueSummary({
-    required this.totalCommandes,
-    required this.totalKm,
-    required this.totalPrix,
-  });
+  List<_ZoneBreakdown> _buildSousZoneBreakdown() {
+    const tunisColor = Color(0xFF0F9A8A);
+    const bejaColor = Color(0xFFF0AE72);
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final bool wrap = constraints.maxWidth < 500;
-            final children = [
-              _SummaryTile(
-                icon: Icons.assignment_turned_in_outlined,
-                label: 'Commandes',
-                value: '$totalCommandes',
-              ),
-              _SummaryTile(
-                icon: Icons.alt_route,
-                label: 'Kilometres',
-                value: '${totalKm.toStringAsFixed(1)} km',
-              ),
-              _SummaryTile(
-                icon: Icons.attach_money,
-                label: 'Revenus',
-                value: '${totalPrix.toStringAsFixed(2)} DT',
-              ),
-            ];
-            if (wrap) {
-              return Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                spacing: 12,
-                runSpacing: 12,
-                children: children,
-              );
-            }
-            return Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: children,
-            );
-          },
-        ),
+    final tunisPercent = _percentForLabel(const ['TUNIS']);
+    final bejaPercent = _percentForLabel(const ['BEJA', 'BÉJA']);
+    final total = _totalRevenue;
+
+    return [
+      _ZoneBreakdown(
+        name: 'TUNIS',
+        percent: tunisPercent,
+        value: total * (tunisPercent / 100),
+        color: tunisColor,
       ),
-    );
+      _ZoneBreakdown(
+        name: 'BÉJA',
+        percent: bejaPercent,
+        value: total * (bejaPercent / 100),
+        color: bejaColor,
+      ),
+    ];
   }
-}
 
-class _SummaryTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _SummaryTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: theme.colorScheme.primary),
-        ),
-        const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            Text(
-              value,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
+  double _percentForLabel(List<String> aliases) {
+    for (final entry in _pourcentageParSousZone.entries) {
+      final upper = entry.key.toUpperCase();
+      if (aliases.any((alias) => upper.contains(alias))) {
+        return entry.value.clamp(0, 100);
+      }
+    }
+    return 0;
   }
-}
 
-class _HistoriqueCardList extends StatelessWidget {
-  final List<Commande> commandes;
-  final ValueChanged<Commande> onDetails;
+  List<String> _buildModePaiementOptions() {
+    return const ['Tous', 'EN_LIGNE', 'HORS_LIGNE'];
+  }
 
-  const _HistoriqueCardList({
-    required this.commandes,
-    required this.onDetails,
-  });
+  List<Facture> _filteredFactures() {
+    return _factures.where((facture) {
+      if (_factureTypeFilter != null && facture.type != _factureTypeFilter) {
+        return false;
+      }
+      if (_factureDateRange != null) {
+        final date = _parseDateTime(facture.dateTimle);
+        if (date == null) return false;
+        final dateOnly = DateTime(date.year, date.month, date.day);
+        final start = DateTime(
+          _factureDateRange!.start.year,
+          _factureDateRange!.start.month,
+          _factureDateRange!.start.day,
+        );
+        final end = DateTime(
+          _factureDateRange!.end.year,
+          _factureDateRange!.end.month,
+          _factureDateRange!.end.day,
+        );
+        if (dateOnly.isBefore(start) || dateOnly.isAfter(end)) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return ListView.separated(
-      itemCount: commandes.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (context, index) {
-        final commande = commandes[index];
-        return _CommandeCardTile(
-          commande: commande,
-          onDetails: () => onDetails(commande),
+  List<Commande> _filteredCommandes(
+    String? zoneLabel,
+    String selectedMode,
+    DateTimeRange? dateRange,
+  ) {
+    final zone = _normalizeZone(zoneLabel);
+    return _commandesLivrees.where((commande) {
+      if (selectedMode != 'Tous') {
+        final mode = _normalizeModePaiement(commande.modePaiement);
+        if (mode != selectedMode) return false;
+      }
+      if (dateRange != null) {
+        final date = commande.dateDemande;
+        if (date == null) return false;
+        final dateOnly = DateTime(date.year, date.month, date.day);
+        final start = DateTime(
+          dateRange.start.year,
+          dateRange.start.month,
+          dateRange.start.day,
+        );
+        final end = DateTime(
+          dateRange.end.year,
+          dateRange.end.month,
+          dateRange.end.day,
+        );
+        if (dateOnly.isBefore(start) || dateOnly.isAfter(end)) {
+          return false;
+        }
+      }
+      if (zone != null) {
+        final depart = _normalizeZone(commande.sousZoneDepart) ?? '';
+        final arrivee = _normalizeZone(commande.sousZoneArrivee) ?? '';
+        if (!depart.contains(zone) && !arrivee.contains(zone)) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
+  }
+
+  String? _normalizeZone(String? value) {
+    if (value == null) return null;
+    final upper = value.toUpperCase();
+    return upper
+        .replaceAll('É', 'E')
+        .replaceAll('È', 'E')
+        .replaceAll('Ê', 'E')
+        .replaceAll('Ë', 'E')
+        .replaceAll('Á', 'A')
+        .replaceAll('À', 'A')
+        .replaceAll('Â', 'A')
+        .replaceAll('Ä', 'A')
+        .replaceAll('Í', 'I')
+        .replaceAll('Ì', 'I')
+        .replaceAll('Î', 'I')
+        .replaceAll('Ï', 'I')
+        .replaceAll('Ó', 'O')
+        .replaceAll('Ò', 'O')
+        .replaceAll('Ô', 'O')
+        .replaceAll('Ö', 'O')
+        .replaceAll('Ú', 'U')
+        .replaceAll('Ù', 'U')
+        .replaceAll('Û', 'U')
+        .replaceAll('Ü', 'U')
+        .replaceAll('Ç', 'C');
+  }
+
+  String _normalizeModePaiement(String? value) {
+    if (value == null) return '';
+    return value.toUpperCase().replaceAll(' ', '_');
+  }
+
+  DateTime? _parseDateTime(String? value) {
+    if (value == null) return null;
+    final raw = value.trim();
+    if (raw.isEmpty) return null;
+    final parsed = DateTime.tryParse(raw);
+    if (parsed != null) return parsed;
+    final match =
+        RegExp(r'^(\\d{1,2})[/-](\\d{1,2})[/-](\\d{2,4})').firstMatch(raw);
+    if (match == null) return null;
+    final day = int.tryParse(match.group(1) ?? '');
+    final month = int.tryParse(match.group(2) ?? '');
+    var year = int.tryParse(match.group(3) ?? '');
+    if (day == null || month == null || year == null) return null;
+    if (year < 100) year += 2000;
+    return DateTime(year, month, day);
+  }
+
+  String _formatDateTime(String? value) {
+    final date = _parseDateTime(value);
+    if (date == null) {
+      return (value == null || value.trim().isEmpty) ? '-' : value;
+    }
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final year = date.year.toString();
+    return '$day/$month/$year';
+  }
+
+  Future<void> _pickDateRange() async {
+    final now = DateTime.now();
+    final initialRange = _dateRange ??
+        DateTimeRange(
+          start: DateTime(now.year, now.month, now.day - 7),
+          end: DateTime(now.year, now.month, now.day),
+        );
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 2),
+      lastDate: DateTime(now.year + 1),
+      initialDateRange: initialRange,
+    );
+    if (picked == null) return;
+    setState(() {
+      _dateRange = picked;
+    });
+  }
+
+  Future<void> _pickFactureDateRange() async {
+    final now = DateTime.now();
+    final initialRange = _factureDateRange ??
+        DateTimeRange(
+          start: DateTime(now.year, now.month, now.day - 7),
+          end: DateTime(now.year, now.month, now.day),
+        );
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 2),
+      lastDate: DateTime(now.year + 1),
+      initialDateRange: initialRange,
+    );
+    if (picked == null) return;
+    setState(() {
+      _factureDateRange = picked;
+    });
+  }
+
+  Future<void> _openPayByFactureDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return _PayByFactureDialog(
+          parentContext: context,
+          onSuccess: _fetchGains,
         );
       },
     );
   }
 }
 
-class _CommandeCardTile extends StatelessWidget {
-  final Commande commande;
-  final VoidCallback onDetails;
+class _PayByFactureDialog extends StatefulWidget {
+  final BuildContext parentContext;
+  final VoidCallback onSuccess;
 
-  const _CommandeCardTile({
-    required this.commande,
-    required this.onDetails,
+  const _PayByFactureDialog({
+    required this.parentContext,
+    required this.onSuccess,
+  });
+
+  @override
+  State<_PayByFactureDialog> createState() => _PayByFactureDialogState();
+}
+
+class _PayByFactureDialogState extends State<_PayByFactureDialog> {
+  bool _isSaving = false;
+  XFile? _pickedImage;
+  Uint8List? _pickedImageBytes;
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: constraints.maxHeight * 0.9,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Paiement par facture',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed:
+                            _isSaving ? null : () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _isSaving
+                              ? null
+                              : () async {
+                                  final image =
+                                      await ImagePicker().pickImage(
+                                    source: ImageSource.gallery,
+                                    imageQuality: 85,
+                                  );
+                                  if (image == null) return;
+                                  final bytes = await image.readAsBytes();
+                                  if (!mounted) return;
+                                  setState(() {
+                                    _pickedImage = image;
+                                    _pickedImageBytes = bytes;
+                                  });
+                                },
+                          icon: const Icon(Icons.photo_library_outlined),
+                          label: const Text('Galerie'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _isSaving
+                              ? null
+                              : () async {
+                                  final image =
+                                      await ImagePicker().pickImage(
+                                    source: ImageSource.camera,
+                                    imageQuality: 85,
+                                  );
+                                  if (image == null) return;
+                                  final bytes = await image.readAsBytes();
+                                  if (!mounted) return;
+                                  setState(() {
+                                    _pickedImage = image;
+                                    _pickedImageBytes = bytes;
+                                  });
+                                },
+                          icon: const Icon(Icons.photo_camera_outlined),
+                          label: const Text('Camera'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_pickedImage != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _pickedImage!.name,
+                      style: Theme.of(context).textTheme.bodySmall,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.memory(
+                        _pickedImageBytes ?? Uint8List(0),
+                        height: 160,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const SizedBox(
+                          height: 160,
+                          child: Center(
+                            child: Text('Apercu indisponible'),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _isSaving
+                          ? null
+                          : () async {
+                              if (_pickedImage == null) {
+                                ScaffoldMessenger.of(widget.parentContext)
+                                    .showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Image requise.'),
+                                  ),
+                                );
+                                return;
+                              }
+                              setState(() {
+                                _isSaving = true;
+                              });
+                              try {
+                                final auth = context.read<AuthController>();
+                                final livreurId =
+                                    auth.currentUser.value?.id ?? '';
+                                await FactureService().createWithImage(
+                                  image: _pickedImage!,
+                                  montant: 0.0,
+                                  dateTimle: DateTime.now().toIso8601String(),
+                                  idLivreur: livreurId,
+                                  type: FactureType.livreurVerseEntreprise,
+                                  confirmer: FactureConfirmation.nonTraiter,
+                                );
+                                if (!mounted) return;
+                                Navigator.of(context).pop();
+                                widget.onSuccess();
+                                ScaffoldMessenger.of(widget.parentContext)
+                                    .showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Facture envoyee.'),
+                                  ),
+                                );
+                              } catch (e) {
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(widget.parentContext)
+                                    .showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Erreur: ${e.toString()}',
+                                    ),
+                                  ),
+                                );
+                              } finally {
+                                if (!mounted) return;
+                                setState(() {
+                                  _isSaving = false;
+                                });
+                              }
+                            },
+                      child: _isSaving
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Valider'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _InfoRow({
+    required this.label,
+    required this.value,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: theme.textTheme.bodyMedium,
+          ),
+        ),
+        Text(
+          value,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CommandesLivreesSection extends StatefulWidget {
+  final List<Commande> commandes;
+  final List<String> modes;
+  final String selectedMode;
+  final ValueChanged<String> onModeChanged;
+  final DateTimeRange? dateRange;
+  final VoidCallback onPickDateRange;
+  final VoidCallback onClearDateRange;
+  final int pageSize;
+
+  const _CommandesLivreesSection({
+    required this.commandes,
+    required this.modes,
+    required this.selectedMode,
+    required this.onModeChanged,
+    required this.dateRange,
+    required this.onPickDateRange,
+    required this.onClearDateRange,
+    this.pageSize = 10,
+  });
+
+  @override
+  State<_CommandesLivreesSection> createState() =>
+      _CommandesLivreesSectionState();
+}
+
+class _CommandesLivreesSectionState extends State<_CommandesLivreesSection> {
+  int _page = 1;
+
+  @override
+  void didUpdateWidget(covariant _CommandesLivreesSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.commandes != widget.commandes ||
+        oldWidget.pageSize != widget.pageSize) {
+      _page = 1;
+    }
+  }
+
+  void _goPrev() {
+    if (_page <= 1) return;
+    setState(() {
+      _page -= 1;
+    });
+  }
+
+  void _goNext(int totalPages) {
+    if (_page >= totalPages) return;
+    setState(() {
+      _page += 1;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final total = widget.commandes.length;
+    final totalPages =
+        total == 0 ? 1 : ((total + widget.pageSize - 1) ~/ widget.pageSize);
+    final start = (total == 0)
+        ? 0
+        : (widget.pageSize * (_page - 1)).clamp(0, total).toInt();
+    final end = (total == 0)
+        ? 0
+        : (start + widget.pageSize).clamp(0, total).toInt();
+    final pageItems = widget.commandes.sublist(start, end);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F8F2),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.black.withOpacity(0.04)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Historique des commandes',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF1F1F1F),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _FilterChip(
+                label: _formatRangeLabel(widget.dateRange),
+                icon: Icons.date_range,
+                onTap: widget.onPickDateRange,
+              ),
+              if (widget.dateRange != null)
+                _FilterChip(
+                  label: 'Effacer',
+                  icon: Icons.close,
+                  onTap: widget.onClearDateRange,
+                ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE9EFE6),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: Colors.black.withOpacity(0.05)),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: widget.selectedMode,
+                    isDense: true,
+                    onChanged: (value) {
+                      if (value == null) return;
+                      widget.onModeChanged(value);
+                    },
+                    items: widget.modes
+                        .map(
+                          (mode) => DropdownMenuItem(
+                            value: mode,
+                            child: Text(
+                              _labelForMode(mode),
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF4E5A52),
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          widget.commandes.isEmpty
+              ? Text(
+                  'Aucune commande disponible.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF6B776E),
+                  ),
+                )
+              : SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    headingRowHeight: 40,
+                    dataRowMinHeight: 44,
+                    dataRowMaxHeight: 48,
+                    columnSpacing: 18,
+                    headingTextStyle: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF4E5A52),
+                    ),
+                    columns: const [
+                      DataColumn(label: Text('Zone depart')),
+                      DataColumn(label: Text('Zone arrivee')),
+                      DataColumn(label: Text('Date')),
+                      DataColumn(label: Text('Prix')),
+                      DataColumn(label: Text('')),
+                    ],
+                    rows: pageItems.map((commande) {
+                      final zoneDepart = _formatZone(
+                        commande.zonePrincipaleDepart,
+                        commande.sousZoneDepart,
+                      );
+                      final zoneArrivee = _formatZone(
+                        commande.zonePrincipaleArrivee,
+                        commande.sousZoneArrivee,
+                      );
+                      final dateCommande = _formatDate(commande.dateDemande);
+                      final prix = _formatMoney(commande.prix ?? 0);
+                      return DataRow(
+                        cells: [
+                          DataCell(Text(zoneDepart)),
+                          DataCell(Text(zoneArrivee)),
+                          DataCell(Text(dateCommande)),
+                          DataCell(Text(prix)),
+                          DataCell(
+                            TextButton(
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) =>
+                                        CommandeDetailsPage(commande: commande),
+                                  ),
+                                );
+                              },
+                              child: const Text('Detail'),
+                            ),
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
+          if (widget.commandes.isNotEmpty) ...[
+            const SizedBox(height: 12),
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(Icons.flight_takeoff, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '${commande.zonePrincipaleDepart ?? '-'} · ${commande.sousZoneDepart ?? '-'}',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+                Text(
+                  'Page $_page / $totalPages',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF6B776E),
+                  ),
+                ),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: _page > 1 ? _goPrev : null,
+                      child: const Text('Precedent'),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: _page < totalPages
+                          ? () => _goNext(totalPages)
+                          : null,
+                      child: const Text('Suivant'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static String _formatZone(String? zone, String? sousZone) {
+    final zoneLabel = (zone == null || zone.trim().isEmpty) ? '-' : zone;
+    final sousZoneLabel =
+        (sousZone == null || sousZone.trim().isEmpty) ? '-' : sousZone;
+    return '$zoneLabel / $sousZoneLabel';
+  }
+
+  static String _formatDate(DateTime? value) {
+    if (value == null) return '-';
+    final day = value.day.toString().padLeft(2, '0');
+    final month = value.month.toString().padLeft(2, '0');
+    final year = value.year.toString();
+    return '$day/$month/$year';
+  }
+
+  static String _formatRangeLabel(DateTimeRange? range) {
+    if (range == null) return 'Toutes dates';
+    return '${_formatDate(range.start)} - ${_formatDate(range.end)}';
+  }
+
+  static String _formatMoney(double value) => '${value.toStringAsFixed(2)} DT';
+
+  static String _labelForMode(String mode) {
+    switch (mode) {
+      case 'EN_LIGNE':
+        return 'En ligne';
+      case 'HORS_LIGNE':
+        return 'Hors ligne';
+      default:
+        return mode;
+    }
+  }
+}
+
+class _FacturesSection extends StatelessWidget {
+  final List<Facture> factures;
+  final FactureType? selectedType;
+  final ValueChanged<FactureType?> onTypeChanged;
+  final DateTimeRange? dateRange;
+  final VoidCallback onPickDateRange;
+  final VoidCallback onClearDateRange;
+
+  const _FacturesSection({
+    required this.factures,
+    required this.selectedType,
+    required this.onTypeChanged,
+    required this.dateRange,
+    required this.onPickDateRange,
+    required this.onClearDateRange,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final facturesAcceptees = factures
+        .where((facture) => facture.confirmer == FactureConfirmation.acceter)
+        .toList();
+    final facturesEnAttente = factures
+        .where(
+          (facture) => facture.confirmer == FactureConfirmation.nonTraiter,
+        )
+        .toList();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F8F2),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.black.withOpacity(0.04)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Historique des factures',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF1F1F1F),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _FilterChip(
+                label: _formatRangeLabel(dateRange),
+                icon: Icons.date_range,
+                onTap: onPickDateRange,
+              ),
+              if (dateRange != null)
+                _FilterChip(
+                  label: 'Effacer',
+                  icon: Icons.close,
+                  onTap: onClearDateRange,
+                ),
+              FilterChip(
+                label: const Text('Tous'),
+                selected: selectedType == null,
+                onSelected: (_) => onTypeChanged(null),
+                selectedColor: const Color(0xFFE9EFE6),
+                showCheckmark: false,
+              ),
+              FilterChip(
+                label: const Text('Vert livreur'),
+                selected: selectedType == FactureType.entrepriseVerseLivreur,
+                onSelected: (_) => onTypeChanged(
+                  FactureType.entrepriseVerseLivreur,
+                ),
+                selectedColor: const Color(0xFFE9EFE6),
+                showCheckmark: false,
+              ),
+              FilterChip(
+                label: const Text('Vert entreprise'),
+                selected: selectedType == FactureType.livreurVerseEntreprise,
+                onSelected: (_) => onTypeChanged(
+                  FactureType.livreurVerseEntreprise,
+                ),
+                selectedColor: const Color(0xFFE9EFE6),
+                showCheckmark: false,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildFactureTable(
+            context,
+            title: 'Factures acceptees',
+            factures: facturesAcceptees,
+          ),
+          const SizedBox(height: 16),
+          _buildFactureTable(
+            context,
+            title: 'Factures en attente',
+            factures: facturesEnAttente,
+            showType: false,
+            showMontant: false,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFactureTable(
+    BuildContext context, {
+    required String title,
+    required List<Facture> factures,
+    bool showType = true,
+    bool showMontant = true,
+  }) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF1F1F1F),
+          ),
+        ),
+        const SizedBox(height: 8),
+        factures.isEmpty
+            ? Text(
+                'Aucune facture disponible.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFF6B776E),
+                ),
+              )
+            : SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  headingRowHeight: 40,
+                  dataRowMinHeight: 44,
+                  dataRowMaxHeight: 48,
+                  columnSpacing: 18,
+                  headingTextStyle: theme.textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF4E5A52),
+                  ),
+                  columns: [
+                    if (showType) const DataColumn(label: Text('Type')),
+                    const DataColumn(label: Text('Date')),
+                    if (showMontant)
+                      const DataColumn(label: Text('Montant')),
+                    const DataColumn(label: Text('')),
+                  ],
+                  rows: factures.map((facture) {
+                    return DataRow(
+                      cells: [
+                        if (showType)
+                          DataCell(Text(_labelForType(facture.type))),
+                        DataCell(Text(_formatDate(facture.dateTimle))),
+                        if (showMontant)
+                          DataCell(Text(_formatMoney(facture.montant))),
+                        DataCell(
+                          TextButton(
+                            onPressed:
+                                facture.image == null ||
+                                        facture.image!.trim().isEmpty
+                                    ? null
+                                    : () => _showFactureImage(context, facture),
+                            child: const Text('Detail'),
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+      ],
+    );
+  }
+
+  static String _labelForType(FactureType type) {
+    switch (type) {
+      case FactureType.entrepriseVerseLivreur:
+        return 'Vert livreur';
+      case FactureType.livreurVerseEntreprise:
+        return 'Vert entreprise';
+    }
+  }
+
+  static String _formatDate(String? value) {
+    if (value == null) return '-';
+    final raw = value.trim();
+    if (raw.isEmpty) return '-';
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return value;
+    final day = parsed.day.toString().padLeft(2, '0');
+    final month = parsed.month.toString().padLeft(2, '0');
+    final year = parsed.year.toString();
+    return '$day/$month/$year';
+  }
+
+  static String _formatRangeLabel(DateTimeRange? range) {
+    if (range == null) return 'Toutes dates';
+    return '${_formatDate(range.start.toIso8601String())} - '
+        '${_formatDate(range.end.toIso8601String())}';
+  }
+
+  static String _formatMoney(double value) => '${value.toStringAsFixed(2)} DT';
+}
+
+void _showFactureImage(BuildContext context, Facture facture) {
+  showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      final url = facture.image?.trim() ?? '';
+      return Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Facture',
+                      style: Theme.of(dialogContext)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (url.isEmpty)
+                const Text('Aucune image disponible.')
+              else
+                AspectRatio(
+                  aspectRatio: 4 / 3,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(
+                      url,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, _, __) {
+                        return const Center(
+                          child: Text('Impossible de charger l\'image.'),
+                        );
+                      },
                     ),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(Icons.flag, color: theme.colorScheme.secondary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '${commande.zonePrincipaleArrivee ?? '-'} · ${commande.sousZoneArrivee ?? '-'}',
-                    style: theme.textTheme.bodyLarge,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              children: [
-                _InfoChip(
-                  icon: Icons.route_outlined,
-                  label: 'Trajet',
-                  value: commande.distanceKm != null
-                      ? '${commande.distanceKm!.toStringAsFixed(1)} km'
-                      : 'N/A',
-                ),
-                _InfoChip(
-                  icon: Icons.monetization_on_outlined,
-                  label: 'Prix',
-                  value: commande.prix != null
-                      ? '${commande.prix!.toStringAsFixed(2)} DT'
-                      : 'N/A',
-                ),
-                _InfoChip(
-                  icon: Icons.qr_code_2,
-                  label: 'Reception',
-                  value: commande.qrCodeReceptionScanne == true ? 'Scannee' : 'Non scannee',
-                ),
-                if (commande.statut != null)
-                  _InfoChip(
-                    icon: Icons.event_available_outlined,
-                    label: 'Statut',
-                    value: commande.statut!,
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                onPressed: onDetails,
-                icon: const Icon(Icons.visibility_outlined),
-                label: const Text('Details'),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _FilterChip({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE9EFE6),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: Colors.black.withOpacity(0.05)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: const Color(0xFF4E5A52)),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF4E5A52),
               ),
             ),
           ],
@@ -556,13 +1366,116 @@ class _CommandeCardTile extends StatelessWidget {
   }
 }
 
-class _InfoChip extends StatelessWidget {
-  final IconData icon;
+class _SemiCircularGauge extends StatelessWidget {
+  final double value;
+  final double min;
+  final double max;
+  final String label;
+  final Color color;
+  final Color backgroundColor;
+
+  const _SemiCircularGauge({
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.label,
+    required this.color,
+    required this.backgroundColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final clamped = value.clamp(min, max);
+    final percent = max <= min ? 0.0 : (clamped - min) / (max - min);
+    final theme = Theme.of(context);
+    return SizedBox(
+      width: 220,
+      height: 120,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(
+            size: const Size(220, 120),
+            painter: _SemiCircularGaugePainter(
+              percent: percent,
+              color: color,
+              backgroundColor: backgroundColor,
+            ),
+          ),
+          Positioned(
+            bottom: 8,
+            child: Column(
+              children: [
+                Text(
+                  label,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  '${min.toStringAsFixed(0)} - ${max.toStringAsFixed(0)}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SemiCircularGaugePainter extends CustomPainter {
+  final double percent;
+  final Color color;
+  final Color backgroundColor;
+
+  _SemiCircularGaugePainter({
+    required this.percent,
+    required this.color,
+    required this.backgroundColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final strokeWidth = 12.0;
+    final center = Offset(size.width / 2, size.height);
+    final radius = (size.width / 2) - strokeWidth;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    final basePaint = Paint()
+      ..color = backgroundColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    final valuePaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    const startAngle = 3.141592653589793;
+    const sweepAngle = 3.141592653589793;
+    canvas.drawArc(rect, startAngle, sweepAngle, false, basePaint);
+    canvas.drawArc(rect, startAngle, sweepAngle * percent, false, valuePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SemiCircularGaugePainter oldDelegate) {
+    return oldDelegate.percent != percent ||
+        oldDelegate.color != color ||
+        oldDelegate.backgroundColor != backgroundColor;
+  }
+}
+
+class _MiniStatCard extends StatelessWidget {
   final String label;
   final String value;
 
-  const _InfoChip({
-    required this.icon,
+  const _MiniStatCard({
     required this.label,
     required this.value,
   });
@@ -571,25 +1484,40 @@ class _InfoChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.6),
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.dividerColor.withOpacity(0.6)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: theme.colorScheme.primary),
-          const SizedBox(width: 6),
           Text(
-            '$label : ',
+            label.toUpperCase(),
             style: theme.textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2,
+              color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
+          const SizedBox(height: 6),
           Text(
             value,
-            style: theme.textTheme.labelSmall,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -597,233 +1525,449 @@ class _InfoChip extends StatelessWidget {
   }
 }
 
-class _ColumnHeader extends StatelessWidget {
-  final IconData icon;
-  final String label;
 
-  const _ColumnHeader({required this.icon, required this.label});
+class _SousZoneRingWithMetrics extends StatelessWidget {
+  final List<_ZoneBreakdown> segments;
+  final int? activeIndex;
+  final double progress;
+  final ValueChanged<int> onSegmentTap;
+  final ValueChanged<int>? onSegmentHover;
+  final VoidCallback? onHoverExit;
+
+  const _SousZoneRingWithMetrics({
+    required this.segments,
+    required this.activeIndex,
+    required this.progress,
+    required this.onSegmentTap,
+    this.onSegmentHover,
+    this.onHoverExit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final safeSegments = segments.take(2).toList();
+    final resolvedActiveIndex = safeSegments.isNotEmpty &&
+            activeIndex != null &&
+            activeIndex! >= 0 &&
+            activeIndex! < safeSegments.length
+        ? activeIndex!
+        : 0;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 640;
+        final maxSide = math.min(constraints.maxWidth, 320).toDouble();
+        final ringSize = isCompact ? maxSide : math.min(maxSide, 280.0);
+
+        final ring = _RingSegmented(
+          size: ringSize,
+          segments: safeSegments,
+          activeIndex: resolvedActiveIndex,
+          progress: progress,
+          onSegmentTap: onSegmentTap,
+          onSegmentHover: onSegmentHover,
+          onHoverExit: onHoverExit,
+        );
+
+        final metrics = _MetricsPanel(
+          segments: safeSegments,
+          activeIndex: resolvedActiveIndex,
+          currencyFormatter: (value) => '${value.toStringAsFixed(2)} DT',
+          onTap: onSegmentTap,
+          onHover: onSegmentHover,
+          onHoverExit: onHoverExit,
+        );
+
+        if (isCompact) {
+          return Column(
+            children: [
+              Center(child: ring),
+              const SizedBox(height: 14),
+              metrics,
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SizedBox(width: ringSize, height: ringSize, child: ring),
+            const SizedBox(width: 16),
+            Expanded(flex: 9, child: metrics),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _RingSegmented extends StatelessWidget {
+  final double size;
+  final List<_ZoneBreakdown> segments;
+  final int activeIndex;
+  final double progress;
+  final ValueChanged<int> onSegmentTap;
+  final ValueChanged<int>? onSegmentHover;
+  final VoidCallback? onHoverExit;
+
+  const _RingSegmented({
+    required this.size,
+    required this.segments,
+    required this.activeIndex,
+    required this.progress,
+    required this.onSegmentTap,
+    this.onSegmentHover,
+    this.onHoverExit,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: theme.textTheme.labelLarge?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w600,
+    if (segments.isEmpty) {
+      return SizedBox(
+        width: size,
+        height: size,
+        child: Center(
+          child: Text(
+            'Aucune donnee',
+            style: theme.textTheme.bodySmall,
           ),
         ),
-      ],
-    );
-  }
-}
+      );
+    }
 
-class _QrStatusBadge extends StatelessWidget {
-  final bool scanned;
-
-  const _QrStatusBadge({required this.scanned});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = scanned ? Colors.green : theme.colorScheme.error;
-    final label = scanned ? 'Scannee' : 'Non scannee';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(0.4)),
-      ),
-      child: Text(
-        label,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w700,
+    return SizedBox(
+      width: size,
+      height: size,
+      child: ClipRect(
+        child: Builder(
+          builder: (ringContext) => MouseRegion(
+            onExit: (_) => onHoverExit?.call(),
+            onHover: (event) {
+              if (onSegmentHover == null) return;
+              final box = ringContext.findRenderObject() as RenderBox?;
+              if (box == null) return;
+              final local = box.globalToLocal(event.position);
+              final index = _hitTestSegment(local, box.size, segments);
+              if (index != null) onSegmentHover!(index);
+            },
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown: (details) {
+                final box = ringContext.findRenderObject() as RenderBox?;
+                if (box == null) return;
+                final local = details.localPosition;
+                final index = _hitTestSegment(local, box.size, segments);
+                if (index != null) onSegmentTap(index);
+              },
+              child: CustomPaint(
+                painter: _SegmentedRingPainter(
+                  segments: segments,
+                  activeIndex: activeIndex,
+                  progress: progress,
+                ),
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${segments[activeIndex.clamp(0, segments.length - 1)].percent.toStringAsFixed(0)}%',
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            fontSize: 34,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.3,
+                            color: const Color(0xFF1F1F1F),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          segments[activeIndex
+                                  .clamp(0, segments.length - 1)]
+                              .name,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.6,
+                            color: const Color(0xFF1F1F1F),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Part du revenu total',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            fontSize: 12,
+                            color: const Color(0xFF6B776E),
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
+
+  int? _hitTestSegment(
+    Offset local,
+    Size size,
+    List<_ZoneBreakdown> segments,
+  ) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final dx = local.dx - center.dx;
+    final dy = local.dy - center.dy;
+    final distance = math.sqrt(dx * dx + dy * dy);
+    final outerRadius =
+        (size.width / 2) - (_SegmentedRingPainter.strokeWidth / 2);
+    const strokeWidth = _SegmentedRingPainter.strokeWidth;
+    final innerRadius = outerRadius - strokeWidth;
+    if (distance < innerRadius || distance > outerRadius) return null;
+
+    var angle = math.atan2(dy, dx);
+    const startAngle = -math.pi / 2;
+    final normalized =
+        (angle - startAngle + math.pi * 2) % (math.pi * 2);
+    var current = 0.0;
+
+    for (var i = 0; i < segments.length; i++) {
+      final sweep = (segments[i].percent / 100) * math.pi * 2;
+      final end = current + sweep;
+      if (normalized >= current && normalized <= end) {
+        return i;
+      }
+      current = end;
+    }
+    return null;
+  }
 }
 
-class _HistoriqueFilters {
-  final double? minPrice;
-  final double? maxPrice;
-  final DateTimeRange? dateRange;
-  final String? zone;
+class _SegmentedRingPainter extends CustomPainter {
+  static const double strokeWidth = 18.0;
 
-  const _HistoriqueFilters({
-    required this.minPrice,
-    required this.maxPrice,
-    required this.dateRange,
-    required this.zone,
-  });
-}
+  final List<_ZoneBreakdown> segments;
+  final int activeIndex;
+  final double progress;
 
-class _FilterSheet extends StatefulWidget {
-  final double? initialMinPrice;
-  final double? initialMaxPrice;
-  final DateTimeRange? initialDateRange;
-  final String? initialZone;
-  final List<String> zones;
-
-  const _FilterSheet({
-    required this.initialMinPrice,
-    required this.initialMaxPrice,
-    required this.initialDateRange,
-    required this.initialZone,
-    required this.zones,
+  _SegmentedRingPainter({
+    required this.segments,
+    required this.activeIndex,
+    required this.progress,
   });
 
   @override
-  State<_FilterSheet> createState() => _FilterSheetState();
-}
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width / 2) - (strokeWidth / 2);
+    final rect = Rect.fromCircle(center: center, radius: radius);
 
-class _FilterSheetState extends State<_FilterSheet> {
-  late TextEditingController _minPriceController;
-  late TextEditingController _maxPriceController;
-  DateTimeRange? _dateRange;
-  String? _selectedZone;
+    final basePaint = Paint()
+      ..color = const Color(0xFFE2E8E1)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
 
-  @override
-  void initState() {
-    super.initState();
-    _minPriceController = TextEditingController(
-      text: widget.initialMinPrice?.toString() ?? '',
-    );
-    _maxPriceController = TextEditingController(
-      text: widget.initialMaxPrice?.toString() ?? '',
-    );
-    _dateRange = widget.initialDateRange;
-    _selectedZone = widget.initialZone;
+    canvas.drawArc(rect, -math.pi / 2, math.pi * 2, false, basePaint);
+
+    final total = segments.fold<double>(0, (sum, seg) => sum + seg.percent);
+    if (total <= 0) return;
+
+    var startAngle = -math.pi / 2;
+    for (var i = 0; i < segments.length; i++) {
+      final rawSweep = (segments[i].percent / 100) * math.pi * 2;
+      final sweep = rawSweep * progress;
+      if (rawSweep <= 0) {
+        startAngle += rawSweep;
+        continue;
+      }
+
+      final isActive = i == activeIndex;
+
+      final segmentPaint = Paint()
+        ..color = isActive
+            ? segments[i].color.withOpacity(0.98)
+            : segments[i].color.withOpacity(0.92)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = isActive ? strokeWidth + 2 : strokeWidth
+        ..strokeCap = StrokeCap.round;
+
+      canvas.drawArc(rect, startAngle, sweep, false, segmentPaint);
+
+      startAngle += rawSweep;
+    }
   }
 
   @override
-  void dispose() {
-    _minPriceController.dispose();
-    _maxPriceController.dispose();
-    super.dispose();
+  bool shouldRepaint(covariant _SegmentedRingPainter oldDelegate) {
+    return oldDelegate.segments != segments ||
+        oldDelegate.activeIndex != activeIndex ||
+        oldDelegate.progress != progress;
   }
+}
+
+class _MetricsPanel extends StatelessWidget {
+  final List<_ZoneBreakdown> segments;
+  final int activeIndex;
+  final String Function(double) currencyFormatter;
+  final ValueChanged<int> onTap;
+  final ValueChanged<int>? onHover;
+  final VoidCallback? onHoverExit;
+
+  const _MetricsPanel({
+    required this.segments,
+    required this.activeIndex,
+    required this.currencyFormatter,
+    required this.onTap,
+    this.onHover,
+    this.onHoverExit,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final viewInsets = MediaQuery.of(context).viewInsets.bottom;
-    return Padding(
-      padding: EdgeInsets.only(bottom: viewInsets),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+    final theme = Theme.of(context);
+    if (segments.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAF6),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.black.withOpacity(0.04)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _MetricRow(
+            data: segments[0],
+            isActive: activeIndex == 0,
+            formattedValue: currencyFormatter(segments[0].value),
+            onTap: () => onTap(0),
+            onHoverEnter: onHover == null ? null : () => onHover!(0),
+            onHoverExit: onHoverExit,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Divider(
+              height: 1,
+              thickness: 1,
+              color: theme.dividerColor.withOpacity(0.4),
+            ),
+          ),
+          if (segments.length > 1)
+            _MetricRow(
+              data: segments[1],
+              isActive: activeIndex == 1,
+              formattedValue: currencyFormatter(segments[1].value),
+              onTap: () => onTap(1),
+              onHoverEnter: onHover == null ? null : () => onHover!(1),
+              onHoverExit: onHoverExit,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetricRow extends StatelessWidget {
+  final _ZoneBreakdown data;
+  final bool isActive;
+  final String formattedValue;
+  final VoidCallback onTap;
+  final VoidCallback? onHoverEnter;
+  final VoidCallback? onHoverExit;
+
+  const _MetricRow({
+    required this.data,
+    required this.isActive,
+    required this.formattedValue,
+    required this.onTap,
+    this.onHoverEnter,
+    this.onHoverExit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return MouseRegion(
+      onEnter: (_) => onHoverEnter?.call(),
+      onExit: (_) => onHoverExit?.call(),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+          decoration: BoxDecoration(
+            color:
+                isActive ? data.color.withOpacity(0.08) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Filtrer les commandes',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: data.color,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: data.color.withOpacity(0.35),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
                     ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _minPriceController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Prix minimum',
-                        prefixText: 'DT ',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: _maxPriceController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Prix maximum',
-                        prefixText: 'DT ',
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Intervalle de dates',
-                  style: Theme.of(context).textTheme.labelLarge,
+                  ],
                 ),
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _pickDateRange,
-                      icon: const Icon(Icons.event),
-                      label: Text(_dateRangeLabel),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      data.name,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                        color: const Color(0xFF1F1F1F),
+                      ),
                     ),
-                  ),
-                  if (_dateRange != null)
-                    IconButton(
-                      onPressed: () => setState(() => _dateRange = null),
-                      icon: const Icon(Icons.close),
-                      tooltip: 'Effacer',
+                    const SizedBox(height: 2),
+                    Text(
+                      formattedValue,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF6B776E),
+                      ),
                     ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: _selectedZone?.isEmpty ?? true ? null : _selectedZone,
-                decoration: const InputDecoration(
-                  labelText: 'Zone principale',
+                  ],
                 ),
-                items: [
-                  const DropdownMenuItem(
-                    value: '',
-                    child: Text('Toutes les zones'),
-                  ),
-                  ...widget.zones.map(
-                    (zone) => DropdownMenuItem(
-                      value: zone,
-                      child: Text(zone),
-                    ),
-                  ),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    _selectedZone = (value == null || value.isEmpty) ? null : value;
-                  });
-                },
               ),
-              const SizedBox(height: 24),
-              Row(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  TextButton(
-                    onPressed: _resetFilters,
-                    child: const Text('Reinitialiser'),
-                  ),
-                  const Spacer(),
-                  FilledButton.icon(
-                    onPressed: _applyFilters,
-                    icon: const Icon(Icons.check),
-                    label: const Text('Appliquer'),
+                  Text(
+                    '${data.percent.toStringAsFixed(0)}%',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF1F1F1F),
+                    ),
                   ),
                 ],
               ),
@@ -833,84 +1977,27 @@ class _FilterSheetState extends State<_FilterSheet> {
       ),
     );
   }
-
-  Future<void> _pickDateRange() async {
-    final now = DateTime.now();
-    final range = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(now.year - 3),
-      lastDate: DateTime(now.year + 1),
-      initialDateRange: _dateRange,
-    );
-    if (range != null) {
-      setState(() => _dateRange = range);
-    }
-  }
-
-  String get _dateRangeLabel {
-    if (_dateRange == null) return 'Selectionner';
-    final start = _formatDate(_dateRange!.start);
-    final end = _formatDate(_dateRange!.end);
-    return '$start - $end';
-  }
-
-  String _formatDate(DateTime date) =>
-      '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
-
-  void _resetFilters() {
-    setState(() {
-      _minPriceController.clear();
-      _maxPriceController.clear();
-      _dateRange = null;
-      _selectedZone = null;
-    });
-  }
-
-  void _applyFilters() {
-    final minPrice = double.tryParse(_minPriceController.text.trim());
-    final maxPrice = double.tryParse(_maxPriceController.text.trim());
-    Navigator.of(context).pop(
-      _HistoriqueFilters(
-        minPrice: minPrice,
-        maxPrice: maxPrice,
-        dateRange: _dateRange,
-        zone: _selectedZone,
-      ),
-    );
-  }
 }
 
-class _HistoriqueEmpty extends StatelessWidget {
-  const _HistoriqueEmpty();
+class _ZoneBreakdown {
+  final String name;
+  final double percent;
+  final double value;
+  final Color color;
 
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: const [
-          Icon(Icons.inbox_outlined, size: 48, color: Colors.black38),
-          SizedBox(height: 8),
-          Text(
-            'Aucune commande trouvee',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          SizedBox(height: 4),
-          Text(
-            'Votre historique apparaitra ici une fois des courses terminees.',
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
+  const _ZoneBreakdown({
+    required this.name,
+    required this.percent,
+    required this.value,
+    required this.color,
+  });
 }
 
-class _HistoriqueError extends StatelessWidget {
+class _GainsError extends StatelessWidget {
   final String error;
   final VoidCallback onRetry;
 
-  const _HistoriqueError({
+  const _GainsError({
     required this.error,
     required this.onRetry,
   });
@@ -925,7 +2012,7 @@ class _HistoriqueError extends StatelessWidget {
           Icon(Icons.error_outline, size: 48, color: theme.colorScheme.error),
           const SizedBox(height: 8),
           Text(
-            'Impossible de charger l\'historique.',
+            'Impossible de charger les gains.',
             style: theme.textTheme.titleMedium?.copyWith(
               color: theme.colorScheme.error,
             ),
@@ -948,3 +2035,4 @@ class _HistoriqueError extends StatelessWidget {
     );
   }
 }
+

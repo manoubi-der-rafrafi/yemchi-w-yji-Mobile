@@ -65,7 +65,7 @@ class _MesGainsPageState extends State<MesGainsPage>
       _isLoading = true;
       _error = null;
     });
-    try {
+    try { 
       final auth = context.read<AuthController>();
       final transporteurId = auth.currentUser.value?.id;
       if (transporteurId == null || transporteurId.isEmpty) {
@@ -87,10 +87,12 @@ class _MesGainsPageState extends State<MesGainsPage>
         _pourcentageParSousZone = results[2] as Map<String, double>;
         _commandesLivrees = results[3] as List<Commande>;
         _factures = results[4] as List<Facture>;
-        _montantVertEntreprise = _factures
+        final facturesConfirmees = _factures
+            .where((f) => f.confirmer == FactureConfirmation.acceter);
+        _montantVertEntreprise = facturesConfirmees
             .where((f) => f.type == FactureType.livreurVerseEntreprise)
             .fold<double>(0, (sum, f) => sum + f.montant);
-        _montantVertLivreur = _factures
+        _montantVertLivreur = facturesConfirmees
             .where((f) => f.type == FactureType.entrepriseVerseLivreur)
             .fold<double>(0, (sum, f) => sum + f.montant);
         _isLoading = false;
@@ -586,241 +588,221 @@ class _MesGainsPageState extends State<MesGainsPage>
   }
 
   Future<void> _openPayByFactureDialog() async {
-    final montantController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    bool isSaving = false;
-    XFile? pickedImage;
-    Uint8List? pickedImageBytes;
-
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return Dialog(
-              insetPadding: const EdgeInsets.all(16),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: constraints.maxHeight * 0.9,
-                    ),
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: Form(
-                        key: formKey,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'Paiement par facture',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(fontWeight: FontWeight.w700),
-                                  ),
-                                ),
-                                IconButton(
-                                  onPressed: isSaving
-                                      ? null
-                                      : () => Navigator.of(dialogContext).pop(),
-                                  icon: const Icon(Icons.close),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: montantController,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(decimal: true),
-                              decoration: const InputDecoration(
-                                labelText: 'Montant',
-                                hintText: 'Ex: 12.50',
-                                border: OutlineInputBorder(),
-                              ),
-                              validator: (value) {
-                                final v = value?.trim() ?? '';
-                                if (v.isEmpty) return 'Montant requis';
-                                final parsed =
-                                    double.tryParse(v.replaceAll(',', '.'));
-                                if (parsed == null || parsed <= 0) {
-                                  return 'Montant invalide';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: isSaving
-                                        ? null
-                                        : () async {
-                                            final image =
-                                                await ImagePicker().pickImage(
-                                              source: ImageSource.gallery,
-                                              imageQuality: 85,
-                                            );
-                                            if (image == null) return;
-                                            final bytes =
-                                                await image.readAsBytes();
-                                            if (!dialogContext.mounted) return;
-                                            setDialogState(() {
-                                              pickedImage = image;
-                                              pickedImageBytes = bytes;
-                                            });
-                                          },
-                                    icon: const Icon(Icons.photo_library_outlined),
-                                    label: const Text('Galerie'),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: isSaving
-                                        ? null
-                                        : () async {
-                                            final image =
-                                                await ImagePicker().pickImage(
-                                              source: ImageSource.camera,
-                                              imageQuality: 85,
-                                            );
-                                            if (image == null) return;
-                                            final bytes =
-                                                await image.readAsBytes();
-                                            if (!dialogContext.mounted) return;
-                                            setDialogState(() {
-                                              pickedImage = image;
-                                              pickedImageBytes = bytes;
-                                            });
-                                          },
-                                    icon: const Icon(Icons.photo_camera_outlined),
-                                    label: const Text('Camera'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (pickedImage != null) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                pickedImage!.name,
-                                style: Theme.of(context).textTheme.bodySmall,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 8),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(10),
-                                child: Image.memory(
-                                  pickedImageBytes ?? Uint8List(0),
-                                  height: 160,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => const SizedBox(
-                                    height: 160,
-                                    child: Center(
-                                      child: Text('Apercu indisponible'),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 16),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: isSaving
-                                    ? null
-                                    : () async {
-                                        if (!formKey.currentState!.validate()) {
-                                          return;
-                                        }
-                                        if (pickedImage == null) {
-                                          ScaffoldMessenger.of(this.context)
-                                              .showSnackBar(
-                                            const SnackBar(
-                                              content: Text('Image requise.'),
-                                            ),
-                                          );
-                                          return;
-                                        }
-                                        setDialogState(() {
-                                          isSaving = true;
-                                        });
-                                        try {
-                                          final auth =
-                                              context.read<AuthController>();
-                                          final livreurId =
-                                              auth.currentUser.value?.id ?? '';
-                                          final montant = double.parse(
-                                            montantController.text
-                                                .trim()
-                                                .replaceAll(',', '.'),
-                                          );
-                                          await FactureService().createWithImage(
-                                            image: pickedImage!,
-                                            montant: montant,
-                                            dateTimle:
-                                                DateTime.now().toIso8601String(),
-                                            idLivreur: livreurId,
-                                            type: FactureType.livreurVerseEntreprise,
-                                            confirmer: false,
-                                          );
-                                          if (!mounted || !dialogContext.mounted) {
-                                            return;
-                                          }
-                                          Navigator.of(dialogContext).pop();
-                                          _fetchGains();
-                                          ScaffoldMessenger.of(this.context)
-                                              .showSnackBar(
-                                            const SnackBar(
-                                              content: Text('Facture envoyee.'),
-                                            ),
-                                          );
-                                        } catch (e) {
-                                          if (!mounted) return;
-                                          ScaffoldMessenger.of(this.context)
-                                              .showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                'Erreur: ${e.toString()}',
-                                              ),
-                                            ),
-                                          );
-                                        } finally {
-                                          if (!dialogContext.mounted) return;
-                                          setDialogState(() {
-                                            isSaving = false;
-                                          });
-                                        }
-                                      },
-                                child: isSaving
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child:
-                                            CircularProgressIndicator(strokeWidth: 2),
-                                      )
-                                    : const Text('Valider'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            );
-          },
+        return _PayByFactureDialog(
+          parentContext: context,
+          onSuccess: _fetchGains,
         );
       },
     );
+  }
+}
 
-    montantController.dispose();
+class _PayByFactureDialog extends StatefulWidget {
+  final BuildContext parentContext;
+  final VoidCallback onSuccess;
+
+  const _PayByFactureDialog({
+    required this.parentContext,
+    required this.onSuccess,
+  });
+
+  @override
+  State<_PayByFactureDialog> createState() => _PayByFactureDialogState();
+}
+
+class _PayByFactureDialogState extends State<_PayByFactureDialog> {
+  bool _isSaving = false;
+  XFile? _pickedImage;
+  Uint8List? _pickedImageBytes;
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: constraints.maxHeight * 0.9,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Paiement par facture',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed:
+                            _isSaving ? null : () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _isSaving
+                              ? null
+                              : () async {
+                                  final image =
+                                      await ImagePicker().pickImage(
+                                    source: ImageSource.gallery,
+                                    imageQuality: 85,
+                                  );
+                                  if (image == null) return;
+                                  final bytes = await image.readAsBytes();
+                                  if (!mounted) return;
+                                  setState(() {
+                                    _pickedImage = image;
+                                    _pickedImageBytes = bytes;
+                                  });
+                                },
+                          icon: const Icon(Icons.photo_library_outlined),
+                          label: const Text('Galerie'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _isSaving
+                              ? null
+                              : () async {
+                                  final image =
+                                      await ImagePicker().pickImage(
+                                    source: ImageSource.camera,
+                                    imageQuality: 85,
+                                  );
+                                  if (image == null) return;
+                                  final bytes = await image.readAsBytes();
+                                  if (!mounted) return;
+                                  setState(() {
+                                    _pickedImage = image;
+                                    _pickedImageBytes = bytes;
+                                  });
+                                },
+                          icon: const Icon(Icons.photo_camera_outlined),
+                          label: const Text('Camera'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_pickedImage != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _pickedImage!.name,
+                      style: Theme.of(context).textTheme.bodySmall,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.memory(
+                        _pickedImageBytes ?? Uint8List(0),
+                        height: 160,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const SizedBox(
+                          height: 160,
+                          child: Center(
+                            child: Text('Apercu indisponible'),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _isSaving
+                          ? null
+                          : () async {
+                              if (_pickedImage == null) {
+                                ScaffoldMessenger.of(widget.parentContext)
+                                    .showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Image requise.'),
+                                  ),
+                                );
+                                return;
+                              }
+                              setState(() {
+                                _isSaving = true;
+                              });
+                              try {
+                                final auth = context.read<AuthController>();
+                                final livreurId =
+                                    auth.currentUser.value?.id ?? '';
+                                await FactureService().createWithImage(
+                                  image: _pickedImage!,
+                                  montant: 0.0,
+                                  dateTimle: DateTime.now().toIso8601String(),
+                                  idLivreur: livreurId,
+                                  type: FactureType.livreurVerseEntreprise,
+                                  confirmer: FactureConfirmation.nonTraiter,
+                                );
+                                if (!mounted) return;
+                                Navigator.of(context).pop();
+                                widget.onSuccess();
+                                ScaffoldMessenger.of(widget.parentContext)
+                                    .showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Facture envoyee.'),
+                                  ),
+                                );
+                              } catch (e) {
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(widget.parentContext)
+                                    .showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Erreur: ${e.toString()}',
+                                    ),
+                                  ),
+                                );
+                              } finally {
+                                if (!mounted) return;
+                                setState(() {
+                                  _isSaving = false;
+                                });
+                              }
+                            },
+                      child: _isSaving
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Valider'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 }
 
@@ -1138,6 +1120,14 @@ class _FacturesSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final facturesAcceptees = factures
+        .where((facture) => facture.confirmer == FactureConfirmation.acceter)
+        .toList();
+    final facturesEnAttente = factures
+        .where(
+          (facture) => facture.confirmer == FactureConfirmation.nonTraiter,
+        )
+        .toList();
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1207,52 +1197,92 @@ class _FacturesSection extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          factures.isEmpty
-              ? Text(
-                  'Aucune facture disponible.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF6B776E),
-                  ),
-                )
-              : SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    headingRowHeight: 40,
-                    dataRowMinHeight: 44,
-                    dataRowMaxHeight: 48,
-                    columnSpacing: 18,
-                    headingTextStyle: theme.textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF4E5A52),
-                    ),
-                    columns: const [
-                      DataColumn(label: Text('Type')),
-                      DataColumn(label: Text('Date')),
-                      DataColumn(label: Text('Montant')),
-                      DataColumn(label: Text('')),
-                    ],
-                    rows: factures.map((facture) {
-                      return DataRow(
-                        cells: [
-                          DataCell(Text(_labelForType(facture.type))),
-                          DataCell(Text(_formatDate(facture.dateTimle))),
-                          DataCell(Text(_formatMoney(facture.montant))),
-                          DataCell(
-                            TextButton(
-                              onPressed: facture.image == null ||
-                                      facture.image!.trim().isEmpty
-                                  ? null
-                                  : () => _showFactureImage(context, facture),
-                              child: const Text('Detail'),
-                            ),
-                          ),
-                        ],
-                      );
-                    }).toList(),
-                  ),
-                ),
+          _buildFactureTable(
+            context,
+            title: 'Factures acceptees',
+            factures: facturesAcceptees,
+          ),
+          const SizedBox(height: 16),
+          _buildFactureTable(
+            context,
+            title: 'Factures en attente',
+            factures: facturesEnAttente,
+            showType: false,
+            showMontant: false,
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildFactureTable(
+    BuildContext context, {
+    required String title,
+    required List<Facture> factures,
+    bool showType = true,
+    bool showMontant = true,
+  }) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF1F1F1F),
+          ),
+        ),
+        const SizedBox(height: 8),
+        factures.isEmpty
+            ? Text(
+                'Aucune facture disponible.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFF6B776E),
+                ),
+              )
+            : SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  headingRowHeight: 40,
+                  dataRowMinHeight: 44,
+                  dataRowMaxHeight: 48,
+                  columnSpacing: 18,
+                  headingTextStyle: theme.textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF4E5A52),
+                  ),
+                  columns: [
+                    if (showType) const DataColumn(label: Text('Type')),
+                    const DataColumn(label: Text('Date')),
+                    if (showMontant)
+                      const DataColumn(label: Text('Montant')),
+                    const DataColumn(label: Text('')),
+                  ],
+                  rows: factures.map((facture) {
+                    return DataRow(
+                      cells: [
+                        if (showType)
+                          DataCell(Text(_labelForType(facture.type))),
+                        DataCell(Text(_formatDate(facture.dateTimle))),
+                        if (showMontant)
+                          DataCell(Text(_formatMoney(facture.montant))),
+                        DataCell(
+                          TextButton(
+                            onPressed:
+                                facture.image == null ||
+                                        facture.image!.trim().isEmpty
+                                    ? null
+                                    : () => _showFactureImage(context, facture),
+                            child: const Text('Detail'),
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+      ],
     );
   }
 

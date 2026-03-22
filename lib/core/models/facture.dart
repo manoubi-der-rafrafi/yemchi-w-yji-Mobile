@@ -27,6 +27,58 @@ extension FactureTypeX on FactureType {
   }
 }
 
+enum FactureConfirmation {
+  nonTraiter,
+  acceter,
+  refuser,
+}
+
+extension FactureConfirmationX on FactureConfirmation {
+  String get value {
+    switch (this) {
+      case FactureConfirmation.nonTraiter:
+        return 'NON_TRAITER';
+      case FactureConfirmation.acceter:
+        return 'ACCETER';
+      case FactureConfirmation.refuser:
+        return 'REFUSER';
+    }
+  }
+
+  static FactureConfirmation? fromValue(String? value) {
+    switch (value?.toUpperCase()) {
+      case 'NON_TRAITER':
+      case 'NON_TRAITE':
+        return FactureConfirmation.nonTraiter;
+      case 'ACCETER':
+      case 'ACCEPTER':
+        return FactureConfirmation.acceter;
+      case 'REFUSER':
+        return FactureConfirmation.refuser;
+      case 'TRUE':
+        return FactureConfirmation.acceter;
+      case 'FALSE':
+        return FactureConfirmation.nonTraiter;
+      default:
+        return null;
+    }
+  }
+
+  static FactureConfirmation? fromDynamic(dynamic value) {
+    if (value is bool) {
+      return value
+          ? FactureConfirmation.acceter
+          : FactureConfirmation.nonTraiter;
+    }
+    if (value is num) {
+      return value != 0
+          ? FactureConfirmation.acceter
+          : FactureConfirmation.nonTraiter;
+    }
+    return fromValue(value?.toString());
+  }
+}
+
 /// Modele Facture pour le front Flutter.
 /// Aligne sur le backend (MongoDB/Mongoose).
 class Facture {
@@ -36,7 +88,7 @@ class Facture {
   final String? image;
   final String idLivreur;
   final FactureType type;
-  final bool confirmer;
+  final FactureConfirmation confirmer;
 
   const Facture({
     required this.id,
@@ -45,7 +97,7 @@ class Facture {
     this.image,
     required this.idLivreur,
     required this.type,
-    this.confirmer = false,
+    this.confirmer = FactureConfirmation.nonTraiter,
   });
 
   Facture copyWith({
@@ -55,7 +107,7 @@ class Facture {
     String? image,
     String? idLivreur,
     FactureType? type,
-    bool? confirmer,
+    FactureConfirmation? confirmer,
   }) {
     return Facture(
       id: id ?? this.id,
@@ -85,7 +137,9 @@ class Facture {
     final FactureType type =
         FactureTypeX.fromValue(map['type']?.toString()) ??
             FactureType.entrepriseVerseLivreur;
-    final bool confirmer = map['confirmer'] == true;
+    final FactureConfirmation confirmer =
+        FactureConfirmationX.fromDynamic(map['confirmer']) ??
+            FactureConfirmation.nonTraiter;
 
     return Facture(
       id: id,
@@ -106,7 +160,7 @@ class Facture {
       'image': image,
       'id_livreur': idLivreur,
       'type': type.value,
-      'confirmer': confirmer,
+      'confirmer': confirmer.value,
     };
   }
 

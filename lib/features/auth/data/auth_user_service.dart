@@ -23,6 +23,12 @@ class AuthUserService {
   
   static String _byId(String id) => '/utilisateur/id/$id';
   static String _updateById(String id) => '/utilisateur/$id';
+  static String _etatIncidentPanne(String id) =>
+      '/utilisateur/$id/etat-incident/panne';
+  static String _etatIncidentAccident(String id) =>
+      '/utilisateur/$id/etat-incident/accident';
+  static String _etatIncidentAccidentProduits(String id) =>
+      '/utilisateur/$id/etat-incident/accident/produits';
   static String _zonesDepartArriver(String id) =>
       '/utilisateur/$id/zones-depart-arriver';
   static String _statusById(String id) => '/utilisateur/$id/status'; // Added
@@ -274,6 +280,49 @@ class AuthUserService {
       throw ApiException(r.statusCode, 'Latitude/Longitude invalides');
     } else {
       throw ApiException(r.statusCode, 'Échec de mise à jour localisation');
+    }
+  }
+
+  Future<Utilisateur> marquerTransporteurEnPanne(String userId) async {
+    final r = await api.put(_etatIncidentPanne(userId), body: json.encode({}));
+
+    if (r.statusCode == 200) {
+      return Utilisateur.fromJson(json.decode(r.body));
+    } else {
+      throw ApiException(r.statusCode, r.body);
+    }
+  }
+
+  Future<Utilisateur> marquerTransporteurEnAccident(String userId) async {
+    final r = await api.put(
+      _etatIncidentAccident(userId),
+      body: json.encode({}),
+    );
+
+    if (r.statusCode == 200) {
+      return Utilisateur.fromJson(json.decode(r.body));
+    } else {
+      throw ApiException(r.statusCode, r.body);
+    }
+  }
+
+  Future<Utilisateur> declarerAccidentAvecProduits({
+    required String userId,
+    required Map<String, int> produitsAffectes,
+    required List<String> produitsNonAffectes,
+  }) async {
+    final r = await api.put(
+      _etatIncidentAccidentProduits(userId),
+      body: json.encode({
+        'produitsAffectes': produitsAffectes,
+        'produitsNonAffectes': produitsNonAffectes,
+      }),
+    );
+
+    if (r.statusCode == 200) {
+      return Utilisateur.fromJson(json.decode(r.body));
+    } else {
+      throw ApiException(r.statusCode, r.body);
     }
   }
 

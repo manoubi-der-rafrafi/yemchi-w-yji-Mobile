@@ -5,8 +5,13 @@ import 'package:yemchi_wyji/features/produit/data/produit_service.dart';
 
 class CommandeProduitsPage extends StatefulWidget {
   final Commande commande;
+  final List<Produit>? produits;
 
-  const CommandeProduitsPage({super.key, required this.commande});
+  const CommandeProduitsPage({
+    super.key,
+    required this.commande,
+    this.produits,
+  });
 
   @override
   State<CommandeProduitsPage> createState() => _CommandeProduitsPageState();
@@ -22,7 +27,12 @@ class _CommandeProduitsPageState extends State<CommandeProduitsPage> {
   @override
   void initState() {
     super.initState();
-    _fetchProduits();
+    if (widget.produits != null) {
+      _produits = List<Produit>.from(widget.produits!);
+      _isLoading = false;
+    } else {
+      _fetchProduits();
+    }
   }
 
   Future<void> _fetchProduits() async {
@@ -121,6 +131,10 @@ class _ProduitTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final quantityLabel = produit.quantite != null ? '${produit.quantite}' : '-';
+    final bool isAffected = produit.affecter;
+    final String affectedQtyLabel = produit.quantiteAffecter != null
+        ? '${produit.quantiteAffecter}'
+        : '-';
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -157,6 +171,23 @@ class _ProduitTile extends StatelessWidget {
                   'Quantite : $quantityLabel',
                   style: theme.textTheme.bodyMedium,
                 ),
+                if (isAffected) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Produit affecte : Oui',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Quantite affectee : $affectedQtyLabel',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.error,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

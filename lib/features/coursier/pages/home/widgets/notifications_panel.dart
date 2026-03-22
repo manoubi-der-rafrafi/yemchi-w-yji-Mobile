@@ -21,6 +21,10 @@ class NotificationsPanel extends StatelessWidget {
     if (!ctrl.isPanelOpen || commande == null) {
       return const SizedBox.shrink();
     }
+    if (ctrl.isCurrentTransporteurEnPanne &&
+        commande.transporteurId == ctrl.currentTransporteurId) {
+      return const SizedBox.shrink();
+    }
 
     return SafeArea(
       top: false,
@@ -101,6 +105,8 @@ class _CommandeSelectionCardState extends State<_CommandeSelectionCard> {
   }
 
   Future<Utilisateur?> _fetchClient() async {
+    final override = context.read<HomeController>().selectedContactInfo;
+    if (override != null) return null;
     final clientId = widget.commande.clientId;
     if (clientId == null || clientId.isEmpty) return null;
     final service = context.read<AuthUserService>();
@@ -149,6 +155,7 @@ class _CommandeSelectionCardState extends State<_CommandeSelectionCard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final homeCtrl = context.watch<HomeController>();
+    final contactOverride = homeCtrl.selectedContactInfo;
     final double? distanceMetersFromRoute =
         homeCtrl.currentRouteDistanceMeters ??
             (widget.commande.distanceKm != null
@@ -168,6 +175,14 @@ class _CommandeSelectionCardState extends State<_CommandeSelectionCard> {
     final bool hasMetrics =
         distanceText != null || durationText != null || priceText != null;
     final bool showCompleteButton = widget.isMine && widget.isNavigationActive;
+    final bool isSecoursCommande =
+        homeCtrl.isCommandeSecours(widget.commande.id);
+    final bool departScanne = widget.commande.qrCodeDepartScanne == true;
+    final bool relaisEffectue =
+        widget.commande.relaisTransporteurEffectue == true;
+    final String completeLabel = isSecoursCommande && departScanne && !relaisEffectue
+        ? 'Relais recupere'
+        : 'Terminer';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
@@ -201,6 +216,7 @@ class _CommandeSelectionCardState extends State<_CommandeSelectionCard> {
                     isLoading: isLoading,
                     onClose: widget.onClose,
                     showContactDetails: !widget.isNavigationActive,
+                    contactOverride: contactOverride,
                   ),
                   const SizedBox(height: 10),
                   if (hasMetrics) ...[
@@ -239,12 +255,26 @@ class _CommandeSelectionCardState extends State<_CommandeSelectionCard> {
                 if (showCompleteButton) ...[
                   const SizedBox(width: 12),
                   Expanded(
+                    flex: 2,
                     child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.red.shade600,
+                        foregroundColor: Colors.white,
+                      ),
                       onPressed: () async {
                         final api = context.read<Api>();
                         final service = CommandeService(api);
-                        final departScanne = widget.commande.qrCodeDepartScanne == true;
-                        if (departScanne) {
+                        if (isSecoursCommande && departScanne && !relaisEffectue) {
+                          final updated = await service
+                              .marquerRelaisTransporteurEffectue(
+                            widget.commande.id,
+                          );
+                          if (!mounted) return;
+                          homeCtrl.updateCommande(updated);
+                          homeCtrl.setNavigationMode(false);
+                          homeCtrl.clearSelection();
+                          return;
+                        } else if (departScanne) {
                           final updated =
                               await service.marquerReceptionScanne(widget.commande.id);
                           if (!mounted) return;
@@ -262,7 +292,12 @@ class _CommandeSelectionCardState extends State<_CommandeSelectionCard> {
                           return;
                         }
                       },
-                      child: const Text('Terminer'),
+                      child: Text(
+                        completeLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        softWrap: false,
+                      ),
                     ),
                   ),
                 ],
@@ -358,41 +393,20 @@ class _RouteMetrics extends StatelessWidget {
     if (metrics.isEmpty) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const minTileWidth = 120.0;
-        final bool shouldStack =
-            constraints.maxWidth < minTileWidth * metrics.length;
-        Widget content;
-        if (shouldStack) {
-          content = Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (var i = 0; i < metrics.length; i++) ...[
-                if (i > 0) const SizedBox(height: 12),
-                _MetricTile(data: metrics[i]),
-              ],
-            ],
-          );
-        } else {
-          content = Row(
-            children: [
-              for (var i = 0; i < metrics.length; i++) ...[
-                if (i > 0) const SizedBox(width: 12),
-                Expanded(child: _MetricTile(data: metrics[i])),
-              ],
-            ],
-          );
-        }
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceVariant.withOpacity(0.35),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: content,
-        );
-      },
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceVariant.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < metrics.length; i++) ...[
+            if (i > 0) const SizedBox(width: 12),
+            Expanded(child: _MetricTile(data: metrics[i])),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -428,11 +442,15 @@ class _MetricTile extends StatelessWidget {
               color: theme.colorScheme.primary,
             ),
             const SizedBox(width: 6),
-            Text(
-              data.label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
+            Expanded(
+              child: Text(
+                data.label,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -443,6 +461,8 @@ class _MetricTile extends StatelessWidget {
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w700,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );
@@ -495,6 +515,7 @@ class _ClientInfos extends StatelessWidget {
   final bool isLoading;
   final VoidCallback onClose;
   final bool showContactDetails;
+  final SelectedContactInfo? contactOverride;
 
   const _ClientInfos({
     required this.theme,
@@ -503,6 +524,7 @@ class _ClientInfos extends StatelessWidget {
     required this.isLoading,
     required this.onClose,
     this.showContactDetails = true,
+    this.contactOverride,
   });
 
   String _fallback(String? value, String fallback) {
@@ -521,15 +543,20 @@ class _ClientInfos extends StatelessWidget {
         .map((s) => s.trim())
         .where((s) => s.isNotEmpty)
         .toList();
-    final fullName =
-        parts.isNotEmpty ? parts.join(' ') : 'Utilisateur inconnu';
+    final fullName = contactOverride?.displayName.trim().isNotEmpty == true
+        ? contactOverride!.displayName.trim()
+        : (parts.isNotEmpty ? parts.join(' ') : 'Utilisateur inconnu');
 
-    final telDepart =
-        _fallback(commande.telDepart, 'Numero depart indisponible');
-    final telArrivee =
-        _fallback(commande.telArrivee, 'Numero arrivee indisponible');
+    final telDepart = _fallback(
+      contactOverride?.phoneDepart ?? commande.telDepart,
+      'Numero depart indisponible',
+    );
+    final telArrivee = _fallback(
+      contactOverride?.phoneArrivee ?? commande.telArrivee,
+      'Numero arrivee indisponible',
+    );
 
-    final imageUrl = user?.image?.trim();
+    final imageUrl = (contactOverride?.imageUrl ?? user?.image)?.trim();
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
 
     final avatar = Container(
@@ -563,8 +590,9 @@ class _ClientInfos extends StatelessWidget {
       ),
     );
 
-    final statusColor =
-        user?.statut == Statut.actif ? Colors.green : Colors.redAccent;
+    final statusColor = contactOverride != null
+        ? (contactOverride!.isActive ? Colors.green : Colors.redAccent)
+        : (user?.statut == Statut.actif ? Colors.green : Colors.redAccent);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,

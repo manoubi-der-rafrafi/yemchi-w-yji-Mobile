@@ -38,7 +38,7 @@ class FactureService {
     required String dateTimle,
     required String idLivreur,
     required FactureType type,
-    bool confirmer = false,
+    FactureConfirmation confirmer = FactureConfirmation.nonTraiter,
   }) async {
     final token = await TokenStorage.access();
     final bytes = await image.readAsBytes();
@@ -67,7 +67,7 @@ class FactureService {
       'dateTimle': dateTimle,
       'idLivreur': idLivreur,
       'type': type.value,
-      'confirmer': confirmer.toString(),
+      'confirmer': confirmer.value,
     });
     final response = await dio.post(
       _base,

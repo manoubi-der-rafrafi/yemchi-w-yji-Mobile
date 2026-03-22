@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_compass/flutter_compass.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
@@ -10,7 +11,12 @@ import 'package:provider/provider.dart';
 import 'package:yemchi_wyji/core/models/commande.dart';
 import 'package:yemchi_wyji/core/models/utilisateur.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
+import 'package:yemchi_wyji/features/commande/dto/commande_transporteur_principal_response.dart';
+import 'package:yemchi_wyji/features/commande/dto/transporteur_panne_commandes_response.dart';
+import 'package:yemchi_wyji/features/commande/dto/transporteur_secours_commandes_response.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/controllers/home_controller.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/pages/transporteur_panne_details_page.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/pages/transporteur_secours_details_page.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/widgets/commande_details_sheet.dart';
 
 import '../services/route_service.dart';
@@ -26,6 +32,7 @@ class MapViewState extends State<MapView>
     with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   final MapController _mapController = MapController();
   StreamSubscription<Position>? _posSub;
+  StreamSubscription<CompassEvent>? _compassSub;
   StreamSubscription<MapEvent>? _mapEventSub;
   final RouteService _routeService = RouteService();
   static const Color _markerArrivalColor = Color(0xFF34D058);
@@ -50,7 +57,16 @@ class MapViewState extends State<MapView>
   static const double _headingBearingDistanceMeters = 8;
   static const double _headingFastSmoothingFactor = 0.8;
   static const double _headingSlowSmoothingFactor = 0.35;
-  static const Duration _headingStaleTimeout = Duration(seconds: 12);
+  static const double _headingMinMovementMeters = 2.5;
+  static const double _headingMaxAccuracyMeters = 35.0;
+  static const double _headingJumpRejectDegrees = 85.0;
+  static const double _headingJumpRejectMoveMeters = 20.0;
+  static const double _compassStrongSmoothingFactor = 0.18;
+  static const double _compassFastCatchupSmoothingFactor = 0.35;
+  static const double _compassDeadbandDegrees = 1.5;
+  static const double _compassJumpRejectDegrees = 70.0;
+  static const Duration _compassFreshness = Duration(seconds: 3);
+  static const double _compassLowConfidenceAccuracy = 22.0;
   static const Duration _cameraAnimationDuration = Duration(milliseconds: 350);
   late final AnimationController _cameraAnimationController;
   static const Duration _userMarkerAnimationDuration =
@@ -98,12 +114,16 @@ class MapViewState extends State<MapView>
   LatLng? _lastCameraUpdateCenter;
   double? _lastCameraUpdateRotation;
   DateTime? _lastCameraUpdateAt;
+  DateTime? _lastCenterUpdateAt;
   DateTime? _lastRotationUpdateAt;
   DateTime? _lastHeadingUpdateAt;
   bool _cameraAnimationActive = false;
   List<LatLng>? _lastPolylineSnapshot;
   int _lastActiveCommandesSignature = 0;
   int _lastMesCommandesSignature = 0;
+  int _lastMinTransporteursSignature = 0;
+  int _lastTransporteursEnPanneSignature = 0;
+  int _lastTransporteursSecoursSignature = 0;
   String? _lastSelectedCommandeId;
   LatLng? _lastArrivalPoint;
   List<LatLng>? _pendingPolylineSnapshot;
@@ -114,6 +134,14 @@ class MapViewState extends State<MapView>
   DateTime? _lastPolylineEmitAt;
   bool _homeControllerSyncScheduled = false;
   DateTime? _lastAcceptedGpsAt;
+  double? _filteredCompassHeading;
+  DateTime? _lastCompassUpdateAt;
+  bool _compassCalibrationHintShown = false;
+
+  double _mapRotationFromHeading(double heading) {
+    final normalizedHeading = ((heading % 360) + 360) % 360;
+    return (360 - normalizedHeading) % 360;
+  }
 
   @override
   void initState() {
@@ -173,6 +201,7 @@ class MapViewState extends State<MapView>
   @override
   void dispose() {
     _posSub?.cancel();
+    _compassSub?.cancel();
     _mapEventSub?.cancel();
     if (_userMarkerAnimationListener != null) {
       _userMarkerAnimationController
@@ -222,6 +251,7 @@ class MapViewState extends State<MapView>
     }
 
     // 3) Suivi en continu
+    _startCompassStream();
     _posSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.best,
@@ -239,6 +269,123 @@ class MapViewState extends State<MapView>
         silent: true,
       );
     }
+  }
+
+  void _startCompassStream() {
+    _compassSub?.cancel();
+    final stream = FlutterCompass.events;
+    if (stream == null) {
+      return;
+    }
+    _compassSub = stream.listen((event) {
+      if (!mounted) return;
+      final raw = event.heading;
+      if (raw == null || raw.isNaN || raw.isInfinite) {
+        return;
+      }
+      final normalized = _normalizeHeading(raw);
+      if (normalized == null) {
+        return;
+      }
+      _ingestCompassHeading(normalized);
+      final accuracy = event.accuracy;
+      if (!_compassCalibrationHintShown &&
+          accuracy != null &&
+          accuracy.isFinite &&
+          accuracy > _compassLowConfidenceAccuracy) {
+        _compassCalibrationHintShown = true;
+        _showSnack(
+          'Boussole peu precise. Fais un mouvement en 8 pour calibrer le cap.',
+        );
+      }
+    });
+  }
+
+  void _ingestCompassHeading(double heading) {
+    final previous = _filteredCompassHeading;
+    if (previous == null) {
+      _filteredCompassHeading = heading;
+      _lastCompassUpdateAt = DateTime.now();
+      _maybeApplyLiveCompassHeading(heading);
+      return;
+    }
+    final delta = _angleDelta(previous, heading);
+    if (delta < _compassDeadbandDegrees) {
+      return;
+    }
+    final speedKmh = _lastSpeedKmh ?? 0;
+    final bool suspiciousJump =
+        delta >= _compassJumpRejectDegrees && speedKmh < _headingReliableSpeedKmh;
+    if (suspiciousJump) {
+      return;
+    }
+    final smoothing = delta >= 25
+        ? _compassFastCatchupSmoothingFactor
+        : _compassStrongSmoothingFactor;
+    _filteredCompassHeading = _lerpHeading(previous, heading, smoothing);
+    _lastCompassUpdateAt = DateTime.now();
+    _maybeApplyLiveCompassHeading(_filteredCompassHeading!);
+  }
+
+  double? _latestCompassHeading() {
+    final heading = _filteredCompassHeading;
+    if (heading == null) {
+      return null;
+    }
+    final updatedAt = _lastCompassUpdateAt;
+    if (updatedAt == null) {
+      return null;
+    }
+    if (DateTime.now().difference(updatedAt) > _compassFreshness) {
+      return null;
+    }
+    return heading;
+  }
+
+  void _maybeApplyLiveCompassHeading(double heading) {
+    if (!mounted) return;
+    final speedKmh = _lastSpeedKmh ?? 0;
+    if (speedKmh >= _headingReliableSpeedKmh) {
+      return;
+    }
+
+    final previousHeading = _headingDegrees;
+    final double resolvedHeading;
+    if (previousHeading == null) {
+      resolvedHeading = heading;
+    } else {
+      final delta = _angleDelta(previousHeading, heading);
+      if (delta < _compassDeadbandDegrees) {
+        return;
+      }
+      resolvedHeading = _lerpHeading(
+        previousHeading,
+        heading,
+        _compassFastCatchupSmoothingFactor,
+      );
+    }
+
+    _headingDegrees = resolvedHeading;
+    _lastHeadingUpdateAt = DateTime.now();
+    _notifyUserLocationVisual();
+
+    final bool rotationEnabled = _navigationModeActive || _following;
+    if (!rotationEnabled) {
+      return;
+    }
+
+    final mapRotation = _mapRotationFromHeading(resolvedHeading);
+    if (!_shouldUpdateRotation(mapRotation)) {
+      return;
+    }
+
+    unawaited(
+      _applyCameraUpdate(
+        center: _mapController.camera.center,
+        zoom: _mapController.camera.zoom,
+        rotation: mapRotation,
+      ),
+    );
   }
 
 
@@ -259,13 +406,14 @@ class MapViewState extends State<MapView>
         final target = _myPos;
         if (target != null) {
           final heading = _headingDegrees ?? 0;
+          final mapRotation = _mapRotationFromHeading(heading);
           final currentZoom = _mapController.camera.zoom;
           final desiredZoom =
               currentZoom < _navigationZoom ? _navigationZoom : currentZoom;
           await _applyCameraUpdate(
             center: target,
             zoom: desiredZoom,
-            rotation: heading,
+            rotation: mapRotation,
           );
         }
       });
@@ -293,7 +441,8 @@ class MapViewState extends State<MapView>
 
     final previousPos = _myPos;
     final latLng = LatLng(p.latitude, p.longitude);
-    final normalizedHeading = _normalizeHeading(p.heading);
+    final normalizedGpsHeading = _normalizeHeading(p.heading);
+    final filteredCompassHeading = _latestCompassHeading();
     final double currentSpeedKmh = _metersPerSecondToKmh(p.speed);
 
     final bool sampleAccepted = _shouldAcceptGpsSample(latLng, p.accuracy);
@@ -313,7 +462,8 @@ class MapViewState extends State<MapView>
       previous: previousPos,
       current: latLng,
       moveMeters: movedMeters,
-      compassHeading: normalizedHeading,
+      gpsHeading: normalizedGpsHeading,
+      compassHeading: filteredCompassHeading,
       speedKmh: currentSpeedKmh,
     );
     _animateUserMarkerTo(latLng);
@@ -346,13 +496,21 @@ class MapViewState extends State<MapView>
         navigationActive: navigationActive,
         speedKmh: _lastSpeedKmh,
       );
-      final double? rotation = rotationEnabled ? _headingDegrees : null;
-      if (_shouldUpdateFollowCamera(latLng, rotation)) {
+      final double? rotation = rotationEnabled
+          ? _mapRotationFromHeading(_headingDegrees!)
+          : null;
+      final bool shouldRecenter = _shouldRecenterFollowCamera(latLng);
+      final bool shouldRotate =
+          rotation != null && _shouldUpdateRotation(rotation);
+      if (shouldRecenter || shouldRotate) {
+        final camera = _mapController.camera;
+        final targetCenter = shouldRecenter ? latLng : camera.center;
+        final targetZoom = shouldRecenter ? followZoom : camera.zoom;
         unawaited(
           _applyCameraUpdate(
-            center: latLng,
-            zoom: followZoom,
-            rotation: rotation,
+            center: targetCenter,
+            zoom: targetZoom,
+            rotation: shouldRotate ? rotation : null,
           ),
         );
       }
@@ -441,7 +599,8 @@ class MapViewState extends State<MapView>
 
   void _maybeRefreshActiveRoute() {
     if (!_navigationModeActive || _myPos == null) return;
-    final homeCtrl = context.read<HomeController>();
+    final homeCtrl = _homeController;
+    if (homeCtrl == null) return;
     if (!homeCtrl.isNavigationMode) return;
     final selectedId = homeCtrl.selectedCommandeId;
     if (selectedId == null) return;
@@ -644,13 +803,15 @@ class MapViewState extends State<MapView>
         _LatLngTween(begin: startCenter, end: center).animate(curved);
     final zoomAnim =
         Tween<double>(begin: startZoom, end: zoom).animate(curved);
-    final rotationAnim =
-        Tween<double>(begin: startRotation, end: rotation).animate(curved);
 
     void listener() {
       final currentCenter = centerAnim.value;
       final currentZoom = zoomAnim.value;
-      final currentRotation = rotationAnim.value;
+      final currentRotation = _lerpHeading(
+        startRotation,
+        rotation,
+        curved.value,
+      );
       _mapController.moveAndRotate(
         currentCenter,
         currentZoom,
@@ -696,6 +857,9 @@ class MapViewState extends State<MapView>
     final currentPolyline = controller.currentPolyline;
     final activeCommandes = controller.activeCommandes;
     final mesCommandes = controller.mesCommandes;
+    final mesCommandesSecours = controller.mesCommandesSecours;
+    final transporteursEnPanne = controller.transporteursEnPanne;
+    final transporteursSecours = controller.transporteursSecours;
     final List<LatLng>? nextPolylineSnapshot = currentPolyline == null
         ? null
         : List<LatLng>.unmodifiable(currentPolyline);
@@ -708,22 +872,48 @@ class MapViewState extends State<MapView>
 
     final activeSignature = _computeCommandesSignature(activeCommandes);
     final mesSignature = _computeCommandesSignature(mesCommandes);
+    final minTransporteursSignature =
+        controller.minTransporteursSignatureFor(activeCommandes);
+    final transporteursEnPanneSignature =
+        controller.transporteursEnPanneSignature();
+    final transporteursSecoursSignature =
+        controller.transporteursSecoursSignature();
     final selectedId = controller.selectedCommandeId;
     final selectionChanged = selectedId != _lastSelectedCommandeId;
     if (selectionChanged ||
         activeSignature != _lastActiveCommandesSignature ||
-        mesSignature != _lastMesCommandesSignature) {
+        mesSignature != _lastMesCommandesSignature ||
+        minTransporteursSignature != _lastMinTransporteursSignature ||
+        transporteursEnPanneSignature != _lastTransporteursEnPanneSignature ||
+        transporteursSecoursSignature != _lastTransporteursSecoursSignature) {
       final mesCommandesById = {
         for (final c in mesCommandes) c.id: c,
       };
-      final markers = _buildCommandeMarkers(
-        activeCommandes,
-        selectedCommandeId: selectedId,
-        mesCommandesById: mesCommandesById,
-      );
+      final secoursCommandesById = {
+        for (final entry in mesCommandesSecours) entry.commande.id: entry,
+      };
+      final markers = <Marker>[
+        ..._buildCommandeMarkers(
+          activeCommandes,
+          selectedCommandeId: selectedId,
+          mesCommandesById: mesCommandesById,
+          secoursCommandesById: secoursCommandesById,
+          minTransporteursById: controller.minTransporteursByCommandeId,
+          isCurrentTransporteurIndisponible:
+              controller.isCurrentTransporteurIndisponible,
+          currentTransporteurId: controller.currentTransporteurId,
+        ),
+        if (controller.isCurrentTransporteurIndisponible)
+          ..._buildTransporteursSecoursMarkers(transporteursSecours)
+        else
+          ..._buildTransporteursEnPanneMarkers(transporteursEnPanne),
+      ];
       _commandeMarkersNotifier.value = List<Marker>.unmodifiable(markers);
       _lastActiveCommandesSignature = activeSignature;
       _lastMesCommandesSignature = mesSignature;
+      _lastMinTransporteursSignature = minTransporteursSignature;
+      _lastTransporteursEnPanneSignature = transporteursEnPanneSignature;
+      _lastTransporteursSecoursSignature = transporteursSecoursSignature;
       _lastSelectedCommandeId = selectedId;
     }
 
@@ -733,12 +923,36 @@ class MapViewState extends State<MapView>
     }
 
     final Commande? selectedCommande = controller.selectedCommande;
+    final selectedContactInfo = controller.selectedContactInfo;
+    final bool preferCurrentPositionToArrivalWhenDepartScanned =
+        selectedContactInfo?.preferCurrentPositionToArrivalWhenDepartScanned ==
+        true;
+    final LatLng? routeStartOverride =
+        selectedContactInfo?.routeStartLatitude != null &&
+                selectedContactInfo?.routeStartLongitude != null
+            ? LatLng(
+                selectedContactInfo!.routeStartLatitude!,
+                selectedContactInfo.routeStartLongitude!,
+              )
+            : null;
+    final LatLng? routeTargetOverride =
+        selectedContactInfo?.routeTargetLatitude != null &&
+                selectedContactInfo?.routeTargetLongitude != null
+            ? LatLng(
+                selectedContactInfo!.routeTargetLatitude!,
+                selectedContactInfo.routeTargetLongitude!,
+              )
+            : null;
     final _RouteRequest? requestPreview = selectedCommande == null
         ? null
         : _deriveRouteRequest(
             selectedCommande,
             isMine: controller.isSelectedCommandeMine,
             currentPos: _myPos,
+            preferCurrentPositionToArrivalWhenDepartScanned:
+                preferCurrentPositionToArrivalWhenDepartScanned,
+            routeStartOverride: routeStartOverride,
+            routeTargetOverride: routeTargetOverride,
           );
     _handleRoutePrefetchState(
       selectedCommande: selectedCommande,
@@ -746,6 +960,52 @@ class MapViewState extends State<MapView>
       currentPolyline: currentPolyline,
       requestPreview: requestPreview,
     );
+  }
+
+  List<Marker> _buildTransporteursEnPanneMarkers(
+    List<TransporteurPanneCommandesResponse> transporteursEnPanne,
+  ) {
+    final markers = <Marker>[];
+    for (final entry in transporteursEnPanne) {
+      final lat = entry.transporteur.latitude;
+      final lng = entry.transporteur.longitude;
+      if (lat == null || lng == null) continue;
+      markers.add(
+        Marker(
+          point: LatLng(lat, lng),
+          width: 84,
+          height: 84,
+          child: _PanneMarker(
+            isAccident:
+                entry.transporteur.etatIncident == EtatIncident.ACCIDENT,
+            onTap: () => _handleTransporteurPanneTap(entry),
+          ),
+        ),
+      );
+    }
+    return markers;
+  }
+
+  List<Marker> _buildTransporteursSecoursMarkers(
+    List<TransporteurSecoursCommandesResponse> transporteursSecours,
+  ) {
+    final markers = <Marker>[];
+    for (final entry in transporteursSecours) {
+      final lat = entry.transporteurSecours.latitude;
+      final lng = entry.transporteurSecours.longitude;
+      if (lat == null || lng == null) continue;
+      markers.add(
+        Marker(
+          point: LatLng(lat, lng),
+          width: 84,
+          height: 84,
+          child: _SecoursMarker(
+            onTap: () => _handleTransporteurSecoursTap(entry),
+          ),
+        ),
+      );
+    }
+    return markers;
   }
 
   void _schedulePolylineSnapshot(List<LatLng>? snapshot) {
@@ -812,13 +1072,14 @@ class MapViewState extends State<MapView>
     if (!force && !_navigationModeActive && !_following) return;
     final heading = fallbackHeading ?? _headingDegrees;
     if (heading == null) return;
+    final mapRotation = _mapRotationFromHeading(heading);
     final center = _mapController.camera.center;
     final zoom = _mapController.camera.zoom;
     unawaited(
       _applyCameraUpdate(
         center: center,
         zoom: zoom,
-        rotation: heading,
+        rotation: mapRotation,
       ),
     );
   }
@@ -1105,30 +1366,23 @@ class MapViewState extends State<MapView>
     return delta > 180 ? 360 - delta : delta;
   }
 
-  bool _shouldUpdateFollowCamera(LatLng target, double? rotation) {
+  bool _shouldRecenterFollowCamera(LatLng target) {
     if (!_enableFollowCameraThrottle) {
       return true;
     }
     final lastCenter = _lastCameraUpdateCenter;
-    final lastRotation = _lastCameraUpdateRotation;
-    final lastUpdateAt = _lastCameraUpdateAt;
-    if (lastCenter == null || lastUpdateAt == null) {
+    if (lastCenter == null) {
       return true;
     }
     final movedMeters = _distance.as(LengthUnit.Meter, target, lastCenter);
-    final bool movedEnough =
-        movedMeters >= _followCameraDistanceThresholdMeters;
-    bool headingChanged = false;
-    if (rotation != null) {
-      headingChanged = lastRotation == null
-          ? true
-          : _angleDelta(rotation, lastRotation) >=
-              _followCameraHeadingThresholdDegrees;
-    }
-    if (!movedEnough && !headingChanged) {
+    if (movedMeters < _followCameraDistanceThresholdMeters) {
       return false;
     }
-    final elapsed = DateTime.now().difference(lastUpdateAt);
+    final lastCenterUpdateAt = _lastCenterUpdateAt ?? _lastCameraUpdateAt;
+    if (lastCenterUpdateAt == null) {
+      return true;
+    }
+    final elapsed = DateTime.now().difference(lastCenterUpdateAt);
     return elapsed >= _followCameraMinInterval;
   }
 
@@ -1148,11 +1402,17 @@ class MapViewState extends State<MapView>
   }
 
   void _registerCameraUpdate(LatLng center, double rotation) {
+    final previousCenter = _lastCameraUpdateCenter;
     _lastCameraUpdateCenter = center;
     _lastCameraUpdateRotation = rotation;
     final now = DateTime.now();
     _lastCameraUpdateAt = now;
     _lastRotationUpdateAt = now;
+    final centerChanged = previousCenter == null ||
+        !_latLngAlmostEquals(previousCenter, center);
+    if (centerChanged) {
+      _lastCenterUpdateAt = now;
+    }
     _updateRotationNotifier(rotation);
   }
 
@@ -1264,7 +1524,7 @@ class MapViewState extends State<MapView>
     await _applyCameraUpdate(
       center: target,
       zoom: zoom,
-      rotation: rotateNow ? heading! : null,
+      rotation: rotateNow ? _mapRotationFromHeading(heading!) : null,
     );
     if (!rotateNow && heading != null) {
       _rotateMapToHeading(force: true, fallbackHeading: heading);
@@ -1287,7 +1547,9 @@ class MapViewState extends State<MapView>
       final zoom = _mapController.camera.zoom;
       final bool rotate =
           _headingDegrees != null && (_navigationModeActive || _following);
-      final rotation = rotate ? _headingDegrees! : null;
+      final rotation = rotate
+          ? _mapRotationFromHeading(_headingDegrees!)
+          : null;
       unawaited(
         _applyCameraUpdate(
           center: _myPos!,
@@ -1302,6 +1564,11 @@ class MapViewState extends State<MapView>
     List<Commande> commandes, {
     String? selectedCommandeId,
     required Map<String, Commande> mesCommandesById,
+    required Map<String, CommandeTransporteurPrincipalResponse>
+        secoursCommandesById,
+    required Map<String, bool> minTransporteursById,
+    required bool isCurrentTransporteurIndisponible,
+    required String? currentTransporteurId,
   }) {
     Iterable<Commande> visibles = commandes;
     if (selectedCommandeId != null) {
@@ -1312,19 +1579,37 @@ class MapViewState extends State<MapView>
       }
     }
 
+    const Color attentionColor = Color(0xFFF4C20D);
+    bool isAttentionStatut(String? raw) {
+      final s = raw?.trim().toLowerCase();
+      return s == 'en_appelle' ||
+          s == 'appelle_client_1' ||
+          s == 'appelle_client_2' ||
+          s == 'non_repondre_client_1' ||
+          s == 'non_repondre_client_2';
+    }
+
     final markers = <Marker>[];
     for (final commande in visibles) {
       final mine = mesCommandesById[commande.id];
-      final Commande source = mine ?? commande;
-      if (mine != null && source.qrCodeReceptionScanne == true) {
+      final secoursEntry = secoursCommandesById[commande.id];
+      final Commande source = mine ?? secoursEntry?.commande ?? commande;
+      final bool treatAsMine = mine != null ||
+          secoursEntry != null ||
+          (isCurrentTransporteurIndisponible &&
+              currentTransporteurId != null &&
+              source.transporteurId == currentTransporteurId);
+      if (treatAsMine && source.qrCodeReceptionScanne == true) {
         continue; // commande dÃ©jÃ  finalisÃ©e â†’ pas de point
       }
 
       LatLng? point;
       bool? isArrivalPoint;
       String? markerLabel;
-      if (mine != null) {
-        final bool goToArrival = source.qrCodeDepartScanne == true;
+      if (treatAsMine) {
+        final bool departScanne = source.qrCodeDepartScanne == true;
+        final bool relaisEffectue =
+            source.relaisTransporteurEffectue == true;
         final double? departLat =
             commande.latitudeDepart ?? source.latitudeDepart;
         final double? departLng =
@@ -1333,13 +1618,23 @@ class MapViewState extends State<MapView>
             commande.latitudeDestination ?? source.latitudeDestination;
         final double? destLng =
             commande.longitudeDestination ?? source.longitudeDestination;
+        final double? transporteurLat = secoursEntry?.transporteur.latitude;
+        final double? transporteurLng = secoursEntry?.transporteur.longitude;
 
-        if (goToArrival && destLat != null && destLng != null) {
+        if (secoursEntry != null &&
+            departScanne &&
+            !relaisEffectue &&
+            transporteurLat != null &&
+            transporteurLng != null) {
+          point = LatLng(transporteurLat, transporteurLng);
+          isArrivalPoint = false;
+          markerLabel = 'Transporteur principal';
+        } else if (departScanne && destLat != null && destLng != null) {
           point = LatLng(destLat, destLng);
           isArrivalPoint = true;
           markerLabel =
               commande.destination ?? source.destination ?? 'Point d\'arrivee';
-        } else if (!goToArrival && departLat != null && departLng != null) {
+        } else if (!departScanne && departLat != null && departLng != null) {
           point = LatLng(departLat, departLng);
           isArrivalPoint = false;
           markerLabel = commande.localisationDepart ??
@@ -1364,9 +1659,18 @@ class MapViewState extends State<MapView>
 
       if (point == null) continue;
 
-      final Color? markerColor = (isArrivalPoint == null)
+      Color? markerColor = (isArrivalPoint == null)
           ? null
           : (isArrivalPoint ? _markerArrivalColor : _markerDepartColor);
+      if (isAttentionStatut(source.statut)) {
+        markerColor = attentionColor;
+      }
+      final bool highlightMinTransporteur =
+          mine == null && (minTransporteursById[commande.id] == true);
+      if (highlightMinTransporteur &&
+          (markerColor == null || markerColor == _markerDepartColor)) {
+        markerColor = Colors.red;
+      }
 
       markers.add(
         Marker(
@@ -1377,6 +1681,9 @@ class MapViewState extends State<MapView>
             commande: commande,
             onTap: () => _handleCommandeTap(commande),
             pointColor: markerColor,
+            iconData: secoursEntry != null
+                ? Icons.volunteer_activism_rounded
+                : null,
             labelOverride: markerLabel,
             showLabel: false,
             rotationListenable: _mapRotationNotifier,
@@ -1390,7 +1697,49 @@ class MapViewState extends State<MapView>
 
   Future<void> _handleCommandeTap(Commande commande) async {
     if (!mounted) return;
+    debugPrint(
+      'MapView tap commande ${commande.id} statut: ${commande.statut ?? 'null'}',
+    );
     final homeCtrl = context.read<HomeController>();
+    final secoursInfo = homeCtrl.buildSecoursContactInfoForCommande(commande.id);
+    homeCtrl.setSelectedContactInfo(secoursInfo, notify: false);
+    final statut = commande.statut?.trim().toLowerCase();
+    if (statut == 'en_appelle' ||
+        statut == 'appelle_client_1' ||
+        statut == 'appelle_client_2') {
+      homeCtrl.selectCommande(commande, openPanel: false);
+      await _showCommandeDetails(commande);
+      if (!mounted) return;
+      homeCtrl.clearSelection();
+      homeCtrl.setCommandTab(CommandTab.mes);
+      return;
+    }
+
+    if (statut == 'non_repondre_client_1' ||
+        statut == 'non_repondre_client_2') {
+      homeCtrl.selectCommande(commande, openPanel: false);
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Verification en cours'),
+          content: const Text(
+            'Cette commande est en attente de verification par l\'administration.'
+            ' Merci de patienter avant de continuer.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Terminer'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      homeCtrl.clearSelection();
+      homeCtrl.setCommandTab(CommandTab.mes);
+      return;
+    }
+
     homeCtrl.selectCommande(commande);
     await _fetchRouteForSelection(commande.id);
   }
@@ -1409,11 +1758,35 @@ class MapViewState extends State<MapView>
     }
 
     final bool isMine =
-        homeCtrl.mesCommandes.any((c) => c.id == commande.id);
+        homeCtrl.isCommandeMine(commande.id);
+    final bool preferCurrentPositionToArrivalWhenDepartScanned =
+        homeCtrl
+            .selectedContactInfo?.preferCurrentPositionToArrivalWhenDepartScanned ==
+        true;
+    final LatLng? routeStartOverride =
+        homeCtrl.selectedContactInfo?.routeStartLatitude != null &&
+                homeCtrl.selectedContactInfo?.routeStartLongitude != null
+            ? LatLng(
+                homeCtrl.selectedContactInfo!.routeStartLatitude!,
+                homeCtrl.selectedContactInfo!.routeStartLongitude!,
+              )
+            : null;
+    final LatLng? routeTargetOverride =
+        homeCtrl.selectedContactInfo?.routeTargetLatitude != null &&
+                homeCtrl.selectedContactInfo?.routeTargetLongitude != null
+            ? LatLng(
+                homeCtrl.selectedContactInfo!.routeTargetLatitude!,
+                homeCtrl.selectedContactInfo!.routeTargetLongitude!,
+              )
+            : null;
     final request = _deriveRouteRequest(
       commande,
       isMine: isMine,
       currentPos: _myPos,
+      preferCurrentPositionToArrivalWhenDepartScanned:
+          preferCurrentPositionToArrivalWhenDepartScanned,
+      routeStartOverride: routeStartOverride,
+      routeTargetOverride: routeTargetOverride,
     );
 
     if (request == null) {
@@ -1516,33 +1889,60 @@ class MapViewState extends State<MapView>
     LatLng? previous,
     required double moveMeters,
     required double speedKmh,
+    double? gpsHeading,
     double? compassHeading,
   }) {
+    final double? normalizedGps = gpsHeading;
     final double? normalizedCompass = compassHeading;
+    final bool hasReliableAccuracy = _accuracyMeters != null &&
+        _accuracyMeters!.isFinite &&
+        _accuracyMeters! <= _headingMaxAccuracyMeters;
+    final bool movedEnoughForAnyHeading =
+        previous != null && moveMeters >= _headingMinMovementMeters;
+    if (!movedEnoughForAnyHeading && speedKmh < _headingReliableSpeedKmh) {
+      return false;
+    }
+    if (!hasReliableAccuracy &&
+        speedKmh < _headingReliableSpeedKmh &&
+        moveMeters < _headingBearingDistanceMeters) {
+      return false;
+    }
+
     final bool fastEnough = speedKmh >= _headingReliableSpeedKmh;
     double? nextHeading;
-    if (fastEnough && normalizedCompass != null) {
+    // At low speed (or stopped), prefer filtered compass.
+    if (!fastEnough && normalizedCompass != null) {
       nextHeading = normalizedCompass;
+    }
+    // At road speed, GNSS heading can be good on many devices.
+    if (nextHeading == null &&
+        fastEnough &&
+        normalizedGps != null &&
+        hasReliableAccuracy) {
+      nextHeading = normalizedGps;
     }
     final bool movedEnough =
         previous != null && moveMeters >= _headingBearingDistanceMeters;
     if (nextHeading == null && movedEnough) {
       nextHeading = _bearingBetween(previous, current);
     }
+    if (nextHeading == null && normalizedCompass != null) {
+      nextHeading = normalizedCompass;
+    }
     if (nextHeading == null) {
-      final bool headingStale = _lastHeadingUpdateAt == null ||
-          DateTime.now().difference(_lastHeadingUpdateAt!) >= _headingStaleTimeout;
-      if (headingStale && normalizedCompass != null) {
-        nextHeading = normalizedCompass;
-      } else {
-        return false;
-      }
+      return false;
     }
     final double resolvedHeading;
     if (_headingDegrees == null) {
       resolvedHeading = nextHeading;
     } else {
       final double delta = _angleDelta(_headingDegrees!, nextHeading);
+      final bool suspiciousJump = delta >= _headingJumpRejectDegrees &&
+          moveMeters < _headingJumpRejectMoveMeters &&
+          speedKmh < _fastSpeedThresholdKmh;
+      if (suspiciousJump) {
+        return false;
+      }
       if (delta >= 45) {
         resolvedHeading = nextHeading;
       } else {
@@ -1581,7 +1981,7 @@ class MapViewState extends State<MapView>
     if (!mounted) return;
     final homeCtrl = context.read<HomeController>();
     final bool isMine =
-        homeCtrl.mesCommandes.any((c) => c.id == commande.id);
+        homeCtrl.isCommandeMine(commande.id);
     if (!isMine) {
       _showSnack('Commande non assignÃ©e.');
       return;
@@ -1631,6 +2031,57 @@ class MapViewState extends State<MapView>
     homeCtrl.setNavigationMode(true);
   }
 
+  Future<void> previewRouteFor(
+    Commande commande, {
+    bool preferCurrentPositionToArrivalWhenDepartScanned = false,
+    LatLng? routeStartOverride,
+    LatLng? routeTargetOverride,
+  }) async {
+    if (!mounted) return;
+    final homeCtrl = context.read<HomeController>();
+    final request = _deriveRouteRequest(
+      commande,
+      isMine: false,
+      currentPos: _myPos,
+      preferCurrentPositionToArrivalWhenDepartScanned:
+          preferCurrentPositionToArrivalWhenDepartScanned,
+      routeStartOverride: routeStartOverride,
+      routeTargetOverride: routeTargetOverride,
+    );
+    if (request == null) {
+      _showSnack('Trajet indisponible pour le moment.');
+      return;
+    }
+
+    try {
+      final route = await _routeService.fetchRoute(
+        start: request.start,
+        end: request.end,
+      );
+      if (!mounted) return;
+      final points = route.isEmpty ? <LatLng>[request.start, request.end] : route;
+      homeCtrl.setRouteData(
+        start: request.start,
+        end: request.end,
+        startOrigin: request.startOrigin,
+        endOrigin: request.endOrigin,
+        polyline: points,
+      );
+      _fitCameraToBounds(LatLngBounds.fromPoints(points));
+    } catch (e) {
+      if (!mounted) return;
+      final fallback = <LatLng>[request.start, request.end];
+      homeCtrl.setRouteData(
+        start: request.start,
+        end: request.end,
+        startOrigin: request.startOrigin,
+        endOrigin: request.endOrigin,
+        polyline: fallback,
+      );
+      _fitCameraToBounds(LatLngBounds.fromPoints(fallback));
+    }
+  }
+
   void _showSnack(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1642,6 +2093,9 @@ class MapViewState extends State<MapView>
     Commande commande, {
     required bool isMine,
     LatLng? currentPos,
+    bool preferCurrentPositionToArrivalWhenDepartScanned = false,
+    LatLng? routeStartOverride,
+    LatLng? routeTargetOverride,
   }) {
     if (isMine && commande.qrCodeReceptionScanne == true) {
       return null;
@@ -1652,22 +2106,38 @@ class MapViewState extends State<MapView>
     RoutePointOrigin startOrigin = RoutePointOrigin.depart;
     RoutePointOrigin endOrigin = RoutePointOrigin.destination;
 
-    if (isMine && currentPos != null) {
+    final LatLng? effectiveCurrentPos = routeStartOverride ?? currentPos;
+    if (effectiveCurrentPos != null && routeTargetOverride != null) {
+      start = effectiveCurrentPos;
+      end = routeTargetOverride;
+      startOrigin = RoutePointOrigin.courier;
+      endOrigin = RoutePointOrigin.contact;
+    }
+    if ((isMine || preferCurrentPositionToArrivalWhenDepartScanned) &&
+        end == null &&
+        effectiveCurrentPos != null) {
       final bool goToArrival = commande.qrCodeDepartScanne == true;
       final double? destinationLat = commande.latitudeDestination;
       final double? destinationLng = commande.longitudeDestination;
       final double? departLat = commande.latitudeDepart;
       final double? departLng = commande.longitudeDepart;
 
-      double? targetLat = goToArrival ? destinationLat : departLat;
-      double? targetLng = goToArrival ? destinationLng : departLng;
+      double? targetLat;
+      double? targetLng;
+      if (preferCurrentPositionToArrivalWhenDepartScanned && !isMine) {
+        targetLat = goToArrival ? destinationLat : null;
+        targetLng = goToArrival ? destinationLng : null;
+      } else {
+        targetLat = goToArrival ? destinationLat : departLat;
+        targetLng = goToArrival ? destinationLng : departLng;
+      }
       if (targetLat == null || targetLng == null) {
         targetLat ??= departLat;
         targetLng ??= departLng;
       }
 
       if (targetLat != null && targetLng != null) {
-        start = currentPos;
+        start = effectiveCurrentPos;
         end = LatLng(targetLat, targetLng);
         startOrigin = RoutePointOrigin.courier;
         endOrigin =
@@ -1718,7 +2188,7 @@ class MapViewState extends State<MapView>
     if (!mounted) return;
     final homeCtrl = context.read<HomeController>();
     final bool isMine =
-        homeCtrl.mesCommandes.any((element) => element.id == commande.id);
+        homeCtrl.isCommandeMine(commande.id);
     await showModalBottomSheet(
       context: context,
       showDragHandle: true,
@@ -1734,6 +2204,102 @@ class MapViewState extends State<MapView>
 
   Future<void> openCommandeDetails(Commande commande) {
     return _showCommandeDetails(commande);
+  }
+
+  Future<void> _handleTransporteurPanneTap(
+    TransporteurPanneCommandesResponse entry,
+  ) async {
+    if (!mounted) return;
+    final dynamic selection = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => TransporteurPanneDetailsPage(data: entry),
+      ),
+    );
+    if (!mounted || selection == null) return;
+    final homeController = context.read<HomeController>();
+    final Commande? commande;
+    if (selection is Commande) {
+      commande = selection;
+      homeController.setSelectedContactInfo(null, notify: false);
+    } else {
+      final dynamic rawCommande = selection.commande;
+      final dynamic rawTransporteur = selection.transporteur;
+      if (rawCommande is! Commande) return;
+      commande = rawCommande;
+      final String displayName =
+          '${rawTransporteur?.prenom ?? ''} ${rawTransporteur?.nom ?? ''}'
+              .trim();
+      homeController.setSelectedContactInfo(
+        SelectedContactInfo(
+          displayName:
+              displayName.isEmpty ? 'Transporteur en panne' : displayName,
+          imageUrl: rawTransporteur?.image as String?,
+          phoneDepart: commande.telDepart,
+          phoneArrivee: commande.telArrivee,
+          preferCurrentPositionToArrivalWhenDepartScanned: true,
+        ),
+        notify: false,
+      );
+    }
+    homeController.selectCommande(commande);
+    await previewRouteFor(
+      commande,
+      preferCurrentPositionToArrivalWhenDepartScanned: true,
+    );
+  }
+
+  Future<void> _handleTransporteurSecoursTap(
+    TransporteurSecoursCommandesResponse entry,
+  ) async {
+    if (!mounted) return;
+    final transporteurEnPanneId =
+        context.read<HomeController>().currentTransporteurId;
+    if (transporteurEnPanneId == null || transporteurEnPanneId.isEmpty) return;
+    final dynamic selection = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => TransporteurSecoursDetailsPage(
+          transporteurEnPanneId: transporteurEnPanneId,
+          data: entry,
+        ),
+      ),
+    );
+    if (!mounted || selection == null) return;
+    final homeController = context.read<HomeController>();
+    final dynamic rawCommande = selection.commande;
+    final dynamic rawTransporteur = selection.transporteur;
+    if (rawCommande is! Commande) return;
+    final commande = rawCommande;
+    final double? routeLatitude =
+        rawTransporteur?.latitude is num
+            ? (rawTransporteur.latitude as num).toDouble()
+            : null;
+    final double? routeLongitude =
+        rawTransporteur?.longitude is num
+            ? (rawTransporteur.longitude as num).toDouble()
+            : null;
+    final String displayName =
+        '${rawTransporteur?.prenom ?? ''} ${rawTransporteur?.nom ?? ''}'.trim();
+    homeController.setSelectedContactInfo(
+      SelectedContactInfo(
+        displayName: displayName.isEmpty ? 'Transporteur secours' : displayName,
+        imageUrl: rawTransporteur?.image as String?,
+        phoneDepart: commande.telDepart,
+        phoneArrivee: commande.telArrivee,
+        preferCurrentPositionToArrivalWhenDepartScanned: true,
+        routeStartLatitude: routeLatitude,
+        routeStartLongitude: routeLongitude,
+      ),
+      notify: false,
+    );
+    homeController.selectCommande(commande);
+    await previewRouteFor(
+      commande,
+      preferCurrentPositionToArrivalWhenDepartScanned: true,
+      routeStartOverride:
+          routeLatitude != null && routeLongitude != null
+              ? LatLng(routeLatitude, routeLongitude)
+              : null,
+    );
   }
 
   @override
@@ -2043,6 +2609,7 @@ class _CommandeMarker extends StatelessWidget {
   final Commande commande;
   final VoidCallback onTap;
   final Color? pointColor;
+  final IconData? iconData;
   final String? labelOverride;
   final bool showLabel;
   final ValueListenable<double> rotationListenable;
@@ -2051,6 +2618,7 @@ class _CommandeMarker extends StatelessWidget {
     required this.commande,
     required this.onTap,
     this.pointColor,
+    this.iconData,
     this.labelOverride,
     this.showLabel = false,
     required this.rotationListenable,
@@ -2127,6 +2695,123 @@ class _CommandeMarker extends StatelessWidget {
                   color: pointColor,
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 2.5),
+                ),
+                child: iconData == null
+                    ? null
+                    : Icon(
+                        iconData,
+                        size: 14,
+                        color: Colors.white,
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PanneMarker extends StatelessWidget {
+  const _PanneMarker({
+    required this.isAccident,
+    required this.onTap,
+  });
+
+  final bool isAccident;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.92),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Center(
+              child: Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: isAccident
+                      ? const Color(0xFFB3261E)
+                      : const Color(0xFFD93025),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2.5),
+                ),
+                child: Icon(
+                  isAccident
+                      ? Icons.car_crash_rounded
+                      : Icons.warning_amber_rounded,
+                  size: 15,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SecoursMarker extends StatelessWidget {
+  const _SecoursMarker({
+    required this.onTap,
+  });
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.92),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Center(
+              child: Container(
+                width: 31,
+                height: 31,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF188038),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2.5),
+                ),
+                child: const Icon(
+                  Icons.support_agent,
+                  size: 15,
+                  color: Colors.white,
                 ),
               ),
             ),
