@@ -30,8 +30,6 @@ class _ClientHomeState extends State<ClientHome> {
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _currentIndex,
-        selectedItemColor: Colors.green,
-        unselectedItemColor: Colors.grey,
         onTap: (int index) {
           setState(() {
             _currentIndex = index;

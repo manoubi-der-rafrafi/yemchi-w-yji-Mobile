@@ -320,7 +320,6 @@ class _AmisPageState extends State<AmisPage> {
       appBar: AppBar(
         title: const Text('Mes amis'),
         centerTitle: true,
-        backgroundColor: Colors.green,
       ),
       body: isLoadingUser 
           ? const Center(child: CircularProgressIndicator()) 
@@ -345,7 +344,6 @@ class _AmisPageState extends State<AmisPage> {
                     icon: const Icon(Icons.person_add, size: 20),
                     label: const Text("Ajouter"),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: () {},
@@ -368,7 +366,10 @@ class _AmisPageState extends State<AmisPage> {
                 Container(
                   margin: const EdgeInsets.only(top: 14, bottom: 12),
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.35),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: Column(
                     children: [
                       Row(
@@ -404,17 +405,18 @@ class _AmisPageState extends State<AmisPage> {
           ),
         ),
       ),
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: Theme.of(context).colorScheme.surface,
     );
   }
 
   Widget _buildTabButton(String label, String mode, bool isLeft) {
+    final scheme = Theme.of(context).colorScheme;
     final bool isActive = viewMode == mode;
     return ElevatedButton(
       onPressed: () => setState(() => viewMode = mode),
       style: ElevatedButton.styleFrom(
-        backgroundColor: isActive ? Colors.green : Colors.grey.shade300,
-        foregroundColor: isActive ? Colors.white : Colors.black87,
+        backgroundColor: isActive ? scheme.primary : scheme.surfaceVariant,
+        foregroundColor: isActive ? Colors.white : scheme.onSurface,
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.horizontal(
                 left: isLeft ? const Radius.circular(16) : Radius.zero,
@@ -466,9 +468,24 @@ class _AmisPageState extends State<AmisPage> {
                 if (user.telephone != null) Text(user.telephone!),
               ]),
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), minimumSize: const Size(38, 32)), onPressed: () => _onAcceptInvitation(user), child: const Text("Accepter", style: TextStyle(color: Colors.white, fontSize: 12))),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    minimumSize: const Size(38, 32),
+                  ),
+                  onPressed: () => _onAcceptInvitation(user),
+                  child: const Text("Accepter", style: TextStyle(color: Colors.white, fontSize: 12)),
+                ),
                 const SizedBox(width: 8),
-                ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.red, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), minimumSize: const Size(38, 32)), onPressed: () => _onRefuseInvitation(user), child: const Text("Refuser", style: TextStyle(color: Colors.white, fontSize: 12))),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    minimumSize: const Size(38, 32),
+                  ),
+                  onPressed: () => _onRefuseInvitation(user),
+                  child: const Text("Refuser", style: TextStyle(color: Colors.white, fontSize: 12)),
+                ),
               ]),
           ),
         );

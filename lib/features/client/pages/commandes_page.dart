@@ -202,7 +202,6 @@ class _CommandesPageState extends State<CommandesPage> {
       appBar: AppBar(
         title: const Text('Historique de mes commandes'),
         centerTitle: true,
-        backgroundColor: Colors.green,
       ),
       body: loading && error == null
           ? const Center(child: CircularProgressIndicator())
@@ -228,7 +227,7 @@ class _CommandesPageState extends State<CommandesPage> {
                     ),
                   ),
                 ),
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: Theme.of(context).colorScheme.surface,
     );
   }
 
@@ -255,7 +254,7 @@ class _CommandesPageState extends State<CommandesPage> {
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   suffixIcon: const Icon(Icons.search),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: Theme.of(context).colorScheme.surface,
                 ),
                 onChanged: (s) {
                   setState(() => search = s);
@@ -267,9 +266,9 @@ class _CommandesPageState extends State<CommandesPage> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
+                border: Border.all(color: Theme.of(context).colorScheme.outline),
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
@@ -292,6 +291,7 @@ class _CommandesPageState extends State<CommandesPage> {
   }
 
   Widget _buildSegmentButton(String mode, String label, {bool isLeft = false, bool isRight = false}) {
+    final scheme = Theme.of(context).colorScheme;
     final bool isActive = viewMode == mode;
     return ElevatedButton(
       onPressed: () {
@@ -299,8 +299,8 @@ class _CommandesPageState extends State<CommandesPage> {
         _syncCommandesSource();
       },
       style: ElevatedButton.styleFrom(
-        backgroundColor: isActive ? Colors.green : Colors.grey.shade200,
-        foregroundColor: isActive ? Colors.white : Colors.black87,
+        backgroundColor: isActive ? scheme.primary : scheme.surfaceVariant,
+        foregroundColor: isActive ? Colors.white : scheme.onSurface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.only(
             topLeft: isLeft ? const Radius.circular(14) : Radius.zero,
@@ -470,7 +470,9 @@ class _CommandesPageState extends State<CommandesPage> {
     if (statut == 'envoyee') {
       return ElevatedButton(
         onPressed: () => _acceptCommand(c),
-        style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Theme.of(context).colorScheme.secondary,
+        ),
         child: const Text('Accepter', style: TextStyle(color: Colors.white)),
       );
     } else if (statut == 'accepter') {

@@ -1,5 +1,6 @@
 // lib/core/models/utilisateur.dart
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 
 class Utilisateur {
   // Identité
@@ -41,6 +42,7 @@ class Utilisateur {
   final Zone? zone;           // Java: enum Zone
   final Map<String, List<String>>? zoneDepart;
   final Map<String, List<String>>? zoneArriver;
+
 
   const Utilisateur({
     required this.id,
@@ -204,8 +206,8 @@ class Utilisateur {
       'identifiant': identifiant,
       'email': email,
       'telephone': telephone,
-      'role': role.name,       // "client" | "transporteur" | "admin"
-      'statut': statut.name,   // "actif"  | "inactif"      | "banni"
+      'role': role.name, // "client" | "transporteur" | "admin"
+      'statut': statut.name, // "actif"  | "inactif"      | "banni"
       'adresse': adresse,
       'image': image,
       'imageCarteIdentiteFace': imageCarteIdentiteFace,
@@ -247,14 +249,28 @@ class Utilisateur {
   // ---------------- ENUM HELPERS ----------------
 
   static Role _roleFromString(dynamic v) {
-    final s = (v ?? '').toString().toLowerCase();
+    final raw = (v ?? '').toString().trim();
+    var s = raw.toLowerCase();
+    if (s.startsWith('role_')) {
+      s = s.substring(5);
+    }
     switch (s) {
       case 'transporteur':
+      case 'courier':
+      case 'driver':
         return Role.transporteur;
       case 'admin':
+      case 'administrator':
         return Role.admin;
       case 'client':
+      case 'user':
+        return Role.client;
       default:
+        if (kDebugMode && raw.isNotEmpty) {
+          debugPrint(
+            '[USER_MODEL] Unknown role "$raw", defaulting to Role.client',
+          );
+        }
         return Role.client;
     }
   }
@@ -303,6 +319,7 @@ class Utilisateur {
 // ---------------- ENUMS ----------------
 
 enum Role { client, transporteur, admin }
+
 enum Statut { actif, inactif, banni }
 
 // --- Enum pour les grandes zones (régions principales) ---
@@ -317,6 +334,7 @@ enum Zone {
   SUD_EST,
   SUD_OUEST,
 }
+
 // --- Enum pour les sous-zones (zones détaillées pour scooters) ---
 enum SousZone {
   // Grand Tunis

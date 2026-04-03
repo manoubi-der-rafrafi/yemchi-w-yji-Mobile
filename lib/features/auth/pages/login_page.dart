@@ -43,7 +43,18 @@ class _LoginPageState extends State<LoginPage> {
     if (!_formKey.currentState!.validate()) return;
     setState(() { _loading = true; _error = null; });
     try {
-      await context.read<AuthController>().login(_idCtrl.text.trim(), _pwdCtrl.text);
+      final auth = context.read<AuthController>();
+      final ok = await auth.login(_idCtrl.text.trim(), _pwdCtrl.text);
+      if (!ok) {
+        final message = auth.error.value ?? 'Identifiants invalides';
+        if (mounted) {
+          setState(() => _error = message);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message)),
+          );
+        }
+        return;
+      }
       if (mounted) Navigator.of(context).maybePop();
     } catch (e) {
       setState(() => _error = e.toString());

@@ -116,8 +116,10 @@ class _ProfilPageState extends State<ProfilPage> {
     const cameraIcon = "assets/profil/camera.png"; 
 
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator(color: Colors.green)),
+      return Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
+        ),
       );
     }
 
@@ -131,9 +133,8 @@ class _ProfilPageState extends State<ProfilPage> {
       appBar: AppBar(
         title: const Text("Profil"),
         centerTitle: true,
-        backgroundColor: Colors.green,
       ),
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: Column(
         children: [
           // Profile block
@@ -202,7 +203,7 @@ class _ProfilPageState extends State<ProfilPage> {
                 const Divider(height: 32),
                 Row(
                   children: [
-                    const Icon(Icons.cake, color: Colors.green, size: 18),
+                    Icon(Icons.cake, color: Theme.of(context).colorScheme.primary, size: 18),
                     const SizedBox(width: 6),
                     const Text("Né(e) le :", style: TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(width: 6),
@@ -225,7 +226,7 @@ class _ProfilPageState extends State<ProfilPage> {
                     _ProfileButton(
                       icon: Icons.edit,
                       label: 'Modifier mon profil',
-                      color: Colors.blue,
+                      color: Theme.of(context).colorScheme.secondary,
                       onPressed: () {
                         // Equivalent to router.navigate(['/profil/modifier'])
                         // Navigator.pushNamed(context, '/profil/modifier', arguments: _user);
@@ -236,7 +237,7 @@ class _ProfilPageState extends State<ProfilPage> {
                     _ProfileButton(
                       icon: Icons.history,
                       label: 'Historique de commandes',
-                      color: Colors.black,
+                      color: Theme.of(context).colorScheme.secondary,
                       onPressed: () {
                         // Equivalent to router.navigate(['/historique'])
                          print("Nav to History");
@@ -246,7 +247,7 @@ class _ProfilPageState extends State<ProfilPage> {
                     _ProfileButton(
                       icon: Icons.people,
                       label: 'Mes amis',
-                      color: Colors.green,
+                      color: Theme.of(context).colorScheme.secondary,
                       onPressed: () {
                          // Equivalent to router.navigate(['/mesAmis'])
                          print("Nav to Friends");
@@ -256,7 +257,7 @@ class _ProfilPageState extends State<ProfilPage> {
                     _ProfileButton(
                       icon: Icons.logout,
                       label: 'Se déconnecter',
-                      color: Colors.red,
+                      color: Theme.of(context).colorScheme.error,
                       onPressed: _onLogout,
                     ),
                     const SizedBox(height: 20),
@@ -283,7 +284,7 @@ class _InfoRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(icon, color: Colors.green, size: 18),
+        Icon(icon, color: Theme.of(context).colorScheme.primary, size: 18),
         const SizedBox(width: 6),
         Text(text, style: const TextStyle(fontSize: 16, color: Colors.black54)),
       ],

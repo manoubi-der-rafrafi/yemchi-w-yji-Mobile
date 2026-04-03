@@ -405,7 +405,7 @@ class _LivrerPageState extends State<LivrerPage> {
             child: ElevatedButton(
               onPressed: hasProduits() ? goToConfirmationPage : null,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
+                backgroundColor: Theme.of(context).colorScheme.secondary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 elevation: 2,
