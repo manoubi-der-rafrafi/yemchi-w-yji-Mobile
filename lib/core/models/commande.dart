@@ -50,6 +50,9 @@ class Commande {
   final String? zonePrincipaleDepart;
   final String? zonePrincipaleArrivee;
 
+  // Véhicule sélectionné par l'IA (ex: 'MOTO', 'VOITURE', 'CAMION', etc.)
+  final String? vehicule;
+
   final bool? qrCodeDepartScanne;
   final DateTime? dateScanDepart;
 
@@ -82,6 +85,7 @@ class Commande {
     this.sousZoneArrivee,
     this.zonePrincipaleDepart,
     this.zonePrincipaleArrivee,
+    this.vehicule,
     this.qrCodeDepartScanne,
     this.dateScanDepart,
     this.qrCodeReceptionScanne,
@@ -167,6 +171,7 @@ class Commande {
       zonePrincipaleArrivee: _toStringOrNull(
         _pick(raw, ['zonePrincipaleArrivee', 'zone_principale_arrivee']),
       ),
+      vehicule: _toStringOrNull(_pick(raw, ['vehicule'])),
       qrCodeDepartScanne: _pick(raw, ['qrCodeDepartScanne', 'qr_code_depart_scanne']) as bool?,
       dateScanDepart: _toDate(_pick(raw, ['dateScanDepart', 'date_scan_depart'])),
       qrCodeReceptionScanne: _pick(raw, ['qrCodeReceptionScanne', 'qr_code_reception_scanne']) as bool?,
@@ -211,6 +216,7 @@ class Commande {
         'sousZoneArrivee': sousZoneArrivee,
         'zonePrincipaleDepart': zonePrincipaleDepart,
         'zonePrincipaleArrivee': zonePrincipaleArrivee,
+        'vehicule': vehicule,
         'qrCodeDepartScanne': qrCodeDepartScanne,
         'dateScanDepart': dateScanDepart?.toIso8601String(),
         'qrCodeReceptionScanne': qrCodeReceptionScanne,
@@ -246,6 +252,7 @@ class Commande {
     String? sousZoneArrivee,
     String? zonePrincipaleDepart,
     String? zonePrincipaleArrivee,
+    String? vehicule,
     bool? qrCodeDepartScanne,
     DateTime? dateScanDepart,
     bool? qrCodeReceptionScanne,
@@ -275,15 +282,13 @@ class Commande {
       majLe: majLe ?? this.majLe,
       sousZoneDepart: sousZoneDepart ?? this.sousZoneDepart,
       sousZoneArrivee: sousZoneArrivee ?? this.sousZoneArrivee,
-      zonePrincipaleDepart:
-          zonePrincipaleDepart ?? this.zonePrincipaleDepart,
-      zonePrincipaleArrivee:
-          zonePrincipaleArrivee ?? this.zonePrincipaleArrivee,
+      zonePrincipaleDepart: zonePrincipaleDepart ?? this.zonePrincipaleDepart,
+      zonePrincipaleArrivee: zonePrincipaleArrivee ?? this.zonePrincipaleArrivee,
+      vehicule: vehicule ?? this.vehicule,
       qrCodeDepartScanne: qrCodeDepartScanne ?? this.qrCodeDepartScanne,
       dateScanDepart: dateScanDepart ?? this.dateScanDepart,
       qrCodeReceptionScanne: qrCodeReceptionScanne ?? this.qrCodeReceptionScanne,
       dateScanReception: dateScanReception ?? this.dateScanReception,
-
     );
   }
 }

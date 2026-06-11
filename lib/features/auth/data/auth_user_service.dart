@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:io'; // Needed for File
 import 'package:http/http.dart' as http; // Needed for MultipartRequest
 import 'package:yemchi_wyji/core/network/api.dart';
@@ -39,7 +39,6 @@ class AuthUserService {
       _login,
       withAuth: false,
       body: json.encode({'email': email, 'motDePasse': password}),
-      includeAuth: false,
     );
 
     return _parseAuthResponse(r);
@@ -50,9 +49,8 @@ class AuthUserService {
   Future<LoginResult> register(Map<String, dynamic> userData) async {
     final r = await api.post(
       _register,
-      withAuth: false,
+      withAuth: false,  
       body: json.encode(userData),
-      includeAuth: false,
     );
 
     return _parseAuthResponse(r);

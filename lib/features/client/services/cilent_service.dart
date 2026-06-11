@@ -7,6 +7,44 @@ import '../../../core/network/api.dart';
 import '../../../core/env.dart';
 import '../../../core/storage/token_storage.dart';
 
+const String _n8nBaseUrl = 'https://n8n-production-949e.up.railway.app/webhook';
+
+// -------- n8n AI response models --------
+
+
+
+class AnalyzeImageResult {
+  final String thinking;
+  final String productName;
+  final double? estimatedPriceTnd;
+  final double? heightCm;
+  final double? widthCm;
+  final double? depthCm;
+  final String rawText;
+
+  AnalyzeImageResult({
+    required this.thinking,
+    required this.productName,
+    this.estimatedPriceTnd,
+    this.heightCm,
+    this.widthCm,
+    this.depthCm,
+    required this.rawText,
+  });
+}
+
+class AnalyzeOrderResult {
+  final String thinking;
+  final String selectedVehicle;
+  final String rawText;
+
+  AnalyzeOrderResult({
+    required this.thinking,
+    required this.selectedVehicle,
+    required this.rawText,
+  });
+}
+
 class CommandeService {
   final api = Api();
   static const String _baseUrl = '/commandes';
@@ -256,6 +294,168 @@ class ProduitService {
 
     // 4. Create produit
     return create(formPayload);
+  }
+
+  // -------- n8n AI helpers --------
+
+  /// Step 1a: Detect object from raw binary image (multipart POST to n8n).
+  /// Returns name, inferred type, weight info.
+
+
+  /// Step 1b + 2: Analyze uploaded image URL via n8n (JSON POST).
+  /// Returns AI-estimated name, price, and dimensions.
+  Future<AnalyzeImageResult> analyzeUploadedImage(String imageUrl) async {
+    final uri = Uri.parse('$_n8nBaseUrl/analyze-image1');
+    final token = await TokenStorage.access();
+
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+
+    final response = await http.post(
+      uri,
+      headers: headers,
+      body: jsonEncode({'image': imageUrl}),
+    );
+    final raw = response.body;
+    // Debug raw backend response in the VS Code debug console.
+    print('Analyze Image Response: $raw');
+
+    final parsed = _extractAnalyzeImagePayload(raw);
+
+    return AnalyzeImageResult(
+      thinking: _readString(parsed, 'thinking'),
+      productName: _readString(parsed, 'productName', fallbackKey: 'product_name'),
+      estimatedPriceTnd: _readDouble(parsed, 'estimatedPriceTnd', fallbackKey: 'estimated_price_tnd'),
+      heightCm: _readDouble(parsed, 'heightCm', fallbackKey: 'height_cm'),
+      widthCm: _readDouble(parsed, 'widthCm', fallbackKey: 'width_cm'),
+      depthCm: _readDouble(parsed, 'depthCm', fallbackKey: 'depth_cm'),
+      rawText: raw,
+    );
+  }
+
+  /// Order confirmation: AI selects best vehicle from product list.
+  Future<AnalyzeOrderResult> analyzeOrder(String prompt) async {
+    final uri = Uri.parse('$_n8nBaseUrl/analyze-order');
+    final token = await TokenStorage.access();
+
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+
+    final response = await http.post(
+      uri,
+      headers: headers,
+      body: jsonEncode({'prompt': prompt}),
+    );
+    final raw = response.body;
+
+    Map<String, dynamic>? parsed;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) parsed = decoded;
+    } catch (_) {}
+
+    return AnalyzeOrderResult(
+      thinking: parsed?['thinking']?.toString() ?? '',
+      selectedVehicle: parsed?['selectedVehicle']?.toString() ?? 'VOITURE',
+      rawText: raw,
+    );
+  }
+
+  static double? _toDouble(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString());
+  }
+
+  static Map<String, dynamic>? _extractAnalyzeImagePayload(String raw) {
+    try {
+      final decoded = jsonDecode(raw);
+
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+
+      if (decoded is List) {
+        for (final item in decoded) {
+          final payload = _extractAnalyzeImagePayloadFromListItem(item);
+          if (payload != null) return payload;
+        }
+      }
+    } catch (_) {}
+
+    return _tryParseEmbeddedJson(raw);
+  }
+
+  static Map<String, dynamic>? _extractAnalyzeImagePayloadFromListItem(dynamic item) {
+    if (item is! Map) return null;
+
+    final map = Map<String, dynamic>.from(item);
+    final content = map['content'];
+    if (content is! List) return null;
+
+    for (final entry in content) {
+      if (entry is! Map) continue;
+
+      final contentMap = Map<String, dynamic>.from(entry);
+      final text = contentMap['text']?.toString();
+      if (text == null || text.isEmpty) continue;
+
+      final parsed = _tryParseEmbeddedJson(text);
+      if (parsed != null) return parsed;
+    }
+
+    return null;
+  }
+
+  static Map<String, dynamic>? _tryParseEmbeddedJson(String text) {
+    final cleaned = _stripMarkdownCodeFence(text).trim();
+    if (cleaned.isEmpty) return null;
+
+    try {
+      final decoded = jsonDecode(cleaned);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
+  static String _stripMarkdownCodeFence(String text) {
+    final trimmed = text.trim();
+    final match = RegExp(
+      r'^```(?:json)?\s*([\s\S]*?)\s*```$',
+      caseSensitive: false,
+    ).firstMatch(trimmed);
+    return match?.group(1) ?? trimmed;
+  }
+
+  static String _readString(
+    Map<String, dynamic>? parsed,
+    String key, {
+    String? fallbackKey,
+  }) {
+    final value = parsed?[key] ?? (fallbackKey == null ? null : parsed?[fallbackKey]);
+    return value?.toString() ?? '';
+  }
+
+  static double? _readDouble(
+    Map<String, dynamic>? parsed,
+    String key, {
+    String? fallbackKey,
+  }) {
+    final value = parsed?[key] ?? (fallbackKey == null ? null : parsed?[fallbackKey]);
+    return _toDouble(value);
   }
 
   // Upload image to /api/produits/upload with Authorization header

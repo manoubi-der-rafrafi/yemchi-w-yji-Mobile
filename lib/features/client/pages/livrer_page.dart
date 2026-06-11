@@ -85,24 +85,23 @@ class _LivrerPageState extends State<LivrerPage> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(produit.nom),
+        title: Text(produit.nom ?? 'Produit'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (produit.image1.isNotEmpty)
+            if ((produit.image1 ?? '').isNotEmpty)
               Image.network(
-                produit.image1,
+                produit.image1!,
                 height: 150,
                 width: double.infinity,
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 50),
               ),
             const SizedBox(height: 10),
-            Text("Type: ${produit.type}"),
+            Text("Type: ${produit.type ?? '-'}"),
             Text("Quantité: ${produit.quantite}"),
-            //if (produit.poid != null) Text("Poids: ${produit.poid} kg"),
-            // Add other fields if needed
+            if (produit.poids != null) Text("Poids: ${produit.poids} kg"),
           ],
         ),
         actions: [
@@ -133,18 +132,12 @@ class _LivrerPageState extends State<LivrerPage> {
 
   Future<void> updateQuantite(Produit produit, int nouvelleQuantite) async {
     try {
-      // Optimistic UI update
       setState(() {
         produit.quantite = nouvelleQuantite;
       });
-      
-      // Update on backend
-      // Assuming your backend update expects the full object or partial map
-      // We send the full object with updated quantity
-      await _produitService.update(produit.id, produit.toJson());
-      
+      await _produitService.update(produit.id, {'quantite': nouvelleQuantite});
     } catch (e) {
-      // Revert on error (optional, or just show message)
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Erreur maj quantité: ${e.toString()}')),
       );
@@ -328,16 +321,18 @@ class _LivrerPageState extends State<LivrerPage> {
                   contentPadding: const EdgeInsets.all(8),
                   leading: ClipRRect(
                     borderRadius: BorderRadius.circular(4),
-                    child: Image.network(
-                      produit.image1,
-                      width: 48,
-                      height: 48,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) =>
-                          const Icon(Icons.broken_image, size: 48, color: Colors.grey),
-                    ),
+                    child: (produit.image1 ?? '').isNotEmpty
+                        ? Image.network(
+                            produit.image1!,
+                            width: 48,
+                            height: 48,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                const Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                          )
+                        : const Icon(Icons.inventory_2, size: 48, color: Colors.grey),
                   ),
-                  title: Text(produit.nom, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  title: Text(produit.nom ?? 'Produit', style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text("${produit.type} \nRef: ${produit.id.substring(0, 4)}..."),
                   trailing: SizedBox(
                     width: 140,
@@ -378,40 +373,64 @@ class _LivrerPageState extends State<LivrerPage> {
   }
 
   Widget _buildResumeCommande() {
+    final total = produits.fold<double>(
+      0,
+      (sum, p) => sum + (p.prix ?? p.prixUnitaire ?? 0) * p.quantite,
+    );
+
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             offset: const Offset(0, -4),
             blurRadius: 10,
           )
         ],
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: OutlinedButton(
-              onPressed: goAjoutProduitClient,
-              style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-              child: const Text("AJOUTER"),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 2,
-            child: ElevatedButton(
-              onPressed: hasProduits() ? goToConfirmationPage : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.secondary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                elevation: 2,
+          if (total > 0)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Total estimé', style: TextStyle(color: Colors.grey)),
+                  Text(
+                    '${total.toStringAsFixed(2)} TND',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ],
               ),
-              child: const Text("CONFIRMER COMMANDE", style: TextStyle(fontWeight: FontWeight.bold)),
             ),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: goAjoutProduitClient,
+                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+                  child: const Text("AJOUTER"),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton(
+                  onPressed: hasProduits() ? goToConfirmationPage : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.secondary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    elevation: 2,
+                  ),
+                  child: const Text("CONFIRMER COMMANDE", style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
           ),
         ],
       ),

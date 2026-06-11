@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:yemchi_wyji/core/models/utilisateur.dart';
-import '../services/cilent_service.dart'; // Importez votre service
+import '../services/cilent_service.dart';
 import 'package:yemchi_wyji/core/models/commande.dart'; 
 import 'package:provider/provider.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
@@ -147,48 +147,65 @@ void goToNextStep() {
 
   // --- Action Finale (Appel API) ---
   Future<void> finalConfirmation() async {
-    // Valide le mode de paiement à l'étape 3
     if (_modePaiement.isEmpty) {
-       ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Veuillez choisir un mode de paiement.')),
       );
       return;
     }
-    
+
     setState(() => isLoading = true);
-    
-    // 1. Construire le payload final (équivalent à this.buildCommandeFromForm() du front)
-    final payload = {
-      // Étape 1
-      'localisation_depart': _departCtrl.text.trim(),
-      'telDepart': _telDepartCtrl.text.trim(),
-      // Étape 2
-      'destination': _destinationCtrl.text.trim(),
-      'telArrivee': _telArriveeCtrl.text.trim(),
-      // Étape 3
-      'mode_paiement': _modePaiement,
-      
-      // Statut crucial pour la confirmation finale
-      'statut': 'confirmer',
-      // Inclure les autres champs non modifiables si nécessaire (ex: clientId, prix)
-      // Si votre API ne requiert que les champs modifiés, ces 6 champs suffisent.
-    };
 
     try {
-      // 2. Appel API de mise à jour/confirmation
-      // Le service utilise l'ID de la commande et envoie le payload
+      // 1. Load products for this commande to build the AI prompt
+      final produitService = ProduitService();
+      final produits = await produitService.getByCommande(widget.commandeId);
+
+      // 2. Build prompt from products (name, weight bucket, dimensions, quantity)
+      final lines = produits.map((p) {
+        final name = p.nom ?? 'Produit';
+        final qty = p.quantite;
+        final weightBucket = p.type ?? 'Standard';
+        final dims = (p.hauteur != null && p.largeur != null && p.profondeur != null)
+            ? '${p.hauteur}x${p.largeur}x${p.profondeur} cm'
+            : 'dimensions inconnues';
+        return '- $name (type: $weightBucket, dims: $dims, qté: $qty)';
+      }).join('\n');
+
+      final prompt =
+          'Analyze this delivery order and choose the most appropriate vehicle '
+          '(MOTO, VOITURE, CAMIONNETTE, CAMION) based on the products:\n$lines\n'
+          'Departure: ${_departCtrl.text.trim()}\nDestination: ${_destinationCtrl.text.trim()}';
+
+      // 3. Call n8n analyze-order webhook
+      String selectedVehicle = 'VOITURE';
+      try {
+        final aiResult = await produitService.analyzeOrder(prompt);
+        selectedVehicle = aiResult.selectedVehicle;
+      } catch (_) {
+        // AI failure is non-fatal — keep default vehicle
+      }
+
+      // 4. Build full payload including vehicule
+      final payload = <String, dynamic>{
+        'localisation_depart': _departCtrl.text.trim(),
+        'telDepart': _telDepartCtrl.text.trim(),
+        'destination': _destinationCtrl.text.trim(),
+        'telArrivee': _telArriveeCtrl.text.trim(),
+        'mode_paiement': _modePaiement,
+        'vehicule': selectedVehicle,
+        'statut': 'confirmer',
+      };
+
+      // 5. Update commande
       await _commandeService.updateCommande(widget.commandeId, payload);
-      
+
       if (!mounted) return;
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✅ Commande confirmée avec succès !')),
+        const SnackBar(content: Text('Commande confirmée avec succès !')),
       );
-
-      // 3. Ferme la page et retourne 'true' (équivalent au router.navigate(['/panier']) du front)
-      // 'true' indique à LivrerPage de recharger/vider le panier
-      Navigator.pop(context, true); 
-
+      Navigator.pop(context, true);
     } catch (e) {
       setState(() => isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
