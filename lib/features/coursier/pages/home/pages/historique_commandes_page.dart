@@ -1,28 +1,32 @@
 import 'dart:math' as math;
-import 'dart:math' as math;
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import 'package:yemchi_wyji/core/models/commande.dart';
 import 'package:yemchi_wyji/core/models/facture.dart';
-import 'package:yemchi_wyji/core/network/api.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
-import 'package:yemchi_wyji/features/commande/data/commande_service.dart';
-import 'package:yemchi_wyji/features/facture/data/facture_service.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/pages/commande_details_page.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/services/transporteur_stats_cache_service.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/services/transporteur_stats_service.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/services/transporteur_stats_snapshot.dart';
+import 'package:yemchi_wyji/features/facture/data/facture_service.dart';
 
 class HistoriqueCommandesPage extends StatefulWidget {
   const HistoriqueCommandesPage({super.key});
 
   @override
-  State<HistoriqueCommandesPage> createState() => _HistoriqueCommandesPageState();
+  State<HistoriqueCommandesPage> createState() =>
+      _HistoriqueCommandesPageState();
 }
 
 class _HistoriqueCommandesPageState extends State<HistoriqueCommandesPage>
     with SingleTickerProviderStateMixin {
   bool _isLoading = true;
+  bool _isRefreshing = false;
+  bool _hasLoadedData = false;
   String? _error;
   double _totalEnLigne = 0;
   double _totalHorsLigne = 0;
@@ -39,13 +43,15 @@ class _HistoriqueCommandesPageState extends State<HistoriqueCommandesPage>
   DateTimeRange? _factureDateRange;
   late final AnimationController _donutController;
   late final Animation<double> _donutAnim;
+  final TransporteurStatsService _statsService = TransporteurStatsService();
+  final TransporteurStatsCacheService _cacheService =
+      TransporteurStatsCacheService();
 
   double get _diff =>
       (_totalHorsLigne - _totalEnLigne) * 0.5 -
       (_montantVertEntreprise - _montantVertLivreur);
   bool get _isCreditLivreur => _diff >= 0;
-  double get _soldeLivreur =>
-      _diff.abs().clamp(0, 800);
+  double get _soldeLivreur => _diff.abs().clamp(0, 800);
   double get _totalRevenue => _totalEnLigne + _totalHorsLigne;
 
   @override
@@ -59,53 +65,101 @@ class _HistoriqueCommandesPageState extends State<HistoriqueCommandesPage>
       parent: _donutController,
       curve: Curves.easeOutCubic,
     );
-    _fetchGains();
+    _loadInitialData();
   }
 
-  Future<void> _fetchGains() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-    try { 
-      final auth = context.read<AuthController>();
-      final transporteurId = auth.currentUser.value?.id;
-      if (transporteurId == null || transporteurId.isEmpty) {
-        throw Exception('Utilisateur non connecte');
-      }
-      final commandeService = CommandeService(Api());
-      final factureService = FactureService();
-      final results = await Future.wait<Object>([
-        commandeService.getSommePrixLivreeEnLigneByTransporteur(transporteurId),
-        commandeService.getSommePrixLivreeHorsLigneByTransporteur(transporteurId),
-        commandeService
-            .getPourcentageRevenuParSousZoneLivreeByTransporteur(transporteurId),
-        commandeService.getCommandesLivreesByTransporteur(transporteurId),
-        factureService.listByLivreurId(transporteurId),
-      ]);
+  String? get _transporteurId =>
+      context.read<AuthController>().currentUser.value?.id;
+
+  Future<void> _loadInitialData() async {
+    final transporteurId = _transporteurId;
+    if (transporteurId == null || transporteurId.isEmpty) {
+      if (!mounted) return;
       setState(() {
-        _totalEnLigne = results[0] as double;
-        _totalHorsLigne = results[1] as double;
-        _pourcentageParSousZone = results[2] as Map<String, double>;
-        _commandesLivrees = results[3] as List<Commande>;
-        _factures = results[4] as List<Facture>;
-        final facturesConfirmees = _factures
-            .where((f) => f.confirmer == FactureConfirmation.acceter);
-        _montantVertEntreprise = facturesConfirmees
-            .where((f) => f.type == FactureType.livreurVerseEntreprise)
-            .fold<double>(0, (sum, f) => sum + f.montant);
-        _montantVertLivreur = facturesConfirmees
-            .where((f) => f.type == FactureType.entrepriseVerseLivreur)
-            .fold<double>(0, (sum, f) => sum + f.montant);
+        _error = 'Utilisateur non connecte';
         _isLoading = false;
       });
-      if (mounted) {
-        _donutController.forward(from: 0);
-      }
-    } catch (e) {
+      return;
+    }
+
+    final cached = await _cacheService.read(transporteurId);
+    if (!mounted) return;
+
+    if (cached != null) {
       setState(() {
-        _error = e.toString();
+        _applySnapshot(cached);
         _isLoading = false;
+        _error = null;
+      });
+      _donutController.forward(from: 0);
+      unawaited(_fetchGains(silent: true));
+      return;
+    }
+
+    await _fetchGains();
+  }
+
+  void _applySnapshot(TransporteurStatsSnapshot snapshot) {
+    _totalEnLigne = snapshot.totalEnLigne;
+    _totalHorsLigne = snapshot.totalHorsLigne;
+    _pourcentageParSousZone = Map<String, double>.from(
+      snapshot.pourcentageParSousZone,
+    );
+    _commandesLivrees = List<Commande>.from(snapshot.commandesLivrees);
+    _factures = List<Facture>.from(snapshot.factures);
+    final facturesConfirmees = _factures.where(
+      (f) => f.confirmer == FactureConfirmation.acceter,
+    );
+    _montantVertEntreprise = facturesConfirmees
+        .where((f) => f.type == FactureType.livreurVerseEntreprise)
+        .fold<double>(0, (sum, f) => sum + f.montant);
+    _montantVertLivreur = facturesConfirmees
+        .where((f) => f.type == FactureType.entrepriseVerseLivreur)
+        .fold<double>(0, (sum, f) => sum + f.montant);
+    _hasLoadedData = true;
+  }
+
+  Future<void> _fetchGains({bool silent = false}) async {
+    final transporteurId = _transporteurId;
+    if (transporteurId == null || transporteurId.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Utilisateur non connecte';
+        _isLoading = false;
+        _isRefreshing = false;
+      });
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _error = null;
+        if (!_hasLoadedData && !silent) {
+          _isLoading = true;
+        } else {
+          _isRefreshing = true;
+        }
+      });
+    }
+
+    try {
+      final snapshot = await _statsService.fetch(transporteurId);
+      await _cacheService.write(snapshot);
+      if (!mounted) return;
+      setState(() {
+        _applySnapshot(snapshot);
+        _isLoading = false;
+        _isRefreshing = false;
+      });
+      _donutController.forward(from: 0);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        if (!_hasLoadedData) {
+          _error = e.toString();
+        }
+        _isLoading = false;
+        _isRefreshing = false;
       });
     }
   }
@@ -120,15 +174,14 @@ class _HistoriqueCommandesPageState extends State<HistoriqueCommandesPage>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final sousZoneBreakdown = _buildSousZoneBreakdown();
-    final hasSousZoneData =
-        sousZoneBreakdown.any((z) => z.percent > 0.01);
-    final activeSousZoneIndex =
-        _selectedSousZoneIndex ?? _hoveredSousZoneIndex;
-    final activeZoneLabel = (activeSousZoneIndex != null &&
-            activeSousZoneIndex >= 0 &&
-            activeSousZoneIndex < sousZoneBreakdown.length)
-        ? sousZoneBreakdown[activeSousZoneIndex].name
-        : null;
+    final hasSousZoneData = sousZoneBreakdown.any((z) => z.percent > 0.01);
+    final activeSousZoneIndex = _selectedSousZoneIndex ?? _hoveredSousZoneIndex;
+    final activeZoneLabel =
+        (activeSousZoneIndex != null &&
+                activeSousZoneIndex >= 0 &&
+                activeSousZoneIndex < sousZoneBreakdown.length)
+            ? sousZoneBreakdown[activeSousZoneIndex].name
+            : null;
     final availableModes = _buildModePaiementOptions();
     final selectedMode = _modePaiementFilter ?? 'Tous';
     final filteredLivrees = _filteredCommandes(
@@ -139,13 +192,13 @@ class _HistoriqueCommandesPageState extends State<HistoriqueCommandesPage>
     final gaugeRatio = (_soldeLivreur / 800).clamp(0.0, 1.0);
     final gaugeColor =
         Color.lerp(const Color(0xFF2E7D32), Colors.red, gaugeRatio) ??
-            theme.colorScheme.primary;
+        theme.colorScheme.primary;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Historique des commandes'),
         actions: [
           IconButton(
-            onPressed: _fetchGains,
+            onPressed: _isRefreshing ? null : _fetchGains,
             icon: const Icon(Icons.refresh),
             tooltip: 'Actualiser',
           ),
@@ -153,110 +206,118 @@ class _HistoriqueCommandesPageState extends State<HistoriqueCommandesPage>
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _error != null
+        child:
+            _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
                 ? _GainsError(error: _error!, onRetry: _fetchGains)
-                : ListView(
-                    children: [
-                      Card(
-                        elevation: 0.5,
-                        color: const Color(0xFFF7F7F2),
-                        surfaceTintColor: Colors.transparent,
-                        shadowColor: Colors.black.withOpacity(0.06),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(18),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _MiniStatCard(
-                                      label: 'Total revenue',
-                                      value: _formatMoney(_totalRevenue),
+                : Stack(
+                  children: [
+                    ListView(
+                      children: [
+                        Card(
+                          elevation: 0.5,
+                          color: const Color(0xFFF7F7F2),
+                          surfaceTintColor: Colors.transparent,
+                          shadowColor: Colors.black.withOpacity(0.06),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(18),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _MiniStatCard(
+                                        label: 'Total revenue',
+                                        value: _formatMoney(_totalRevenue),
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: _MiniStatCard(
-                                      label: 'Total enligne',
-                                      value: _formatMoney(_totalEnLigne),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _MiniStatCard(
+                                        label: 'Total enligne',
+                                        value: _formatMoney(_totalEnLigne),
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: _MiniStatCard(
-                                      label: 'Total non enligne',
-                                      value: _formatMoney(_totalHorsLigne),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              Container(
-                                padding: const EdgeInsets.all(20),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF6F7F0),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: Colors.black.withOpacity(0.06),
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.04),
-                                      blurRadius: 18,
-                                      offset: const Offset(0, 10),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _MiniStatCard(
+                                        label: 'Total non enligne',
+                                        value: _formatMoney(_totalHorsLigne),
+                                      ),
                                     ),
                                   ],
                                 ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            'Revenu par sous-zone',
-                                            style: theme
-                                                .textTheme.titleMedium
-                                                ?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                              color: const Color(0xFF1F1F1F),
-                                            ),
-                                          ),
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 6,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFE9EFE6),
-                                            borderRadius:
-                                                BorderRadius.circular(999),
-                                            border: Border.all(
-                                              color:
-                                                  Colors.black.withOpacity(0.05),
-                                            ),
-                                          ),
-                                          child: Text(
-                                            'Ce mois',
-                                            style: theme.textTheme.labelSmall
-                                                ?.copyWith(
-                                              color: const Color(0xFF5E6B62),
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
+                                const SizedBox(height: 16),
+                                Container(
+                                  padding: const EdgeInsets.all(20),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF6F7F0),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: Colors.black.withOpacity(0.06),
                                     ),
-                                    const SizedBox(height: 16),
-                                    hasSousZoneData
-                                        ? AnimatedBuilder(
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.04),
+                                        blurRadius: 18,
+                                        offset: const Offset(0, 10),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              'Revenu par sous-zone',
+                                              style: theme.textTheme.titleMedium
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.w700,
+                                                    color: const Color(
+                                                      0xFF1F1F1F,
+                                                    ),
+                                                  ),
+                                            ),
+                                          ),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 10,
+                                              vertical: 6,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFE9EFE6),
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
+                                              border: Border.all(
+                                                color: Colors.black.withOpacity(
+                                                  0.05,
+                                                ),
+                                              ),
+                                            ),
+                                            child: Text(
+                                              'Ce mois',
+                                              style: theme.textTheme.labelSmall
+                                                  ?.copyWith(
+                                                    color: const Color(
+                                                      0xFF5E6B62,
+                                                    ),
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 16),
+                                      hasSousZoneData
+                                          ? AnimatedBuilder(
                                             animation: _donutAnim,
                                             builder: (context, _) {
                                               return _SousZoneRingWithMetrics(
@@ -285,42 +346,52 @@ class _HistoriqueCommandesPageState extends State<HistoriqueCommandesPage>
                                               );
                                             },
                                           )
-                                        : Text(
+                                          : Text(
                                             'Aucune donnee disponible.',
                                             style: theme.textTheme.bodySmall
                                                 ?.copyWith(
-                                              color:
-                                                  const Color(0xFF6B776E),
-                                            ),
+                                                  color: const Color(
+                                                    0xFF6B776E,
+                                                  ),
+                                                ),
                                           ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 16),
-                              _CommandesLivreesSection(
-                                commandes: filteredLivrees,
-                                modes: availableModes,
-                                selectedMode: selectedMode,
-                                onModeChanged: (value) {
-                                  setState(() {
-                                    _modePaiementFilter =
-                                        value == 'Tous' ? null : value;
-                                  });
-                                },
-                                dateRange: _dateRange,
-                                onPickDateRange: _pickDateRange,
-                                onClearDateRange: () {
-                                  setState(() {
-                                    _dateRange = null;
-                                  });
-                                },
-                              ),
-                            ],
+                                const SizedBox(height: 16),
+                                _CommandesLivreesSection(
+                                  commandes: filteredLivrees,
+                                  modes: availableModes,
+                                  selectedMode: selectedMode,
+                                  onModeChanged: (value) {
+                                    setState(() {
+                                      _modePaiementFilter =
+                                          value == 'Tous' ? null : value;
+                                    });
+                                  },
+                                  dateRange: _dateRange,
+                                  onPickDateRange: _pickDateRange,
+                                  onClearDateRange: () {
+                                    setState(() {
+                                      _dateRange = null;
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
                           ),
                         ),
+                      ],
+                    ),
+                    if (_isRefreshing)
+                      const Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: LinearProgressIndicator(minHeight: 2),
                       ),
-                    ],
-                  ),
+                  ],
+                ),
       ),
     );
   }
@@ -470,8 +541,9 @@ class _HistoriqueCommandesPageState extends State<HistoriqueCommandesPage>
     if (raw.isEmpty) return null;
     final parsed = DateTime.tryParse(raw);
     if (parsed != null) return parsed;
-    final match =
-        RegExp(r'^(\\d{1,2})[/-](\\d{1,2})[/-](\\d{2,4})').firstMatch(raw);
+    final match = RegExp(
+      r'^(\\d{1,2})[/-](\\d{1,2})[/-](\\d{2,4})',
+    ).firstMatch(raw);
     if (match == null) return null;
     final day = int.tryParse(match.group(1) ?? '');
     final month = int.tryParse(match.group(2) ?? '');
@@ -494,7 +566,8 @@ class _HistoriqueCommandesPageState extends State<HistoriqueCommandesPage>
 
   Future<void> _pickDateRange() async {
     final now = DateTime.now();
-    final initialRange = _dateRange ??
+    final initialRange =
+        _dateRange ??
         DateTimeRange(
           start: DateTime(now.year, now.month, now.day - 7),
           end: DateTime(now.year, now.month, now.day),
@@ -513,7 +586,8 @@ class _HistoriqueCommandesPageState extends State<HistoriqueCommandesPage>
 
   Future<void> _pickFactureDateRange() async {
     final now = DateTime.now();
-    final initialRange = _factureDateRange ??
+    final initialRange =
+        _factureDateRange ??
         DateTimeRange(
           start: DateTime(now.year, now.month, now.day - 7),
           end: DateTime(now.year, now.month, now.day),
@@ -573,9 +647,7 @@ class _PayByFactureDialogState extends State<_PayByFactureDialog> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           return ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: constraints.maxHeight * 0.9,
-            ),
+            constraints: BoxConstraints(maxHeight: constraints.maxHeight * 0.9),
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -586,15 +658,15 @@ class _PayByFactureDialogState extends State<_PayByFactureDialog> {
                       Expanded(
                         child: Text(
                           'Paiement par facture',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
+                          style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                       ),
                       IconButton(
                         onPressed:
-                            _isSaving ? null : () => Navigator.of(context).pop(),
+                            _isSaving
+                                ? null
+                                : () => Navigator.of(context).pop(),
                         icon: const Icon(Icons.close),
                       ),
                     ],
@@ -604,22 +676,22 @@ class _PayByFactureDialogState extends State<_PayByFactureDialog> {
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: _isSaving
-                              ? null
-                              : () async {
-                                  final image =
-                                      await ImagePicker().pickImage(
-                                    source: ImageSource.gallery,
-                                    imageQuality: 85,
-                                  );
-                                  if (image == null) return;
-                                  final bytes = await image.readAsBytes();
-                                  if (!mounted) return;
-                                  setState(() {
-                                    _pickedImage = image;
-                                    _pickedImageBytes = bytes;
-                                  });
-                                },
+                          onPressed:
+                              _isSaving
+                                  ? null
+                                  : () async {
+                                    final image = await ImagePicker().pickImage(
+                                      source: ImageSource.gallery,
+                                      imageQuality: 85,
+                                    );
+                                    if (image == null) return;
+                                    final bytes = await image.readAsBytes();
+                                    if (!mounted) return;
+                                    setState(() {
+                                      _pickedImage = image;
+                                      _pickedImageBytes = bytes;
+                                    });
+                                  },
                           icon: const Icon(Icons.photo_library_outlined),
                           label: const Text('Galerie'),
                         ),
@@ -627,22 +699,22 @@ class _PayByFactureDialogState extends State<_PayByFactureDialog> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: _isSaving
-                              ? null
-                              : () async {
-                                  final image =
-                                      await ImagePicker().pickImage(
-                                    source: ImageSource.camera,
-                                    imageQuality: 85,
-                                  );
-                                  if (image == null) return;
-                                  final bytes = await image.readAsBytes();
-                                  if (!mounted) return;
-                                  setState(() {
-                                    _pickedImage = image;
-                                    _pickedImageBytes = bytes;
-                                  });
-                                },
+                          onPressed:
+                              _isSaving
+                                  ? null
+                                  : () async {
+                                    final image = await ImagePicker().pickImage(
+                                      source: ImageSource.camera,
+                                      imageQuality: 85,
+                                    );
+                                    if (image == null) return;
+                                    final bytes = await image.readAsBytes();
+                                    if (!mounted) return;
+                                    setState(() {
+                                      _pickedImage = image;
+                                      _pickedImageBytes = bytes;
+                                    });
+                                  },
                           icon: const Icon(Icons.photo_camera_outlined),
                           label: const Text('Camera'),
                         ),
@@ -664,12 +736,11 @@ class _PayByFactureDialogState extends State<_PayByFactureDialog> {
                         height: 160,
                         width: double.infinity,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const SizedBox(
-                          height: 160,
-                          child: Center(
-                            child: Text('Apercu indisponible'),
-                          ),
-                        ),
+                        errorBuilder:
+                            (_, __, ___) => const SizedBox(
+                              height: 160,
+                              child: Center(child: Text('Apercu indisponible')),
+                            ),
                       ),
                     ),
                   ],
@@ -677,66 +748,71 @@ class _PayByFactureDialogState extends State<_PayByFactureDialog> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _isSaving
-                          ? null
-                          : () async {
-                              if (_pickedImage == null) {
-                                ScaffoldMessenger.of(widget.parentContext)
-                                    .showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Image requise.'),
-                                  ),
-                                );
-                                return;
-                              }
-                              setState(() {
-                                _isSaving = true;
-                              });
-                              try {
-                                final auth = context.read<AuthController>();
-                                final livreurId =
-                                    auth.currentUser.value?.id ?? '';
-                                await FactureService().createWithImage(
-                                  image: _pickedImage!,
-                                  montant: 0.0,
-                                  dateTimle: DateTime.now().toIso8601String(),
-                                  idLivreur: livreurId,
-                                  type: FactureType.livreurVerseEntreprise,
-                                  confirmer: FactureConfirmation.nonTraiter,
-                                );
-                                if (!mounted) return;
-                                Navigator.of(context).pop();
-                                widget.onSuccess();
-                                ScaffoldMessenger.of(widget.parentContext)
-                                    .showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Facture envoyee.'),
-                                  ),
-                                );
-                              } catch (e) {
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(widget.parentContext)
-                                    .showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Erreur: ${e.toString()}',
+                      onPressed:
+                          _isSaving
+                              ? null
+                              : () async {
+                                if (_pickedImage == null) {
+                                  ScaffoldMessenger.of(
+                                    widget.parentContext,
+                                  ).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Image requise.'),
                                     ),
-                                  ),
-                                );
-                              } finally {
-                                if (!mounted) return;
+                                  );
+                                  return;
+                                }
                                 setState(() {
-                                  _isSaving = false;
+                                  _isSaving = true;
                                 });
-                              }
-                            },
-                      child: _isSaving
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Valider'),
+                                try {
+                                  final auth = context.read<AuthController>();
+                                  final livreurId =
+                                      auth.currentUser.value?.id ?? '';
+                                  await FactureService().createWithImage(
+                                    image: _pickedImage!,
+                                    montant: 0.0,
+                                    dateTimle: DateTime.now().toIso8601String(),
+                                    idLivreur: livreurId,
+                                    type: FactureType.livreurVerseEntreprise,
+                                    confirmer: FactureConfirmation.nonTraiter,
+                                  );
+                                  if (!mounted) return;
+                                  Navigator.of(context).pop();
+                                  widget.onSuccess();
+                                  ScaffoldMessenger.of(
+                                    widget.parentContext,
+                                  ).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Facture envoyee.'),
+                                    ),
+                                  );
+                                } catch (e) {
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(
+                                    widget.parentContext,
+                                  ).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Erreur: ${e.toString()}'),
+                                    ),
+                                  );
+                                } finally {
+                                  if (!mounted) return;
+                                  setState(() {
+                                    _isSaving = false;
+                                  });
+                                }
+                              },
+                      child:
+                          _isSaving
+                              ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : const Text('Valider'),
                     ),
                   ),
                 ],
@@ -753,22 +829,14 @@ class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
 
-  const _InfoRow({
-    required this.label,
-    required this.value,
-  });
+  const _InfoRow({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Row(
       children: [
-        Expanded(
-          child: Text(
-            label,
-            style: theme.textTheme.bodyMedium,
-          ),
-        ),
+        Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
         Text(
           value,
           style: theme.textTheme.titleMedium?.copyWith(
@@ -838,12 +906,12 @@ class _CommandesLivreesSectionState extends State<_CommandesLivreesSection> {
     final total = widget.commandes.length;
     final totalPages =
         total == 0 ? 1 : ((total + widget.pageSize - 1) ~/ widget.pageSize);
-    final start = (total == 0)
-        ? 0
-        : (widget.pageSize * (_page - 1)).clamp(0, total).toInt();
-    final end = (total == 0)
-        ? 0
-        : (start + widget.pageSize).clamp(0, total).toInt();
+    final start =
+        (total == 0)
+            ? 0
+            : (widget.pageSize * (_page - 1)).clamp(0, total).toInt();
+    final end =
+        (total == 0) ? 0 : (start + widget.pageSize).clamp(0, total).toInt();
     final pageItems = widget.commandes.sublist(start, end);
     return Container(
       padding: const EdgeInsets.all(16),
@@ -887,8 +955,10 @@ class _CommandesLivreesSectionState extends State<_CommandesLivreesSection> {
                   onTap: widget.onClearDateRange,
                 ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFE9EFE6),
                   borderRadius: BorderRadius.circular(999),
@@ -902,20 +972,21 @@ class _CommandesLivreesSectionState extends State<_CommandesLivreesSection> {
                       if (value == null) return;
                       widget.onModeChanged(value);
                     },
-                    items: widget.modes
-                        .map(
-                          (mode) => DropdownMenuItem(
-                            value: mode,
-                            child: Text(
-                              _labelForMode(mode),
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF4E5A52),
+                    items:
+                        widget.modes
+                            .map(
+                              (mode) => DropdownMenuItem(
+                                value: mode,
+                                child: Text(
+                                  _labelForMode(mode),
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF4E5A52),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                        )
-                        .toList(),
+                            )
+                            .toList(),
                   ),
                 ),
               ),
@@ -924,64 +995,67 @@ class _CommandesLivreesSectionState extends State<_CommandesLivreesSection> {
           const SizedBox(height: 12),
           widget.commandes.isEmpty
               ? Text(
-                  'Aucune commande disponible.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF6B776E),
-                  ),
-                )
-              : SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    headingRowHeight: 40,
-                    dataRowMinHeight: 44,
-                    dataRowMaxHeight: 48,
-                    columnSpacing: 18,
-                    headingTextStyle: theme.textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF4E5A52),
-                    ),
-                    columns: const [
-                      DataColumn(label: Text('Zone depart')),
-                      DataColumn(label: Text('Zone arrivee')),
-                      DataColumn(label: Text('Date')),
-                      DataColumn(label: Text('Prix')),
-                      DataColumn(label: Text('')),
-                    ],
-                    rows: pageItems.map((commande) {
-                      final zoneDepart = _formatZone(
-                        commande.zonePrincipaleDepart,
-                        commande.sousZoneDepart,
-                      );
-                      final zoneArrivee = _formatZone(
-                        commande.zonePrincipaleArrivee,
-                        commande.sousZoneArrivee,
-                      );
-                      final dateCommande = _formatDate(commande.dateDemande);
-                      final prix = _formatMoney(commande.prix ?? 0);
-                      return DataRow(
-                        cells: [
-                          DataCell(Text(zoneDepart)),
-                          DataCell(Text(zoneArrivee)),
-                          DataCell(Text(dateCommande)),
-                          DataCell(Text(prix)),
-                          DataCell(
-                            TextButton(
-                              onPressed: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute<void>(
-                                    builder: (_) =>
-                                        CommandeDetailsPage(commande: commande),
-                                  ),
-                                );
-                              },
-                              child: const Text('Detail'),
-                            ),
-                          ),
-                        ],
-                      );
-                    }).toList(),
-                  ),
+                'Aucune commande disponible.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFF6B776E),
                 ),
+              )
+              : SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  headingRowHeight: 40,
+                  dataRowMinHeight: 44,
+                  dataRowMaxHeight: 48,
+                  columnSpacing: 18,
+                  headingTextStyle: theme.textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF4E5A52),
+                  ),
+                  columns: const [
+                    DataColumn(label: Text('Zone depart')),
+                    DataColumn(label: Text('Zone arrivee')),
+                    DataColumn(label: Text('Date')),
+                    DataColumn(label: Text('Prix')),
+                    DataColumn(label: Text('')),
+                  ],
+                  rows:
+                      pageItems.map((commande) {
+                        final zoneDepart = _formatZone(
+                          commande.zonePrincipaleDepart,
+                          commande.sousZoneDepart,
+                        );
+                        final zoneArrivee = _formatZone(
+                          commande.zonePrincipaleArrivee,
+                          commande.sousZoneArrivee,
+                        );
+                        final dateCommande = _formatDate(commande.dateDemande);
+                        final prix = _formatMoney(commande.prix ?? 0);
+                        return DataRow(
+                          cells: [
+                            DataCell(Text(zoneDepart)),
+                            DataCell(Text(zoneArrivee)),
+                            DataCell(Text(dateCommande)),
+                            DataCell(Text(prix)),
+                            DataCell(
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder:
+                                          (_) => CommandeDetailsPage(
+                                            commande: commande,
+                                          ),
+                                    ),
+                                  );
+                                },
+                                child: const Text('Detail'),
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                ),
+              ),
           if (widget.commandes.isNotEmpty) ...[
             const SizedBox(height: 12),
             Row(
@@ -1001,9 +1075,8 @@ class _CommandesLivreesSectionState extends State<_CommandesLivreesSection> {
                     ),
                     const SizedBox(width: 8),
                     TextButton(
-                      onPressed: _page < totalPages
-                          ? () => _goNext(totalPages)
-                          : null,
+                      onPressed:
+                          _page < totalPages ? () => _goNext(totalPages) : null,
                       child: const Text('Suivant'),
                     ),
                   ],
@@ -1070,14 +1143,18 @@ class _FacturesSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final facturesAcceptees = factures
-        .where((facture) => facture.confirmer == FactureConfirmation.acceter)
-        .toList();
-    final facturesEnAttente = factures
-        .where(
-          (facture) => facture.confirmer == FactureConfirmation.nonTraiter,
-        )
-        .toList();
+    final facturesAcceptees =
+        factures
+            .where(
+              (facture) => facture.confirmer == FactureConfirmation.acceter,
+            )
+            .toList();
+    final facturesEnAttente =
+        factures
+            .where(
+              (facture) => facture.confirmer == FactureConfirmation.nonTraiter,
+            )
+            .toList();
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1129,18 +1206,16 @@ class _FacturesSection extends StatelessWidget {
               FilterChip(
                 label: const Text('Vert livreur'),
                 selected: selectedType == FactureType.entrepriseVerseLivreur,
-                onSelected: (_) => onTypeChanged(
-                  FactureType.entrepriseVerseLivreur,
-                ),
+                onSelected:
+                    (_) => onTypeChanged(FactureType.entrepriseVerseLivreur),
                 selectedColor: const Color(0xFFE9EFE6),
                 showCheckmark: false,
               ),
               FilterChip(
                 label: const Text('Vert entreprise'),
                 selected: selectedType == FactureType.livreurVerseEntreprise,
-                onSelected: (_) => onTypeChanged(
-                  FactureType.livreurVerseEntreprise,
-                ),
+                onSelected:
+                    (_) => onTypeChanged(FactureType.livreurVerseEntreprise),
                 selectedColor: const Color(0xFFE9EFE6),
                 showCheckmark: false,
               ),
@@ -1186,52 +1261,53 @@ class _FacturesSection extends StatelessWidget {
         const SizedBox(height: 8),
         factures.isEmpty
             ? Text(
-                'Aucune facture disponible.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: const Color(0xFF6B776E),
-                ),
-              )
-            : SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  headingRowHeight: 40,
-                  dataRowMinHeight: 44,
-                  dataRowMaxHeight: 48,
-                  columnSpacing: 18,
-                  headingTextStyle: theme.textTheme.labelSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF4E5A52),
-                  ),
-                  columns: [
-                    if (showType) const DataColumn(label: Text('Type')),
-                    const DataColumn(label: Text('Date')),
-                    if (showMontant)
-                      const DataColumn(label: Text('Montant')),
-                    const DataColumn(label: Text('')),
-                  ],
-                  rows: factures.map((facture) {
-                    return DataRow(
-                      cells: [
-                        if (showType)
-                          DataCell(Text(_labelForType(facture.type))),
-                        DataCell(Text(_formatDate(facture.dateTimle))),
-                        if (showMontant)
-                          DataCell(Text(_formatMoney(facture.montant))),
-                        DataCell(
-                          TextButton(
-                            onPressed:
-                                facture.image == null ||
-                                        facture.image!.trim().isEmpty
-                                    ? null
-                                    : () => _showFactureImage(context, facture),
-                            child: const Text('Detail'),
-                          ),
-                        ),
-                      ],
-                    );
-                  }).toList(),
-                ),
+              'Aucune facture disponible.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: const Color(0xFF6B776E),
               ),
+            )
+            : SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                headingRowHeight: 40,
+                dataRowMinHeight: 44,
+                dataRowMaxHeight: 48,
+                columnSpacing: 18,
+                headingTextStyle: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF4E5A52),
+                ),
+                columns: [
+                  if (showType) const DataColumn(label: Text('Type')),
+                  const DataColumn(label: Text('Date')),
+                  if (showMontant) const DataColumn(label: Text('Montant')),
+                  const DataColumn(label: Text('')),
+                ],
+                rows:
+                    factures.map((facture) {
+                      return DataRow(
+                        cells: [
+                          if (showType)
+                            DataCell(Text(_labelForType(facture.type))),
+                          DataCell(Text(_formatDate(facture.dateTimle))),
+                          if (showMontant)
+                            DataCell(Text(_formatMoney(facture.montant))),
+                          DataCell(
+                            TextButton(
+                              onPressed:
+                                  facture.image == null ||
+                                          facture.image!.trim().isEmpty
+                                      ? null
+                                      : () =>
+                                          _showFactureImage(context, facture),
+                              child: const Text('Detail'),
+                            ),
+                          ),
+                        ],
+                      );
+                    }).toList(),
+              ),
+            ),
       ],
     );
   }
@@ -1284,9 +1360,7 @@ void _showFactureImage(BuildContext context, Facture facture) {
                   Expanded(
                     child: Text(
                       'Facture',
-                      style: Theme.of(dialogContext)
-                          .textTheme
-                          .titleMedium
+                      style: Theme.of(dialogContext).textTheme.titleMedium
                           ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                   ),
@@ -1445,17 +1519,19 @@ class _SemiCircularGaugePainter extends CustomPainter {
     final radius = (size.width / 2) - strokeWidth;
     final rect = Rect.fromCircle(center: center, radius: radius);
 
-    final basePaint = Paint()
-      ..color = backgroundColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
+    final basePaint =
+        Paint()
+          ..color = backgroundColor
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth
+          ..strokeCap = StrokeCap.round;
 
-    final valuePaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
+    final valuePaint =
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth
+          ..strokeCap = StrokeCap.round;
 
     const startAngle = 3.141592653589793;
     const sweepAngle = 3.141592653589793;
@@ -1475,10 +1551,7 @@ class _MiniStatCard extends StatelessWidget {
   final String label;
   final String value;
 
-  const _MiniStatCard({
-    required this.label,
-    required this.value,
-  });
+  const _MiniStatCard({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -1525,7 +1598,6 @@ class _MiniStatCard extends StatelessWidget {
   }
 }
 
-
 class _SousZoneRingWithMetrics extends StatelessWidget {
   final List<_ZoneBreakdown> segments;
   final int? activeIndex;
@@ -1546,12 +1618,13 @@ class _SousZoneRingWithMetrics extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final safeSegments = segments.take(2).toList();
-    final resolvedActiveIndex = safeSegments.isNotEmpty &&
-            activeIndex != null &&
-            activeIndex! >= 0 &&
-            activeIndex! < safeSegments.length
-        ? activeIndex!
-        : 0;
+    final resolvedActiveIndex =
+        safeSegments.isNotEmpty &&
+                activeIndex != null &&
+                activeIndex! >= 0 &&
+                activeIndex! < safeSegments.length
+            ? activeIndex!
+            : 0;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1628,10 +1701,7 @@ class _RingSegmented extends StatelessWidget {
         width: size,
         height: size,
         child: Center(
-          child: Text(
-            'Aucune donnee',
-            style: theme.textTheme.bodySmall,
-          ),
+          child: Text('Aucune donnee', style: theme.textTheme.bodySmall),
         ),
       );
     }
@@ -1641,84 +1711,83 @@ class _RingSegmented extends StatelessWidget {
       height: size,
       child: ClipRect(
         child: Builder(
-          builder: (ringContext) => MouseRegion(
-            onExit: (_) => onHoverExit?.call(),
-            onHover: (event) {
-              if (onSegmentHover == null) return;
-              final box = ringContext.findRenderObject() as RenderBox?;
-              if (box == null) return;
-              final local = box.globalToLocal(event.position);
-              final index = _hitTestSegment(local, box.size, segments);
-              if (index != null) onSegmentHover!(index);
-            },
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown: (details) {
-                final box = ringContext.findRenderObject() as RenderBox?;
-                if (box == null) return;
-                final local = details.localPosition;
-                final index = _hitTestSegment(local, box.size, segments);
-                if (index != null) onSegmentTap(index);
-              },
-              child: CustomPaint(
-                painter: _SegmentedRingPainter(
-                  segments: segments,
-                  activeIndex: activeIndex,
-                  progress: progress,
-                ),
-                child: Center(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${segments[activeIndex.clamp(0, segments.length - 1)].percent.toStringAsFixed(0)}%',
-                          style: theme.textTheme.headlineMedium?.copyWith(
-                            fontSize: 34,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.3,
-                            color: const Color(0xFF1F1F1F),
-                          ),
+          builder:
+              (ringContext) => MouseRegion(
+                onExit: (_) => onHoverExit?.call(),
+                onHover: (event) {
+                  if (onSegmentHover == null) return;
+                  final box = ringContext.findRenderObject() as RenderBox?;
+                  if (box == null) return;
+                  final local = box.globalToLocal(event.position);
+                  final index = _hitTestSegment(local, box.size, segments);
+                  if (index != null) onSegmentHover!(index);
+                },
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapDown: (details) {
+                    final box = ringContext.findRenderObject() as RenderBox?;
+                    if (box == null) return;
+                    final local = details.localPosition;
+                    final index = _hitTestSegment(local, box.size, segments);
+                    if (index != null) onSegmentTap(index);
+                  },
+                  child: CustomPaint(
+                    painter: _SegmentedRingPainter(
+                      segments: segments,
+                      activeIndex: activeIndex,
+                      progress: progress,
+                    ),
+                    child: Center(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${segments[activeIndex.clamp(0, segments.length - 1)].percent.toStringAsFixed(0)}%',
+                              style: theme.textTheme.headlineMedium?.copyWith(
+                                fontSize: 34,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.3,
+                                color: const Color(0xFF1F1F1F),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              segments[activeIndex.clamp(
+                                    0,
+                                    segments.length - 1,
+                                  )]
+                                  .name,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.6,
+                                color: const Color(0xFF1F1F1F),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Part du revenu total',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                fontSize: 12,
+                                color: const Color(0xFF6B776E),
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          segments[activeIndex
-                                  .clamp(0, segments.length - 1)]
-                              .name,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.6,
-                            color: const Color(0xFF1F1F1F),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Part du revenu total',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            fontSize: 12,
-                            color: const Color(0xFF6B776E),
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
         ),
       ),
     );
   }
 
-  int? _hitTestSegment(
-    Offset local,
-    Size size,
-    List<_ZoneBreakdown> segments,
-  ) {
+  int? _hitTestSegment(Offset local, Size size, List<_ZoneBreakdown> segments) {
     final center = Offset(size.width / 2, size.height / 2);
     final dx = local.dx - center.dx;
     final dy = local.dy - center.dy;
@@ -1731,8 +1800,7 @@ class _RingSegmented extends StatelessWidget {
 
     var angle = math.atan2(dy, dx);
     const startAngle = -math.pi / 2;
-    final normalized =
-        (angle - startAngle + math.pi * 2) % (math.pi * 2);
+    final normalized = (angle - startAngle + math.pi * 2) % (math.pi * 2);
     var current = 0.0;
 
     for (var i = 0; i < segments.length; i++) {
@@ -1766,11 +1834,12 @@ class _SegmentedRingPainter extends CustomPainter {
     final radius = (size.width / 2) - (strokeWidth / 2);
     final rect = Rect.fromCircle(center: center, radius: radius);
 
-    final basePaint = Paint()
-      ..color = const Color(0xFFE2E8E1)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
+    final basePaint =
+        Paint()
+          ..color = const Color(0xFFE2E8E1)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth
+          ..strokeCap = StrokeCap.round;
 
     canvas.drawArc(rect, -math.pi / 2, math.pi * 2, false, basePaint);
 
@@ -1788,13 +1857,15 @@ class _SegmentedRingPainter extends CustomPainter {
 
       final isActive = i == activeIndex;
 
-      final segmentPaint = Paint()
-        ..color = isActive
-            ? segments[i].color.withOpacity(0.98)
-            : segments[i].color.withOpacity(0.92)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = isActive ? strokeWidth + 2 : strokeWidth
-        ..strokeCap = StrokeCap.round;
+      final segmentPaint =
+          Paint()
+            ..color =
+                isActive
+                    ? segments[i].color.withOpacity(0.98)
+                    : segments[i].color.withOpacity(0.92)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = isActive ? strokeWidth + 2 : strokeWidth
+            ..strokeCap = StrokeCap.round;
 
       canvas.drawArc(rect, startAngle, sweep, false, segmentPaint);
 
@@ -1914,8 +1985,7 @@ class _MetricRow extends StatelessWidget {
           curve: Curves.easeOutCubic,
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
           decoration: BoxDecoration(
-            color:
-                isActive ? data.color.withOpacity(0.08) : Colors.transparent,
+            color: isActive ? data.color.withOpacity(0.08) : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -1997,10 +2067,7 @@ class _GainsError extends StatelessWidget {
   final String error;
   final VoidCallback onRetry;
 
-  const _GainsError({
-    required this.error,
-    required this.onRetry,
-  });
+  const _GainsError({required this.error, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -2035,4 +2102,3 @@ class _GainsError extends StatelessWidget {
     );
   }
 }
-

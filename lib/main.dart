@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:provider/provider.dart';
 
 // 🔌 Services & contrôleurs
@@ -14,8 +16,17 @@ import 'package:yemchi_wyji/features/auth/pages/signup_page.dart';
 import 'package:yemchi_wyji/features/client/client_home_navbar.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/home_coursier_page.dart';
 
+const String _defaultMapboxAccessToken = '';
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  const accessToken = String.fromEnvironment(
+    'ACCESS_TOKEN',
+    defaultValue: _defaultMapboxAccessToken,
+  );
+  if (!kIsWeb && accessToken.isNotEmpty) {
+    MapboxOptions.setAccessToken(accessToken);
+  }
   runApp(const MyApp());
 }
 

@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'dart:io';
 import '../models/produit.dart';
 import 'package:yemchi_wyji/core/models/commande.dart';
 import '../../../core/network/api.dart';
@@ -11,7 +10,15 @@ class CommandeService {
   final api = Api();
   static const String _baseUrl = '/commandes';
 
-
+  Future<Commande> getCommandeById(String commandeId) async {
+    final response = await api.get('$_baseUrl/$commandeId');
+    if (response.statusCode == 200 && response.body.isNotEmpty) {
+      return Commande.fromJson(jsonDecode(response.body));
+    }
+    throw Exception(
+      'Erreur lors du chargement de la commande (${response.statusCode}): ${response.body}',
+    );
+  }
 
   // GET /commandes/client/:userId/en_cours
   Future<Commande?> getActiveCommandeByUserId(String userId) async {
@@ -24,39 +31,36 @@ class CommandeService {
 
   // POST /commandes
   Future<Commande> createCommandeForUser(String userId) async {
-    final payload = {
-      'statut': 'en_cours',
-      'clientId': userId,
-    };
-    final response = await api.post(
-      _baseUrl,
-      body: jsonEncode(payload),
-    );
+    final payload = {'statut': 'en_cours', 'clientId': userId};
+    final response = await api.post(_baseUrl, body: jsonEncode(payload));
     if (response.statusCode == 200 || response.statusCode == 201) {
       return Commande.fromJson(jsonDecode(response.body));
     }
     throw Exception('Erreur lors de la création de la commande');
   }
 
-   Future<Commande> updateCommande(String commandeId, Map<String, dynamic> payload) async {
+  Future<Commande> updateCommande(
+    String commandeId,
+    Map<String, dynamic> payload,
+  ) async {
     // La méthode HTTP 'PUT' ou 'PATCH' est utilisée pour la mise à jour d'une ressource existante
-    final response = await api.put( // to change to patch 
-      '$_baseUrl/$commandeId', 
+    final response = await api.put(
+      // to change to patch
+      '$_baseUrl/$commandeId',
       body: jsonEncode(payload),
     );
     if (response.statusCode == 200) {
       return Commande.fromJson(jsonDecode(response.body));
     }
     // Inclure le corps de la réponse d'erreur pour le debug
-    throw Exception('Erreur lors de la mise à jour de la commande (${response.statusCode}): ${response.body}');
+    throw Exception(
+      'Erreur lors de la mise à jour de la commande (${response.statusCode}): ${response.body}',
+    );
   }
-  //add api.patch 
-  
-
-
+  //add api.patch
 
   // GET active commande or create if not found
-   Future<Commande> getOrCreateActiveCommande(String userId) async {
+  Future<Commande> getOrCreateActiveCommande(String userId) async {
     try {
       final response = await api.get('$_baseUrl/client/$userId/en_cours');
 
@@ -64,33 +68,36 @@ class CommandeService {
       if (response.statusCode == 200 && response.body.isNotEmpty) {
         return Commande.fromJson(jsonDecode(response.body));
       }
-      
+
       // CAS 2: Erreur de l'API (excluant 404 si votre méthode api.get gère 404)
       if (response.statusCode != 200 && response.statusCode != 404) {
-         throw Exception('Erreur API (${response.statusCode}) lors de la recherche de commande active: ${response.body}');
+        throw Exception(
+          'Erreur API (${response.statusCode}) lors de la recherche de commande active: ${response.body}',
+        );
       }
-      
+
       // CAS 3: Commande non trouvée (ou statut 200 avec body vide, ou 404 si l'API ne l'a pas catché)
       // On force la création
       return await createCommandeForUser(userId);
-
     } on Exception catch (e) {
       // Si votre méthode api.get lance une exception interne (ex: Timeout, No Internet, ou 404)
       // Vous devez vérifier si l'exception est due au 404.
       // Si l'exception est due à un 404 (ce qui est le cas le plus probable ici), on crée.
-      // SANS avoir le code de votre classe Api, on ne peut pas être certain, 
+      // SANS avoir le code de votre classe Api, on ne peut pas être certain,
       // mais on peut tester la chaîne de caractères si elle contient "404" ou "Not Found".
       final errorString = e.toString();
-      if (errorString.contains('404') || errorString.toLowerCase().contains('not found')) {
+      if (errorString.contains('404') ||
+          errorString.toLowerCase().contains('not found')) {
         print("Commande non trouvée (404), création d'une nouvelle.");
         return await createCommandeForUser(userId);
       }
-      
+
       // Si c'est une autre erreur (réseau, authentification 401, 500, etc.), relancez.
-      throw Exception('Erreur inattendue lors du chargement de la commande: $errorString');
+      throw Exception(
+        'Erreur inattendue lors du chargement de la commande: $errorString',
+      );
     }
   }
-
 
   // PUT /commandes/:id/confirmer
   Future<Commande> confirmerCommande(String commandeId) async {
@@ -120,7 +127,9 @@ class CommandeService {
     if (response.statusCode == 404 || response.statusCode == 204) {
       return [];
     }
-    throw Exception('Erreur lors du chargement des commandes client: ${response.statusCode}');
+    throw Exception(
+      'Erreur lors du chargement des commandes client: ${response.statusCode}',
+    );
   }
 
   // NOUVEAU: 2. Récupère les commandes où l'utilisateur est l'ami/destinataire
@@ -134,9 +143,10 @@ class CommandeService {
     if (response.statusCode == 404 || response.statusCode == 204) {
       return [];
     }
-    throw Exception('Erreur lors du chargement des commandes amie: ${response.statusCode}');
+    throw Exception(
+      'Erreur lors du chargement des commandes amie: ${response.statusCode}',
+    );
   }
-
 }
 
 class ProduitService {
@@ -164,10 +174,7 @@ class ProduitService {
 
   // POST /produits
   Future<Produit> create(Map<String, dynamic> payload) async {
-    final response = await api.post(
-      _baseUrl,
-      body: jsonEncode(payload),
-    );
+    final response = await api.post(_baseUrl, body: jsonEncode(payload));
     if (response.statusCode == 200 || response.statusCode == 201) {
       return Produit.fromJson(jsonDecode(response.body));
     }
@@ -176,10 +183,7 @@ class ProduitService {
 
   // PUT /produits/:id
   Future<Produit> update(String id, Map<String, dynamic> payload) async {
-    final response = await api.put(
-      '$_baseUrl/$id',
-      body: jsonEncode(payload),
-    );
+    final response = await api.put('$_baseUrl/$id', body: jsonEncode(payload));
     if (response.statusCode == 200) {
       return Produit.fromJson(jsonDecode(response.body));
     }
@@ -203,7 +207,10 @@ class ProduitService {
 
     // Construct the query parameters manually for the GET request
     final queryString = Uri(queryParameters: params).query;
-    final endpoint = queryString.isNotEmpty ? '$_baseUrl/search?$queryString' : '$_baseUrl/search';
+    final endpoint =
+        queryString.isNotEmpty
+            ? '$_baseUrl/search?$queryString'
+            : '$_baseUrl/search';
 
     final response = await api.get(endpoint);
     if (response.statusCode == 200) {
@@ -226,7 +233,9 @@ class ProduitService {
   // --- Helper Methods for Cart Flow ---
 
   // Get products for user's active cart (creates one if missing)
-  Future<List<Produit>> getProduitsForActiveCommandeByUserId(String userId) async {
+  Future<List<Produit>> getProduitsForActiveCommandeByUserId(
+    String userId,
+  ) async {
     final commandeService = CommandeService();
 
     // Step 1: Get or create active commande
@@ -248,7 +257,8 @@ class ProduitService {
     // 2. Upload image if provided
     if (imagePath != null && imagePath.isNotEmpty) {
       final url = await uploadProduitImageAuth(imagePath);
-      formPayload['image1'] = url; // Matches backend "Produit.imageUrl" convention if field is image1
+      formPayload['image1'] =
+          url; // Matches backend "Produit.imageUrl" convention if field is image1
     }
 
     // 3. Attach commandeId
@@ -265,28 +275,30 @@ class ProduitService {
     final token = await TokenStorage.access();
 
     final request = http.MultipartRequest('POST', uri);
-    
+
     // Add auth header manually because MultipartRequest doesn't use the Api interceptor
     if (token != null && token.isNotEmpty) {
       request.headers['Authorization'] = 'Bearer $token';
     }
     request.headers['Accept'] = 'application/json';
-    
+
     // 'image' matches @RequestParam("image") in Spring Boot controller
     request.files.add(await http.MultipartFile.fromPath('image', filePath));
 
     final streamed = await request.send();
     final response = await http.Response.fromStream(streamed);
-    
+
     if (response.statusCode == 200) {
       final decoded = jsonDecode(response.body);
       // Handle the specific response format from your controller:
       // return ResponseEntity.ok(Map.of("success", true, "url", url, ...));
-      if (decoded is Map && decoded['success'] == true && decoded['url'] != null) {
+      if (decoded is Map &&
+          decoded['success'] == true &&
+          decoded['url'] != null) {
         return decoded['url'].toString();
       }
       if (decoded is Map && decoded['message'] != null) {
-         throw Exception('Erreur backend: ${decoded['message']}');
+        throw Exception('Erreur backend: ${decoded['message']}');
       }
     }
     throw Exception('Upload echoue (${response.statusCode}): ${response.body}');

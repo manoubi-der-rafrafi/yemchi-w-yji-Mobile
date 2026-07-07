@@ -51,7 +51,9 @@ class HomeCoursierPage extends StatelessWidget {
                       child: Padding(
                         padding: const EdgeInsets.only(right: 12),
                         child: FloatingActionButton.small(
-                          onPressed: () => _mapKey.currentState?.centerOnMe(),
+                          onPressed:
+                              () =>
+                                  _mapKey.currentState?.handleCenterButtonTap(),
                           child: const Icon(Icons.my_location),
                         ),
                       ),
@@ -78,10 +80,11 @@ class HomeCoursierPage extends StatelessWidget {
     final controller = context.read<HomeController>();
     final Commande? commande = await Navigator.of(context).push<Commande>(
       MaterialPageRoute(
-        builder: (_) => ChangeNotifierProvider<HomeController>.value(
-          value: controller,
-          child: const MesCoursesPage(),
-        ),
+        builder:
+            (_) => ChangeNotifierProvider<HomeController>.value(
+              value: controller,
+              child: const MesCoursesPage(),
+            ),
       ),
     );
     if (commande == null) return;

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -6,6 +8,7 @@ import 'package:yemchi_wyji/core/models/utilisateur.dart';
 import 'package:yemchi_wyji/features/auth/data/auth_user_service.dart';
 import 'package:yemchi_wyji/core/network/api.dart';
 import 'package:yemchi_wyji/features/commande/data/commande_service.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/services/client_cache_service.dart';
 
 import '../controllers/home_controller.dart';
 import 'map_view.dart';
@@ -39,24 +42,31 @@ class NotificationsPanel extends StatelessWidget {
             onClose: () {
               final mapState = mapKey.currentState;
               if (mapState != null) {
-                mapState.stopNavigation(); // 🛑 Stoppe la navigation avant de fermer
+                mapState
+                    .stopNavigation(); // 🛑 Stoppe la navigation avant de fermer
               }
-              context.read<HomeController>().clearSelection(); // 🔚 Ferme le panneau
+              context
+                  .read<HomeController>()
+                  .clearSelection(); // 🔚 Ferme le panneau
             },
 
+            onExitNavigation: () {
+              mapKey.currentState?.stopNavigation();
+            },
             onDetails: () => mapKey.currentState?.openCommandeDetails(commande),
             isNavigationActive: ctrl.isNavigationMode,
-            onToggleNavigation: ctrl.isSelectedCommandeMine
-                ? () async {
-                    final mapState = mapKey.currentState;
-                    if (mapState == null) return;
-                    if (ctrl.isNavigationMode) {
-                      mapState.stopNavigation();
-                    } else {
-                      await mapState.startNavigationFor(commande);
+            onToggleNavigation:
+                ctrl.isSelectedCommandeMine
+                    ? () async {
+                      final mapState = mapKey.currentState;
+                      if (mapState == null) return;
+                      if (ctrl.isNavigationMode) {
+                        mapState.stopNavigation();
+                      } else {
+                        await mapState.startNavigationFor(commande);
+                      }
                     }
-                  }
-                : null,
+                    : null,
           ),
         ),
       ),
@@ -68,6 +78,7 @@ class _CommandeSelectionCard extends StatefulWidget {
   final Commande commande;
   final bool isMine;
   final VoidCallback onClose;
+  final VoidCallback onExitNavigation;
   final VoidCallback onDetails;
   final bool isNavigationActive;
   final VoidCallback? onToggleNavigation;
@@ -77,6 +88,7 @@ class _CommandeSelectionCard extends StatefulWidget {
     required this.commande,
     required this.isMine,
     required this.onClose,
+    required this.onExitNavigation,
     required this.onDetails,
     required this.isNavigationActive,
     this.onToggleNavigation,
@@ -87,33 +99,78 @@ class _CommandeSelectionCard extends StatefulWidget {
 }
 
 class _CommandeSelectionCardState extends State<_CommandeSelectionCard> {
-  late Future<Utilisateur?> _clientFuture;
+  final ClientCacheService _clientCacheService = ClientCacheService();
+  Utilisateur? _client;
+  bool _isClientLoading = true;
   bool _isCalling = false;
 
   @override
   void initState() {
     super.initState();
-    _clientFuture = _fetchClient();
+    _loadClient();
   }
 
   @override
   void didUpdateWidget(covariant _CommandeSelectionCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.commande.id != widget.commande.id) {
-      _clientFuture = _fetchClient();
+      _loadClient();
     }
   }
 
-  Future<Utilisateur?> _fetchClient() async {
+  Future<void> _loadClient() async {
     final override = context.read<HomeController>().selectedContactInfo;
-    if (override != null) return null;
+    if (override != null) {
+      if (!mounted) return;
+      setState(() {
+        _client = null;
+        _isClientLoading = false;
+      });
+      return;
+    }
     final clientId = widget.commande.clientId;
-    if (clientId == null || clientId.isEmpty) return null;
+    if (clientId == null || clientId.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _client = null;
+        _isClientLoading = false;
+      });
+      return;
+    }
+
+    final cached = await _clientCacheService.read(clientId);
+    if (!mounted || widget.commande.clientId != clientId) return;
+    if (cached != null) {
+      setState(() {
+        _client = cached;
+        _isClientLoading = false;
+      });
+      unawaited(_refreshClient(clientId));
+      return;
+    }
+
+    setState(() {
+      _client = null;
+      _isClientLoading = true;
+    });
+    await _refreshClient(clientId);
+  }
+
+  Future<void> _refreshClient(String clientId) async {
     final service = context.read<AuthUserService>();
     try {
-      return await service.getById(clientId);
+      final user = await service.getById(clientId);
+      await _clientCacheService.write(user);
+      if (!mounted || widget.commande.clientId != clientId) return;
+      setState(() {
+        _client = user;
+        _isClientLoading = false;
+      });
     } catch (_) {
-      return null;
+      if (!mounted || widget.commande.clientId != clientId) return;
+      setState(() {
+        _isClientLoading = false;
+      });
     }
   }
 
@@ -121,9 +178,10 @@ class _CommandeSelectionCardState extends State<_CommandeSelectionCard> {
     if (_isCalling) return;
 
     final bool departScanne = widget.commande.qrCodeDepartScanne == true;
-    final rawNumber = departScanne
-        ? (widget.commande.telArrivee ?? widget.commande.telDepart)
-        : (widget.commande.telDepart ?? widget.commande.telArrivee);
+    final rawNumber =
+        departScanne
+            ? (widget.commande.telArrivee ?? widget.commande.telDepart)
+            : (widget.commande.telDepart ?? widget.commande.telArrivee);
     final number = rawNumber?.replaceAll(RegExp(r'[^0-9+]'), '');
 
     if (number == null || number.isEmpty) {
@@ -158,34 +216,42 @@ class _CommandeSelectionCardState extends State<_CommandeSelectionCard> {
     final contactOverride = homeCtrl.selectedContactInfo;
     final double? distanceMetersFromRoute =
         homeCtrl.currentRouteDistanceMeters ??
-            (widget.commande.distanceKm != null
-                ? widget.commande.distanceKm! * 1000
-                : null);
-    final Duration? eta = homeCtrl.currentRouteEta ??
+        (widget.commande.distanceKm != null
+            ? widget.commande.distanceKm! * 1000
+            : null);
+    final Duration? eta =
+        homeCtrl.currentRouteEta ??
         (distanceMetersFromRoute != null
             ? _etaFromDistance(distanceMetersFromRoute)
             : null);
-    final distanceText = distanceMetersFromRoute != null
-        ? _formatDistance(distanceMetersFromRoute)
-        : null;
+    final distanceText =
+        distanceMetersFromRoute != null
+            ? _formatDistance(distanceMetersFromRoute)
+            : null;
     final durationText = eta != null ? _formatDuration(eta) : null;
-    final priceText = !widget.isNavigationActive
-        ? _formatPrice(widget.commande.prix)
-        : null;
+    final priceText =
+        !widget.isNavigationActive ? _formatPrice(widget.commande.prix) : null;
     final bool hasMetrics =
         distanceText != null || durationText != null || priceText != null;
     final bool showCompleteButton = widget.isMine && widget.isNavigationActive;
-    final bool isSecoursCommande =
-        homeCtrl.isCommandeSecours(widget.commande.id);
+    final bool isSecoursCommande = homeCtrl.isCommandeSecours(
+      widget.commande.id,
+    );
     final bool departScanne = widget.commande.qrCodeDepartScanne == true;
     final bool relaisEffectue =
         widget.commande.relaisTransporteurEffectue == true;
-    final String completeLabel = isSecoursCommande && departScanne && !relaisEffectue
-        ? 'Relais recupere'
-        : 'Terminer';
+    final String completeLabel =
+        isSecoursCommande && departScanne && !relaisEffectue
+            ? 'Relais recupere'
+            : 'Terminer';
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        widget.isNavigationActive ? 12 : 16,
+        16,
+        12,
+      ),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
@@ -197,127 +263,159 @@ class _CommandeSelectionCardState extends State<_CommandeSelectionCard> {
           ),
         ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
-          FutureBuilder<Utilisateur?>(
-            future: _clientFuture,
-            builder: (context, snapshot) {
-              final isLoading =
-                  snapshot.connectionState == ConnectionState.waiting;
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _ClientInfos(
-                    theme: theme,
-                    user: snapshot.data,
-                    commande: widget.commande,
-                    isLoading: isLoading,
-                    onClose: widget.onClose,
-                    showContactDetails: !widget.isNavigationActive,
-                    contactOverride: contactOverride,
-                  ),
-                  const SizedBox(height: 10),
-                  if (hasMetrics) ...[
-                    _RouteMetrics(
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (widget.isNavigationActive) ...[
+                if (hasMetrics)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 36),
+                    child: _RouteMetrics(
                       distance: distanceText,
                       eta: durationText,
                       price: priceText,
                     ),
+                  ),
+                if (hasMetrics) const SizedBox(height: 12),
+              ] else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _ClientInfos(
+                      theme: theme,
+                      user: _client,
+                      commande: widget.commande,
+                      isLoading: _isClientLoading,
+                      onClose: widget.onClose,
+                      contactOverride: contactOverride,
+                    ),
                     const SizedBox(height: 10),
-                  ],
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              if (widget.isMine) ...[
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: widget.isNavigationActive
-                        ? () => _callClient()
-                        : widget.onDetails,
-                    child: Text(widget.isNavigationActive ? 'Appeler' : 'Details'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: () async {
-                      widget.onToggleNavigation?.call();
-                    },
-                    child: Text(widget.isNavigationActive ? 'Arrêter' : 'Démarrer'),
-                  ),
-                ),
-                if (showCompleteButton) ...[
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.red.shade600,
-                        foregroundColor: Colors.white,
+                    if (hasMetrics) ...[
+                      _RouteMetrics(
+                        distance: distanceText,
+                        eta: durationText,
+                        price: priceText,
                       ),
-                      onPressed: () async {
-                        final api = context.read<Api>();
-                        final service = CommandeService(api);
-                        if (isSecoursCommande && departScanne && !relaisEffectue) {
-                          final updated = await service
-                              .marquerRelaisTransporteurEffectue(
-                            widget.commande.id,
-                          );
-                          if (!mounted) return;
-                          homeCtrl.updateCommande(updated);
-                          homeCtrl.setNavigationMode(false);
-                          homeCtrl.clearSelection();
-                          return;
-                        } else if (departScanne) {
-                          final updated =
-                              await service.marquerReceptionScanne(widget.commande.id);
-                          if (!mounted) return;
-                          homeCtrl.updateCommande(updated);
-                          homeCtrl.setNavigationMode(false);
-                          homeCtrl.clearSelection();
-                          return;
-                        } else {
-                          final updated =
-                              await service.marquerDepartScanne(widget.commande.id);
-                          if (!mounted) return;
-                          homeCtrl.updateCommande(updated);
-                          homeCtrl.setNavigationMode(false);
-                          homeCtrl.clearSelection();
-                          return;
-                        }
-                      },
-                      child: Text(
-                        completeLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        softWrap: false,
+                      const SizedBox(height: 10),
+                    ],
+                  ],
+                ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  if (widget.isMine) ...[
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed:
+                            widget.isNavigationActive
+                                ? () => _callClient()
+                                : widget.onDetails,
+                        child: Text(
+                          widget.isNavigationActive ? 'Appeler' : 'Details',
+                        ),
                       ),
                     ),
-                  ),
+                    if (!widget.isNavigationActive) ...[
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () async {
+                            widget.onToggleNavigation?.call();
+                          },
+                          child: const Text('Démarrer'),
+                        ),
+                      ),
+                    ],
+                    if (showCompleteButton) ...[
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.red.shade600,
+                            foregroundColor: Colors.white,
+                          ),
+                          onPressed: () async {
+                            final api = context.read<Api>();
+                            final service = CommandeService(api);
+                            if (isSecoursCommande &&
+                                departScanne &&
+                                !relaisEffectue) {
+                              final updated = await service
+                                  .marquerRelaisTransporteurEffectue(
+                                    widget.commande.id,
+                                  );
+                              if (!mounted) return;
+                              homeCtrl.updateCommande(updated);
+                              homeCtrl.setNavigationMode(false);
+                              homeCtrl.clearSelection();
+                              return;
+                            } else if (departScanne) {
+                              final updated = await service
+                                  .marquerReceptionScanne(widget.commande.id);
+                              if (!mounted) return;
+                              homeCtrl.updateCommande(updated);
+                              homeCtrl.setNavigationMode(false);
+                              homeCtrl.clearSelection();
+                              return;
+                            } else {
+                              final updated = await service.marquerDepartScanne(
+                                widget.commande.id,
+                              );
+                              if (!mounted) return;
+                              homeCtrl.updateCommande(updated);
+                              homeCtrl.setNavigationMode(false);
+                              homeCtrl.clearSelection();
+                              return;
+                            }
+                          },
+                          child: Text(
+                            completeLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            softWrap: false,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ] else ...[
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {},
+                        child: const Text('Refuser'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: widget.onDetails,
+                        child: const Text('Details'),
+                      ),
+                    ),
+                  ],
                 ],
-              ] else ...[
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {},
-                    child: const Text('Refuser'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: widget.onDetails,
-                    child: const Text('Details'),
-                  ),
-                ),
-              ],
+              ),
             ],
           ),
+          if (widget.isNavigationActive)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: IconButton(
+                onPressed: widget.onExitNavigation,
+                icon: const Icon(Icons.close, size: 22),
+                tooltip: 'Arrêter le suivi',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints.tightFor(
+                  width: 28,
+                  height: 28,
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
         ],
       ),
     );
@@ -378,17 +476,9 @@ class _RouteMetrics extends StatelessWidget {
           value: distance!,
         ),
       if (eta != null)
-        _RouteMetric(
-          icon: Icons.timer,
-          label: 'Temps restant',
-          value: eta!,
-        ),
+        _RouteMetric(icon: Icons.timer, label: 'Temps restant', value: eta!),
       if (price != null)
-        _RouteMetric(
-          icon: Icons.payments,
-          label: 'Prix',
-          value: price!,
-        ),
+        _RouteMetric(icon: Icons.payments, label: 'Prix', value: price!),
     ];
     if (metrics.isEmpty) return const SizedBox.shrink();
 
@@ -436,11 +526,7 @@ class _MetricTile extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(
-              data.icon,
-              size: 18,
-              color: theme.colorScheme.primary,
-            ),
+            Icon(data.icon, size: 18, color: theme.colorScheme.primary),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
@@ -514,7 +600,6 @@ class _ClientInfos extends StatelessWidget {
   final Commande commande;
   final bool isLoading;
   final VoidCallback onClose;
-  final bool showContactDetails;
   final SelectedContactInfo? contactOverride;
 
   const _ClientInfos({
@@ -523,7 +608,6 @@ class _ClientInfos extends StatelessWidget {
     required this.commande,
     required this.isLoading,
     required this.onClose,
-    this.showContactDetails = true,
     this.contactOverride,
   });
 
@@ -535,17 +619,16 @@ class _ClientInfos extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!showContactDetails) {
-      return const SizedBox.shrink();
-    }
-    final parts = [user?.prenom, user?.nom]
-        .whereType<String>()
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .toList();
-    final fullName = contactOverride?.displayName.trim().isNotEmpty == true
-        ? contactOverride!.displayName.trim()
-        : (parts.isNotEmpty ? parts.join(' ') : 'Utilisateur inconnu');
+    final parts =
+        [user?.prenom, user?.nom]
+            .whereType<String>()
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toList();
+    final fullName =
+        contactOverride?.displayName.trim().isNotEmpty == true
+            ? contactOverride!.displayName.trim()
+            : (parts.isNotEmpty ? parts.join(' ') : 'Utilisateur inconnu');
 
     final telDepart = _fallback(
       contactOverride?.phoneDepart ?? commande.telDepart,
@@ -571,28 +654,27 @@ class _ClientInfos extends StatelessWidget {
       child: CircleAvatar(
         radius: 26,
         backgroundColor: theme.colorScheme.surfaceVariant.withOpacity(0.35),
-        backgroundImage: hasImage ? NetworkImage(imageUrl!) : null,
-        child: hasImage
-            ? null
-            : isLoading
+        backgroundImage: hasImage ? NetworkImage(imageUrl) : null,
+        child:
+            hasImage
+                ? null
+                : isLoading
                 ? SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: theme.colorScheme.primary,
-                    ),
-                  )
-                : Icon(
-                    Icons.person,
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
                     color: theme.colorScheme.primary,
                   ),
+                )
+                : Icon(Icons.person, color: theme.colorScheme.primary),
       ),
     );
 
-    final statusColor = contactOverride != null
-        ? (contactOverride!.isActive ? Colors.green : Colors.redAccent)
-        : (user?.statut == Statut.actif ? Colors.green : Colors.redAccent);
+    final statusColor =
+        contactOverride != null
+            ? (contactOverride!.isActive ? Colors.green : Colors.redAccent)
+            : (user?.statut == Statut.actif ? Colors.green : Colors.redAccent);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -626,39 +708,37 @@ class _ClientInfos extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 4),
-              if (showContactDetails)
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    const minColumnWidth = 220.0;
-                    final bool shouldStack =
-                        constraints.maxWidth < minColumnWidth * 2;
-                    if (shouldStack) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _InfoLine(label: 'Tel depart', value: telDepart),
-                          const SizedBox(height: 6),
-                          _InfoLine(label: 'Tel arrivee', value: telArrivee),
-                        ],
-                      );
-                    }
-                    return Row(
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  const minColumnWidth = 220.0;
+                  final bool shouldStack =
+                      constraints.maxWidth < minColumnWidth * 2;
+                  if (shouldStack) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child:
-                              _InfoLine(label: 'Tel depart', value: telDepart),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _InfoLine(
-                            label: 'Tel arrivee',
-                            value: telArrivee,
-                          ),
-                        ),
+                        _InfoLine(label: 'Tel depart', value: telDepart),
+                        const SizedBox(height: 6),
+                        _InfoLine(label: 'Tel arrivee', value: telArrivee),
                       ],
                     );
-                  },
-                ),
+                  }
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: _InfoLine(label: 'Tel depart', value: telDepart),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _InfoLine(
+                          label: 'Tel arrivee',
+                          value: telArrivee,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ],
           ),
         ),

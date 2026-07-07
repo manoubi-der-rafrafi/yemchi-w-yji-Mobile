@@ -4,20 +4,215 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:yemchi_wyji/core/models/utilisateur.dart';
 import '../services/cilent_service.dart'; // Importez votre service
-import 'package:yemchi_wyji/core/models/commande.dart'; 
+import 'package:yemchi_wyji/core/models/commande.dart';
 import 'package:provider/provider.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
 import 'package:yemchi_wyji/features/amis/data/amis_service.dart';
 import 'package:yemchi_wyji/features/auth/data/auth_user_service.dart';
-import 'package:yemchi_wyji/core/network/api.dart';// Importez votre modèle Commande
+import 'package:yemchi_wyji/core/network/api.dart'; // Importez votre modèle Commande
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 
-// Note: Pour une implémentation complète des cartes/géoloc/autocomplete, 
-// vous aurez besoin de packages supplémentaires (ex: geolocator, flutter_map, etc.). 
+// Note: Pour une implémentation complète des cartes/géoloc/autocomplete,
+// vous aurez besoin de packages supplémentaires (ex: geolocator, flutter_map, etc.).
 // Ici, les boutons de géoloc/carte sont des stubs pour suivre la logique du front-end.
+
+const List<Map<String, Object>> _zoneBounds = [
+  {
+    'name': 'TUNIS',
+    'zone': 'GRAND_TUNIS',
+    'latMin': 36.70,
+    'latMax': 36.95,
+    'lngMin': 10.00,
+    'lngMax': 10.45,
+  },
+  {
+    'name': 'ARIANA',
+    'zone': 'GRAND_TUNIS',
+    'latMin': 36.75,
+    'latMax': 37.10,
+    'lngMin': 10.00,
+    'lngMax': 10.45,
+  },
+  {
+    'name': 'BEN_AROUS',
+    'zone': 'GRAND_TUNIS',
+    'latMin': 36.55,
+    'latMax': 36.85,
+    'lngMin': 10.05,
+    'lngMax': 10.45,
+  },
+  {
+    'name': 'MANOUBA',
+    'zone': 'GRAND_TUNIS',
+    'latMin': 36.60,
+    'latMax': 36.98,
+    'lngMin': 9.85,
+    'lngMax': 10.25,
+  },
+  {
+    'name': 'BIZERTE',
+    'zone': 'NORD_EST',
+    'latMin': 37.00,
+    'latMax': 37.55,
+    'lngMin': 9.30,
+    'lngMax': 10.35,
+  },
+  {
+    'name': 'NABEUL',
+    'zone': 'NORD_EST',
+    'latMin': 36.15,
+    'latMax': 36.95,
+    'lngMin': 10.25,
+    'lngMax': 11.20,
+  },
+  {
+    'name': 'BEJA',
+    'zone': 'NORD_OUEST',
+    'latMin': 36.50,
+    'latMax': 37.20,
+    'lngMin': 8.60,
+    'lngMax': 9.60,
+  },
+  {
+    'name': 'JENDOUBA',
+    'zone': 'NORD_OUEST',
+    'latMin': 36.50,
+    'latMax': 37.10,
+    'lngMin': 8.30,
+    'lngMax': 9.20,
+  },
+  {
+    'name': 'KEF',
+    'zone': 'NORD_OUEST',
+    'latMin': 35.90,
+    'latMax': 36.80,
+    'lngMin': 8.20,
+    'lngMax': 9.10,
+  },
+  {
+    'name': 'SILIANA',
+    'zone': 'NORD_OUEST',
+    'latMin': 35.70,
+    'latMax': 36.40,
+    'lngMin': 8.70,
+    'lngMax': 9.80,
+  },
+  {
+    'name': 'ZAGHOUAN',
+    'zone': 'CENTRE',
+    'latMin': 36.10,
+    'latMax': 36.60,
+    'lngMin': 9.90,
+    'lngMax': 10.60,
+  },
+  {
+    'name': 'KAIROUAN',
+    'zone': 'CENTRE',
+    'latMin': 35.20,
+    'latMax': 36.10,
+    'lngMin': 9.50,
+    'lngMax': 10.50,
+  },
+  {
+    'name': 'KASSERINE',
+    'zone': 'CENTRE_OUEST',
+    'latMin': 34.80,
+    'latMax': 35.70,
+    'lngMin': 8.20,
+    'lngMax': 9.50,
+  },
+  {
+    'name': 'SIDI_BOUZID',
+    'zone': 'CENTRE_OUEST',
+    'latMin': 34.60,
+    'latMax': 35.60,
+    'lngMin': 8.80,
+    'lngMax': 10.00,
+  },
+  {
+    'name': 'SOUSSE',
+    'zone': 'SAHEL',
+    'latMin': 35.70,
+    'latMax': 36.20,
+    'lngMin': 10.30,
+    'lngMax': 10.90,
+  },
+  {
+    'name': 'MONASTIR',
+    'zone': 'SAHEL',
+    'latMin': 35.50,
+    'latMax': 35.90,
+    'lngMin': 10.60,
+    'lngMax': 11.20,
+  },
+  {
+    'name': 'MAHDIA',
+    'zone': 'SAHEL',
+    'latMin': 35.20,
+    'latMax': 35.70,
+    'lngMin': 10.60,
+    'lngMax': 11.30,
+  },
+  {
+    'name': 'SFAX',
+    'zone': 'SFAX',
+    'latMin': 34.50,
+    'latMax': 35.10,
+    'lngMin': 10.40,
+    'lngMax': 11.20,
+  },
+  {
+    'name': 'GABES',
+    'zone': 'SUD_EST',
+    'latMin': 33.70,
+    'latMax': 34.30,
+    'lngMin': 9.80,
+    'lngMax': 10.40,
+  },
+  {
+    'name': 'MEDENINE',
+    'zone': 'SUD_EST',
+    'latMin': 33.00,
+    'latMax': 33.80,
+    'lngMin': 10.00,
+    'lngMax': 11.20,
+  },
+  {
+    'name': 'TATAOUINE',
+    'zone': 'SUD_EST',
+    'latMin': 31.50,
+    'latMax': 33.40,
+    'lngMin': 9.50,
+    'lngMax': 11.20,
+  },
+  {
+    'name': 'TOZEUR',
+    'zone': 'SUD_OUEST',
+    'latMin': 33.50,
+    'latMax': 34.20,
+    'lngMin': 7.30,
+    'lngMax': 8.40,
+  },
+  {
+    'name': 'KEBILI',
+    'zone': 'SUD_OUEST',
+    'latMin': 33.10,
+    'latMax': 34.00,
+    'lngMin': 8.20,
+    'lngMax': 9.30,
+  },
+  {
+    'name': 'GAFSA',
+    'zone': 'SUD_OUEST',
+    'latMin': 33.70,
+    'latMax': 34.80,
+    'lngMin': 8.30,
+    'lngMax': 9.30,
+  },
+];
 
 class ConfirmationCommandePage extends StatefulWidget {
   final String commandeId; // L'ID de la commande en cours
@@ -25,7 +220,8 @@ class ConfirmationCommandePage extends StatefulWidget {
   const ConfirmationCommandePage({super.key, required this.commandeId});
 
   @override
-  State<ConfirmationCommandePage> createState() => _ConfirmationCommandePageState();
+  State<ConfirmationCommandePage> createState() =>
+      _ConfirmationCommandePageState();
 }
 
 class _ConfirmationCommandePageState extends State<ConfirmationCommandePage> {
@@ -36,20 +232,19 @@ class _ConfirmationCommandePageState extends State<ConfirmationCommandePage> {
   bool isLoading = false;
   String? loadError;
   Utilisateur? currentUser;
-  
+
   // --- Contrôleurs de formulaire ---
   final TextEditingController _departCtrl = TextEditingController();
   final TextEditingController _telDepartCtrl = TextEditingController();
   final TextEditingController _destinationCtrl = TextEditingController();
   final TextEditingController _telArriveeCtrl = TextEditingController();
   final TextEditingController _amiIdentifiantCtrl = TextEditingController();
-  
+
   // Modèle de commande pour pré-remplissage et état (facultatif mais recommandé)
-  Commande? _commande; 
-  
+  Commande? _commande;
+
   // Étape 3: Mode de paiement
-  String _modePaiement = 'en_ligne'; 
-  String? _initialClientId; 
+  String _modePaiement = 'en_ligne';
   bool _envoyerAmi = false;
   bool _sharePending = false;
   String? _pendingFriendLabel;
@@ -62,18 +257,19 @@ class _ConfirmationCommandePageState extends State<ConfirmationCommandePage> {
   final MapController _mapController = MapController();
   LatLng _mapCenter = const LatLng(36.8065, 10.1815);
   LatLng? _selectedLatLng;
+  LatLng? _departLatLng;
+  LatLng? _destinationLatLng;
   String? _reverseAddress;
   bool _reverseLoading = false;
   String? _mapError;
   String _mapTarget = 'depart';
   bool _locatingDepart = false;
 
-
   @override
   void initState() {
     super.initState();
     _authUserService = AuthUserService(Api());
-    _loadInitialData();
+    _loadInitialCommandeData();
   }
 
   @override
@@ -86,22 +282,25 @@ class _ConfirmationCommandePageState extends State<ConfirmationCommandePage> {
     _friendDebounce?.cancel();
     super.dispose();
   }
-  
+
   // Pré-chargement des détails de commande pour pré-remplir les champs
+  // ignore: unused_element
   Future<void> _loadInitialData() async {
     setState(() => isLoading = true);
     try {
-      final authController = Provider.of<AuthController>(context, listen: false);
-    currentUser = authController.currentUser.value;
+      final authController = Provider.of<AuthController>(
+        context,
+        listen: false,
+      );
+      currentUser = authController.currentUser.value;
       // Vous devez ajouter un getById(id) à votre CommandeService si ce n'est pas fait
       // Mais pour le flow, on peut assumer que la commande existe.
       // Appel d'API pour récupérer la commande complète:
       // _commande = await _commandeService.getById(widget.commandeId);
-      
+
       // Simule un pré-remplissage (si votre API le permet)
       //_departCtrl.text = _commande?.localisation_depart ?? ""; // Si déjà stocké
       //_telDepartCtrl.text = _commande?.telDepart ?? "216xxxxxxx"; // Numéro client par défaut
-
     } catch (e) {
       loadError = "Impossible de charger les détails initiaux.";
     } finally {
@@ -109,23 +308,59 @@ class _ConfirmationCommandePageState extends State<ConfirmationCommandePage> {
     }
   }
 
-  // --- Navigation & Validation ---
-  
-  bool _isStep1Valid() {
-    return _departCtrl.text.trim().length > 3 && 
-           _telDepartCtrl.text.trim().isNotEmpty &&
-           RegExp(r'^\+?\d{6,15}$').hasMatch(_telDepartCtrl.text.trim());
+  Future<void> _loadInitialCommandeData() async {
+    setState(() => isLoading = true);
+    try {
+      final authController = Provider.of<AuthController>(
+        context,
+        listen: false,
+      );
+      currentUser = authController.currentUser.value;
+      final commande = await _commandeService.getCommandeById(
+        widget.commandeId,
+      );
+      _commande = commande;
+      _departCtrl.text = commande.localisationDepart ?? '';
+      _telDepartCtrl.text = commande.telDepart ?? currentUser?.telephone ?? '';
+      _destinationCtrl.text = commande.destination ?? '';
+      _telArriveeCtrl.text = commande.telArrivee ?? '';
+      _modePaiement = commande.modePaiement ?? _modePaiement;
+      _sharePending = (commande.statut ?? '').toLowerCase() == 'envoyee';
+      _departLatLng = _latLngFrom(
+        commande.latitudeDepart,
+        commande.longitudeDepart,
+      );
+      _destinationLatLng = _latLngFrom(
+        commande.latitudeDestination,
+        commande.longitudeDestination,
+      );
+    } catch (_) {
+      loadError = "Impossible de charger les dÃ©tails initiaux.";
+    } finally {
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
+    }
   }
-  
+
+  // --- Navigation & Validation ---
+
+  bool _isStep1Valid() {
+    return _departCtrl.text.trim().length > 3 &&
+        _telDepartCtrl.text.trim().isNotEmpty &&
+        RegExp(r'^\+?\d{6,15}$').hasMatch(_telDepartCtrl.text.trim());
+  }
+
   bool _isStep2Valid() {
     if (_envoyerAmi) {
       return _selectedFriend != null;
     }
-    return _destinationCtrl.text.trim().length > 3 && 
-           _telArriveeCtrl.text.trim().isNotEmpty &&
-           RegExp(r'^\+?\d{6,15}$').hasMatch(_telArriveeCtrl.text.trim());  
-    }
-void goToNextStep() {
+    return _destinationCtrl.text.trim().length > 3 &&
+        _telArriveeCtrl.text.trim().isNotEmpty &&
+        RegExp(r'^\+?\d{6,15}$').hasMatch(_telArriveeCtrl.text.trim());
+  }
+
+  void goToNextStep() {
     if (step == 1 && !_isStep1Valid()) return;
     if (step == 2 && !_isStep2Valid()) return;
 
@@ -133,7 +368,7 @@ void goToNextStep() {
       _sendCommandeToFriend();
       return;
     }
-    
+
     setState(() {
       step = step < 3 ? step + 1 : 3;
     });
@@ -149,15 +384,16 @@ void goToNextStep() {
   Future<void> finalConfirmation() async {
     // Valide le mode de paiement à l'étape 3
     if (_modePaiement.isEmpty) {
-       ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Veuillez choisir un mode de paiement.')),
       );
       return;
     }
-    
+
     setState(() => isLoading = true);
-    
+
     // 1. Construire le payload final (équivalent à this.buildCommandeFromForm() du front)
+    // ignore: unused_local_variable
     final payload = {
       // Étape 1
       'localisation_depart': _departCtrl.text.trim(),
@@ -167,7 +403,7 @@ void goToNextStep() {
       'telArrivee': _telArriveeCtrl.text.trim(),
       // Étape 3
       'mode_paiement': _modePaiement,
-      
+
       // Statut crucial pour la confirmation finale
       'statut': 'confirmer',
       // Inclure les autres champs non modifiables si nécessaire (ex: clientId, prix)
@@ -177,18 +413,23 @@ void goToNextStep() {
     try {
       // 2. Appel API de mise à jour/confirmation
       // Le service utilise l'ID de la commande et envoie le payload
-      await _commandeService.updateCommande(widget.commandeId, payload);
-      
+      _commande = await _commandeService.updateCommande(
+        widget.commandeId,
+        await _buildCommandePayload(
+          statut: 'confirmer',
+          includeModePaiement: true,
+        ),
+      );
+
       if (!mounted) return;
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('✅ Commande confirmée avec succès !')),
       );
 
       // 3. Ferme la page et retourne 'true' (équivalent au router.navigate(['/panier']) du front)
       // 'true' indique à LivrerPage de recharger/vider le panier
-      Navigator.pop(context, true); 
-
+      Navigator.pop(context, true);
     } catch (e) {
       setState(() => isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -206,6 +447,7 @@ void goToNextStep() {
       _friendError = null;
     });
 
+    // ignore: unused_local_variable
     final payload = {
       'localisation_depart': _departCtrl.text.trim(),
       'telDepart': _telDepartCtrl.text.trim(),
@@ -216,14 +458,21 @@ void goToNextStep() {
     };
 
     try {
-      await _commandeService.updateCommande(widget.commandeId, payload);
+      _commande = await _commandeService.updateCommande(
+        widget.commandeId,
+        await _buildCommandePayload(statut: 'envoyee', friend: _selectedFriend),
+      );
       if (!mounted) return;
       setState(() {
         _sharePending = true;
         _pendingFriendLabel = _displayFriend(_selectedFriend!);
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Commande envoyee a ${_pendingFriendLabel ?? 'votre ami'}')),
+        SnackBar(
+          content: Text(
+            'Commande envoyee a ${_pendingFriendLabel ?? 'votre ami'}',
+          ),
+        ),
       );
     } catch (e) {
       setState(() {
@@ -248,7 +497,9 @@ void goToNextStep() {
       if (!enabled) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Le service de localisation est desactive.')),
+          const SnackBar(
+            content: Text('Le service de localisation est desactive.'),
+          ),
         );
         return;
       }
@@ -257,7 +508,8 @@ void goToNextStep() {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Permission de localisation refusee.')),
@@ -268,15 +520,21 @@ void goToNextStep() {
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
-      final address = await _reverseGeocodeLatLng(position.latitude, position.longitude);
-      final value = (address == null || address.isEmpty)
-          ? '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}'
-          : address;
+      final address = await _reverseGeocodeLatLng(
+        position.latitude,
+        position.longitude,
+      );
+      final value =
+          (address == null || address.isEmpty)
+              ? '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}'
+              : address;
 
       if (target == 'depart') {
         _departCtrl.text = value;
+        _departLatLng = LatLng(position.latitude, position.longitude);
       } else {
         _destinationCtrl.text = value;
+        _destinationLatLng = LatLng(position.latitude, position.longitude);
       }
     } catch (e) {
       if (!mounted) return;
@@ -300,10 +558,14 @@ void goToNextStep() {
       if (placemarks.isEmpty) return null;
       final p = placemarks.first;
       final parts = <String>[];
-      if (p.street != null && p.street!.trim().isNotEmpty) parts.add(p.street!.trim());
-      if (p.locality != null && p.locality!.trim().isNotEmpty) parts.add(p.locality!.trim());
-      if (p.postalCode != null && p.postalCode!.trim().isNotEmpty) parts.add(p.postalCode!.trim());
-      if (p.country != null && p.country!.trim().isNotEmpty) parts.add(p.country!.trim());
+      if (p.street != null && p.street!.trim().isNotEmpty)
+        parts.add(p.street!.trim());
+      if (p.locality != null && p.locality!.trim().isNotEmpty)
+        parts.add(p.locality!.trim());
+      if (p.postalCode != null && p.postalCode!.trim().isNotEmpty)
+        parts.add(p.postalCode!.trim());
+      if (p.country != null && p.country!.trim().isNotEmpty)
+        parts.add(p.country!.trim());
       return parts.join(', ');
     } catch (_) {
       return null;
@@ -333,13 +595,20 @@ void goToNextStep() {
                 child: Column(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       child: Row(
                         children: [
                           Expanded(
                             child: Text(
-                              _mapTarget == 'depart' ? 'Choisir position depart' : 'Choisir position arrivee',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                              _mapTarget == 'depart'
+                                  ? 'Choisir position depart'
+                                  : 'Choisir position arrivee',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                           IconButton(
@@ -355,15 +624,17 @@ void goToNextStep() {
                         options: MapOptions(
                           initialCenter: _mapCenter,
                           initialZoom: 13,
-                          onTap: (tapPosition, point) => _onMapTap(
-                            point,
-                            dialogSetState: setDialogState,
-                            isDialogOpen: () => dialogOpen,
-                          ),
+                          onTap:
+                              (tapPosition, point) => _onMapTap(
+                                point,
+                                dialogSetState: setDialogState,
+                                isDialogOpen: () => dialogOpen,
+                              ),
                         ),
                         children: [
                           TileLayer(
-                            urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            urlTemplate:
+                                'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
                             subdomains: const ['a', 'b', 'c'],
                             userAgentPackageName: 'com.example.yemchi_wyji',
                           ),
@@ -374,7 +645,11 @@ void goToNextStep() {
                                   point: _selectedLatLng!,
                                   width: 40,
                                   height: 40,
-                                  child: const Icon(Icons.location_on, color: Colors.red, size: 36),
+                                  child: const Icon(
+                                    Icons.location_on,
+                                    color: Colors.red,
+                                    size: 36,
+                                  ),
                                 ),
                               ],
                             ),
@@ -389,12 +664,19 @@ void goToNextStep() {
                           if (_reverseLoading)
                             const Text('Recherche adresse...'),
                           if (_mapError != null)
-                            Text(_mapError!, style: const TextStyle(color: Colors.red)),
-                          if (_reverseAddress != null && _reverseAddress!.isNotEmpty)
+                            Text(
+                              _mapError!,
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          if (_reverseAddress != null &&
+                              _reverseAddress!.isNotEmpty)
                             Text(_reverseAddress!),
                           const SizedBox(height: 8),
                           ElevatedButton(
-                            onPressed: _selectedLatLng == null || _reverseLoading ? null : _confirmMapPick,
+                            onPressed:
+                                _selectedLatLng == null || _reverseLoading
+                                    ? null
+                                    : _confirmMapPick,
                             child: const Text('Utiliser cet emplacement'),
                           ),
                         ],
@@ -409,16 +691,18 @@ void goToNextStep() {
       },
     );
     dialogOpen = false;
-
   }
 
   Future<void> _setMapCenterToCurrentLocation() async {
     try {
       final permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
         return;
       }
-      final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
       final center = LatLng(position.latitude, position.longitude);
       if (!mounted) return;
       setState(() => _mapCenter = center);
@@ -440,7 +724,11 @@ void goToNextStep() {
       dialogSetState: dialogSetState,
       isDialogOpen: isDialogOpen,
     );
-    _reverseGeocode(point, dialogSetState: dialogSetState, isDialogOpen: isDialogOpen);
+    _reverseGeocode(
+      point,
+      dialogSetState: dialogSetState,
+      isDialogOpen: isDialogOpen,
+    );
   }
 
   Future<void> _reverseGeocode(
@@ -457,7 +745,10 @@ void goToNextStep() {
       dialogSetState: dialogSetState,
       isDialogOpen: isDialogOpen,
     );
-    final address = await _reverseGeocodeLatLng(point.latitude, point.longitude);
+    final address = await _reverseGeocodeLatLng(
+      point.latitude,
+      point.longitude,
+    );
     if (!mounted) return;
     _updateMapDialogState(
       () {
@@ -476,13 +767,16 @@ void goToNextStep() {
   void _confirmMapPick() {
     if (_selectedLatLng == null) return;
     final picked = _reverseAddress;
-    final value = (picked == null || picked.isEmpty)
-        ? '${_selectedLatLng!.latitude.toStringAsFixed(6)}, ${_selectedLatLng!.longitude.toStringAsFixed(6)}'
-        : picked;
+    final value =
+        (picked == null || picked.isEmpty)
+            ? '${_selectedLatLng!.latitude.toStringAsFixed(6)}, ${_selectedLatLng!.longitude.toStringAsFixed(6)}'
+            : picked;
     if (_mapTarget == 'depart') {
       _departCtrl.text = value;
+      _departLatLng = _selectedLatLng;
     } else {
       _destinationCtrl.text = value;
+      _destinationLatLng = _selectedLatLng;
     }
     Navigator.pop(context);
   }
@@ -500,33 +794,161 @@ void goToNextStep() {
     if (!mounted) return;
     setState(fn);
   }
-  
+
+  LatLng? _latLngFrom(double? latitude, double? longitude) {
+    if (latitude == null || longitude == null) return null;
+    if (latitude.abs() < 0.000001 && longitude.abs() < 0.000001) return null;
+    return LatLng(latitude, longitude);
+  }
+
+  Future<LatLng?> _resolveCoordinatesFromText(String value) async {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+
+    final match = RegExp(
+      r'^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$',
+    ).firstMatch(trimmed);
+    if (match != null) {
+      final lat = double.tryParse(match.group(1)!);
+      final lng = double.tryParse(match.group(2)!);
+      if (lat != null && lng != null) {
+        return LatLng(lat, lng);
+      }
+    }
+
+    try {
+      final locations = await locationFromAddress(trimmed);
+      if (locations.isEmpty) return null;
+      return LatLng(locations.first.latitude, locations.first.longitude);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Map<String, String>? _resolveZone(double lat, double lng) {
+    for (final zone in _zoneBounds) {
+      final latMin = zone['latMin'] as double;
+      final latMax = zone['latMax'] as double;
+      final lngMin = zone['lngMin'] as double;
+      final lngMax = zone['lngMax'] as double;
+      if (lat >= latMin && lat <= latMax && lng >= lngMin && lng <= lngMax) {
+        return {
+          'zone': zone['zone'] as String,
+          'sousZone': zone['name'] as String,
+        };
+      }
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>> _buildCommandePayload({
+    required String statut,
+    Utilisateur? friend,
+    bool includeModePaiement = false,
+  }) async {
+    final departLabel =
+        _departCtrl.text.trim().isNotEmpty
+            ? _departCtrl.text.trim()
+            : (_commande?.localisationDepart ?? '');
+    final destinationLabel =
+        friend?.adresse?.trim().isNotEmpty == true
+            ? friend!.adresse!.trim()
+            : (_destinationCtrl.text.trim().isNotEmpty
+                ? _destinationCtrl.text.trim()
+                : (_commande?.destination ?? ''));
+
+    final departCoords =
+        _departLatLng ??
+        _latLngFrom(_commande?.latitudeDepart, _commande?.longitudeDepart) ??
+        await _resolveCoordinatesFromText(departLabel);
+    final friendCoords = _latLngFrom(friend?.latitude, friend?.longitude);
+    final destinationCoords =
+        friendCoords ??
+        _destinationLatLng ??
+        _latLngFrom(
+          _commande?.latitudeDestination,
+          _commande?.longitudeDestination,
+        ) ??
+        await _resolveCoordinatesFromText(destinationLabel);
+
+    final departZone =
+        departCoords == null
+            ? null
+            : _resolveZone(departCoords.latitude, departCoords.longitude);
+    final destinationZone =
+        destinationCoords == null
+            ? null
+            : _resolveZone(
+              destinationCoords.latitude,
+              destinationCoords.longitude,
+            );
+
+    final payload = <String, dynamic>{
+      'localisation_depart': departLabel,
+      'telDepart':
+          _telDepartCtrl.text.trim().isNotEmpty
+              ? _telDepartCtrl.text.trim()
+              : (_commande?.telDepart ?? ''),
+      'destination': destinationLabel,
+      'telArrivee':
+          friend?.telephone?.trim().isNotEmpty == true
+              ? friend!.telephone!.trim()
+              : (_telArriveeCtrl.text.trim().isNotEmpty
+                  ? _telArriveeCtrl.text.trim()
+                  : (_commande?.telArrivee ?? '')),
+      'statut': statut,
+      'idAmie': friend?.id ?? _commande?.idAmie,
+      'latitudeDepart': departCoords?.latitude ?? _commande?.latitudeDepart,
+      'longitudeDepart': departCoords?.longitude ?? _commande?.longitudeDepart,
+      'latitudeDestination':
+          destinationCoords?.latitude ?? _commande?.latitudeDestination,
+      'longitudeDestination':
+          destinationCoords?.longitude ?? _commande?.longitudeDestination,
+      'zonePrincipaleDepart':
+          departZone?['zone'] ?? _commande?.zonePrincipaleDepart,
+      'sousZoneDepart': departZone?['sousZone'] ?? _commande?.sousZoneDepart,
+      'zonePrincipaleArrivee':
+          friend?.zone?.name ??
+          destinationZone?['zone'] ??
+          _commande?.zonePrincipaleArrivee,
+      'sousZoneArrivee':
+          friend?.sousZone?.name ??
+          destinationZone?['sousZone'] ??
+          _commande?.sousZoneArrivee,
+    };
+
+    if (includeModePaiement) {
+      payload['mode_paiement'] = _modePaiement;
+    }
+
+    return payload;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Confirmer ma commande - Étape $step/3'),
-      ),
-      body: isLoading && _commande == null
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildStepper(),
-                  const SizedBox(height: 30),
-                  
-                  // Contenu basé sur l'étape
-                  if (step == 1) _buildStep1(),
-                  if (step == 2) _buildStep2(),
-                  if (step == 3) _buildStep3(),
-                  
-                  const SizedBox(height: 50),
-                  _buildActions(),
-                ],
+      appBar: AppBar(title: Text('Confirmer ma commande - Étape $step/3')),
+      body:
+          isLoading && _commande == null
+              ? const Center(child: CircularProgressIndicator())
+              : SingleChildScrollView(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildStepper(),
+                    const SizedBox(height: 30),
+
+                    // Contenu basé sur l'étape
+                    if (step == 1) _buildStep1(),
+                    if (step == 2) _buildStep2(),
+                    if (step == 3) _buildStep3(),
+
+                    const SizedBox(height: 50),
+                    _buildActions(),
+                  ],
+                ),
               ),
-            ),
     );
   }
 
@@ -553,14 +975,28 @@ void goToNextStep() {
       children: [
         CircleAvatar(
           radius: 12,
-          backgroundColor: isCurrent ? Colors.blue : isDone ? Colors.green : Colors.grey.shade300,
+          backgroundColor:
+              isCurrent
+                  ? Colors.blue
+                  : isDone
+                  ? Colors.green
+                  : Colors.grey.shade300,
           child: Text(
             '$num',
-            style: TextStyle(color: isCurrent || isDone ? Colors.white : Colors.grey.shade600, fontSize: 12),
+            style: TextStyle(
+              color: isCurrent || isDone ? Colors.white : Colors.grey.shade600,
+              fontSize: 12,
+            ),
           ),
         ),
         const SizedBox(height: 4),
-        Text(label, style: TextStyle(color: isCurrent ? Colors.blue : Colors.black, fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal)),
+        Text(
+          label,
+          style: TextStyle(
+            color: isCurrent ? Colors.blue : Colors.black,
+            fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
       ],
     );
   }
@@ -575,25 +1011,38 @@ void goToNextStep() {
     );
   }
 
-
   Widget _buildStep1() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text("Adresse de départ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        Text(
+          "Adresse de départ",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
         Row(
           children: [
-            Expanded(child: TextFormField(
-              controller: _departCtrl,
-              decoration: const InputDecoration(hintText: "Rue, ville, code postal"),
-              validator: (v) => (v?.length ?? 0) < 4 ? "Adresse obligatoire." : null,
-              autovalidateMode: AutovalidateMode.onUserInteraction,
-            )),
+            Expanded(
+              child: TextFormField(
+                controller: _departCtrl,
+                decoration: const InputDecoration(
+                  hintText: "Rue, ville, code postal",
+                ),
+                validator:
+                    (v) => (v?.length ?? 0) < 4 ? "Adresse obligatoire." : null,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
+              ),
+            ),
             IconButton(
-              onPressed: _locatingDepart ? null : () => _useMyLocation('depart'),
-              icon: _locatingDepart
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.location_on),
+              onPressed:
+                  _locatingDepart ? null : () => _useMyLocation('depart'),
+              icon:
+                  _locatingDepart
+                      ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.location_on),
             ),
             IconButton(
               onPressed: () => _openMapPicker('depart'),
@@ -602,36 +1051,47 @@ void goToNextStep() {
           ],
         ),
         const SizedBox(height: 20),
-        Text("Numéro de départ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        Text(
+          "Numéro de départ",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
         Row(
           children: [
-            Expanded(child: TextFormField(
-              controller: _telDepartCtrl,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(hintText: "+216 ..."),
-              validator: (v) => RegExp(r'^\+?\d{6,15}$').hasMatch(v ?? '') ? null : "Numéro invalide.",
-              autovalidateMode: AutovalidateMode.onUserInteraction,
-            )),
+            Expanded(
+              child: TextFormField(
+                controller: _telDepartCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(hintText: "+216 ..."),
+                validator:
+                    (v) =>
+                        RegExp(r'^\+?\d{6,15}$').hasMatch(v ?? '')
+                            ? null
+                            : "Numéro invalide.",
+                autovalidateMode: AutovalidateMode.onUserInteraction,
+              ),
+            ),
             TextButton.icon(
               onPressed: () {
                 final tel = currentUser?.telephone?.trim();
                 if (tel == null || tel.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Aucun numéro enregistré pour ce compte.')),
+                    const SnackBar(
+                      content: Text('Aucun numéro enregistré pour ce compte.'),
+                    ),
                   );
                   return;
                 }
                 _telDepartCtrl.text = tel;
               },
-              icon: const Icon(Icons.phone), 
-              label: const Text("Utiliser mon numéro")
+              icon: const Icon(Icons.phone),
+              label: const Text("Utiliser mon numéro"),
             ),
           ],
         ),
       ],
     );
   }
-  
+
   Widget _buildStep2() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -650,32 +1110,41 @@ void goToNextStep() {
             ),
           ),
         OutlinedButton.icon(
-          onPressed: _sharePending
-              ? null
-              : () {
-                  setState(() {
-                    _envoyerAmi = !_envoyerAmi;
-                    if (!_envoyerAmi) {
-                      _selectedFriend = null;
-                      _amiIdentifiantCtrl.clear();
-                      _friendResults = [];
-                      _friendError = null;
-                    }
-                  });
-                },
+          onPressed:
+              _sharePending
+                  ? null
+                  : () {
+                    setState(() {
+                      _envoyerAmi = !_envoyerAmi;
+                      if (!_envoyerAmi) {
+                        _selectedFriend = null;
+                        _amiIdentifiantCtrl.clear();
+                        _friendResults = [];
+                        _friendError = null;
+                      }
+                    });
+                  },
           icon: Icon(_envoyerAmi ? Icons.undo : Icons.send),
           label: Text(_envoyerAmi ? 'Revenir a la saisie' : 'Envoyer a un ami'),
         ),
         const SizedBox(height: 12),
         if (_envoyerAmi) ...[
-          Text("Coordonnee de l'ami (nom, email ou numero)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          Text(
+            "Coordonnee de l'ami (nom, email ou numero)",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
           TextFormField(
             controller: _amiIdentifiantCtrl,
             decoration: InputDecoration(
               hintText: "Nom complet, email ou numero",
-              suffixIcon: _friendSearchLoading
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.search),
+              suffixIcon:
+                  _friendSearchLoading
+                      ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.search),
             ),
             onChanged: _onFriendQueryChanged,
             enabled: !_sharePending,
@@ -683,71 +1152,114 @@ void goToNextStep() {
           if (_friendError != null)
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: Text(_friendError!, style: const TextStyle(color: Colors.red)),
+              child: Text(
+                _friendError!,
+                style: const TextStyle(color: Colors.red),
+              ),
             ),
           const SizedBox(height: 8),
           if (_friendResults.isNotEmpty)
             Column(
-              children: _friendResults.map((u) {
-                final label = _displayFriend(u);
-                return Card(
-                  child: ListTile(
-                    title: Text(label),
-                    subtitle: Text(u.email ?? u.telephone ?? ''),
-                    trailing: _selectedFriend?.id == u.id
-                        ? const Icon(Icons.check_circle, color: Colors.green)
-                        : null,
-                    onTap: _sharePending
-                        ? null
-                        : () {
-                            setState(() {
-                              _selectedFriend = u;
-                              _amiIdentifiantCtrl.text = label;
-                              _friendResults = [u];
-                              _friendError = null;
-                            });
-                          },
-                  ),
-                );
-              }).toList(),
+              children:
+                  _friendResults.map((u) {
+                    final label = _displayFriend(u);
+                    return Card(
+                      child: ListTile(
+                        title: Text(label),
+                        subtitle: Text(u.email ?? u.telephone ?? ''),
+                        trailing:
+                            _selectedFriend?.id == u.id
+                                ? const Icon(
+                                  Icons.check_circle,
+                                  color: Colors.green,
+                                )
+                                : null,
+                        onTap:
+                            _sharePending
+                                ? null
+                                : () {
+                                  setState(() {
+                                    _selectedFriend = u;
+                                    _amiIdentifiantCtrl.text = label;
+                                    _friendResults = [u];
+                                    _friendError = null;
+                                  });
+                                },
+                      ),
+                    );
+                  }).toList(),
             ),
         ] else ...[
-          Text("Adresse d’arrivée", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          Text(
+            "Adresse d’arrivée",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
           Row(
             children: [
-              Expanded(child: TextFormField(
-                controller: _destinationCtrl,
-                decoration: const InputDecoration(hintText: "Rue, ville, code postal"),
-                validator: (v) => (v?.length ?? 0) < 4 ? "Adresse obligatoire." : null,
-                autovalidateMode: AutovalidateMode.onUserInteraction,
-              )),
-              IconButton(onPressed: () => _openMapPicker('arrivee'), icon: const Icon(Icons.map)),
+              Expanded(
+                child: TextFormField(
+                  controller: _destinationCtrl,
+                  decoration: const InputDecoration(
+                    hintText: "Rue, ville, code postal",
+                  ),
+                  validator:
+                      (v) =>
+                          (v?.length ?? 0) < 4 ? "Adresse obligatoire." : null,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                ),
+              ),
+              IconButton(
+                onPressed: () => _openMapPicker('arrivee'),
+                icon: const Icon(Icons.map),
+              ),
             ],
           ),
           const SizedBox(height: 20),
-          Text("Numéro d’arrivée", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          Text(
+            "Numéro d’arrivée",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
           TextFormField(
             controller: _telArriveeCtrl,
             keyboardType: TextInputType.phone,
             decoration: const InputDecoration(hintText: "+216 ..."),
-            validator: (v) => RegExp(r'^\+?\d{6,15}$').hasMatch(v ?? '') ? null : "Numéro invalide.",
+            validator:
+                (v) =>
+                    RegExp(r'^\+?\d{6,15}$').hasMatch(v ?? '')
+                        ? null
+                        : "Numéro invalide.",
             autovalidateMode: AutovalidateMode.onUserInteraction,
           ),
         ],
       ],
     );
   }
-  
+
   Widget _buildStep3() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text("Mode de paiement", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        const Text(
+          "Mode de paiement",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
         const SizedBox(height: 10),
-        _buildPaymentOption('en_ligne', '💳 Paiement en ligne', 'Recommandé: Carte bancaire / wallet sécurisé'),
-        _buildPaymentOption('depart', '🏁 Au départ', 'Remise au livreur avant le trajet'),
-        _buildPaymentOption('arrivee', '📦 À l’arrivée', 'Pratique: Paiement lors de la livraison'),
-        
+        _buildPaymentOption(
+          'en_ligne',
+          '💳 Paiement en ligne',
+          'Recommandé: Carte bancaire / wallet sécurisé',
+        ),
+        _buildPaymentOption(
+          'depart',
+          '🏁 Au départ',
+          'Remise au livreur avant le trajet',
+        ),
+        _buildPaymentOption(
+          'arrivee',
+          '📦 À l’arrivée',
+          'Pratique: Paiement lors de la livraison',
+        ),
+
         // Mini Récap (comme sur le front-end Angular)
         const SizedBox(height: 30),
         Card(
@@ -762,7 +1274,7 @@ void goToNextStep() {
               ],
             ),
           ),
-        )
+        ),
       ],
     );
   }
@@ -771,7 +1283,13 @@ void goToNextStep() {
     return Card(
       color: _modePaiement == value ? Colors.blue.shade50 : null,
       child: ListTile(
-        title: Text(title, style: TextStyle(fontWeight: _modePaiement == value ? FontWeight.bold : FontWeight.normal)),
+        title: Text(
+          title,
+          style: TextStyle(
+            fontWeight:
+                _modePaiement == value ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
         subtitle: Text(subtitle),
         trailing: Radio<String>(
           value: value,
@@ -788,13 +1306,17 @@ void goToNextStep() {
       ),
     );
   }
-  
+
   String _getPaymentLabel(String value) {
     switch (value) {
-      case 'en_ligne': return 'En ligne';
-      case 'depart': return 'Au départ';
-      case 'arrivee': return 'À l’arrivée';
-      default: return '-';
+      case 'en_ligne':
+        return 'En ligne';
+      case 'depart':
+        return 'Au départ';
+      case 'arrivee':
+        return 'À l’arrivée';
+      default:
+        return '-';
     }
   }
 
@@ -804,8 +1326,16 @@ void goToNextStep() {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 80, child: Text("$label :", style: const TextStyle(color: Colors.grey))),
-          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.bold))),
+          SizedBox(
+            width: 80,
+            child: Text("$label :", style: const TextStyle(color: Colors.grey)),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
         ],
       ),
     );
@@ -815,11 +1345,11 @@ void goToNextStep() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        if (step > 1) 
+        if (step > 1)
           TextButton(onPressed: goToPreviousStep, child: const Text("Retour")),
-        
+
         const Spacer(),
-          
+
         if (step == 2 && _sharePending)
           ElevatedButton(
             onPressed: isLoading ? null : () => Navigator.pop(context, true),
@@ -827,20 +1357,28 @@ void goToNextStep() {
           )
         else if (step < 3)
           ElevatedButton(
-            onPressed: isLoading ? null : goToNextStep, 
-            child: Text(_envoyerAmi && step == 2 ? "Envoyer" : "Suivant")
+            onPressed: isLoading ? null : goToNextStep,
+            child: Text(_envoyerAmi && step == 2 ? "Envoyer" : "Suivant"),
           ),
-          
+
         if (step == 3)
           ElevatedButton(
-            onPressed: isLoading ? null : finalConfirmation, 
-            child: isLoading 
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
-              : const Text("✔ Confirmer"),
+            onPressed: isLoading ? null : finalConfirmation,
+            child:
+                isLoading
+                    ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                    : const Text("✔ Confirmer"),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15)
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
             ),
           ),
       ],
@@ -876,18 +1414,33 @@ void goToNextStep() {
         results = u.id.isNotEmpty ? [u] : [];
       } else if (_isPhoneLike(v)) {
         final digits = v.replaceAll(RegExp(r'\\D'), '');
-        final last8 = digits.length > 8 ? digits.substring(digits.length - 8) : digits;
-        results = await _amiService.searchMyFriendsByNumero(currentUser!.id, last8);
+        final last8 =
+            digits.length > 8 ? digits.substring(digits.length - 8) : digits;
+        results = await _amiService.searchMyFriendsByNumero(
+          currentUser!.id,
+          last8,
+        );
       } else if (_isFullName(v)) {
-        final parts = v.split(RegExp(r'\\s+')).where((p) => p.isNotEmpty).toList();
+        final parts =
+            v.split(RegExp(r'\\s+')).where((p) => p.isNotEmpty).toList();
         final prenom = parts.first;
         final nom = parts.sublist(1).join(' ');
-        results = await _amiService.searchMyFriendsByNomEtPrenom(currentUser!.id, nom, prenom);
+        results = await _amiService.searchMyFriendsByNomEtPrenom(
+          currentUser!.id,
+          nom,
+          prenom,
+        );
         if (results.isEmpty) {
-          results = await _amiService.searchMyFriendsByNomPrenom(currentUser!.id, v);
+          results = await _amiService.searchMyFriendsByNomPrenom(
+            currentUser!.id,
+            v,
+          );
         }
       } else {
-        results = await _amiService.searchMyFriendsByNomPrenom(currentUser!.id, v);
+        results = await _amiService.searchMyFriendsByNomPrenom(
+          currentUser!.id,
+          v,
+        );
       }
 
       setState(() {

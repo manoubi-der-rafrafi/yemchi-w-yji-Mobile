@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:yemchi_wyji/core/models/facture.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/services/transporteur_factures_cache_service.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/services/transporteur_stats_cache_service.dart';
 import 'package:yemchi_wyji/features/facture/data/facture_service.dart';
 
 class MesFacturesPage extends StatefulWidget {
@@ -13,48 +17,131 @@ class MesFacturesPage extends StatefulWidget {
 
 class _MesFacturesPageState extends State<MesFacturesPage> {
   bool _isLoading = true;
+  bool _isRefreshing = false;
+  bool _hasLoadedData = false;
   String? _error;
   List<Facture> _factures = [];
   FactureType? _typeFilter;
   DateTimeRange? _dateRange;
+  final FactureService _factureService = FactureService();
+  final TransporteurFacturesCacheService _cacheService =
+      TransporteurFacturesCacheService();
+  final TransporteurStatsCacheService _statsCacheService =
+      TransporteurStatsCacheService();
 
   @override
   void initState() {
     super.initState();
-    _fetchFactures();
+    _loadInitialData();
   }
 
-  Future<void> _fetchFactures() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-    try {
-      final auth = context.read<AuthController>();
-      final livreurId = auth.currentUser.value?.id;
-      if (livreurId == null || livreurId.isEmpty) {
-        throw Exception('Utilisateur non connecte');
-      }
-      final service = FactureService();
-      final factures = await service.listByLivreurId(livreurId);
-      factures.sort((a, b) {
-        final da = _parseDate(a.dateTimle);
-        final db = _parseDate(b.dateTimle);
-        if (da == null && db == null) {
-          return b.dateTimle.compareTo(a.dateTimle);
-        }
-        if (da == null) return 1;
-        if (db == null) return -1;
-        return db.compareTo(da);
-      });
+  String? get _livreurId =>
+      context.read<AuthController>().currentUser.value?.id;
+
+  Future<void> _loadInitialData() async {
+    final livreurId = _livreurId;
+    if (livreurId == null || livreurId.isEmpty) {
+      if (!mounted) return;
       setState(() {
-        _factures = factures;
+        _error = 'Utilisateur non connecte';
         _isLoading = false;
+      });
+      return;
+    }
+
+    final cachedFactures = await _cacheService.read(livreurId);
+    if (!mounted) return;
+    if (cachedFactures != null) {
+      setState(() {
+        _applyFactures(cachedFactures.factures);
+        _isLoading = false;
+        _error = null;
+      });
+      unawaited(_fetchFactures(silent: true));
+      return;
+    }
+
+    final cachedStats = await _statsCacheService.read(livreurId);
+    if (!mounted) return;
+    if (cachedStats != null) {
+      setState(() {
+        _applyFactures(cachedStats.factures);
+        _isLoading = false;
+        _error = null;
+      });
+      unawaited(_fetchFactures(silent: true));
+      return;
+    }
+
+    await _fetchFactures();
+  }
+
+  void _sortFactures(List<Facture> factures) {
+    factures.sort((a, b) {
+      final da = _parseDate(a.dateTimle);
+      final db = _parseDate(b.dateTimle);
+      if (da == null && db == null) {
+        return b.dateTimle.compareTo(a.dateTimle);
+      }
+      if (da == null) return 1;
+      if (db == null) return -1;
+      return db.compareTo(da);
+    });
+  }
+
+  void _applyFactures(List<Facture> factures) {
+    _factures = List<Facture>.from(factures);
+    _sortFactures(_factures);
+    _hasLoadedData = true;
+  }
+
+  Future<void> _fetchFactures({bool silent = false}) async {
+    final livreurId = _livreurId;
+    if (livreurId == null || livreurId.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Utilisateur non connecte';
+        _isLoading = false;
+        _isRefreshing = false;
+      });
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _error = null;
+        if (!_hasLoadedData && !silent) {
+          _isLoading = true;
+        } else {
+          _isRefreshing = true;
+        }
+      });
+    }
+
+    try {
+      final factures = await _factureService.listByLivreurId(livreurId);
+      _sortFactures(factures);
+      await _cacheService.write(
+        TransporteurFacturesCacheEntry(
+          transporteurId: livreurId,
+          cachedAt: DateTime.now(),
+          factures: factures,
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _applyFactures(factures);
+        _isLoading = false;
+        _isRefreshing = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        if (!_hasLoadedData) {
+          _error = e.toString();
+        }
         _isLoading = false;
+        _isRefreshing = false;
       });
     }
   }
@@ -92,8 +179,9 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
     if (raw.isEmpty) return null;
     final parsed = DateTime.tryParse(raw);
     if (parsed != null) return parsed;
-    final match = RegExp(r'^(\\d{1,2})[/-](\\d{1,2})[/-](\\d{2,4})')
-        .firstMatch(raw);
+    final match = RegExp(
+      r'^(\\d{1,2})[/-](\\d{1,2})[/-](\\d{2,4})',
+    ).firstMatch(raw);
     if (match == null) return null;
     final day = int.tryParse(match.group(1) ?? '');
     final month = int.tryParse(match.group(2) ?? '');
@@ -133,7 +221,8 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
 
   Future<void> _pickDateRange() async {
     final now = DateTime.now();
-    final initialRange = _dateRange ??
+    final initialRange =
+        _dateRange ??
         DateTimeRange(
           start: DateTime(now.year, now.month, now.day - 7),
           end: DateTime(now.year, now.month, now.day),
@@ -159,7 +248,7 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
         title: const Text('Mes factures'),
         actions: [
           IconButton(
-            onPressed: _fetchFactures,
+            onPressed: _isRefreshing ? null : _fetchFactures,
             icon: const Icon(Icons.refresh),
             tooltip: 'Actualiser',
           ),
@@ -167,109 +256,112 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _error != null
+        child:
+            _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
                 ? _FacturesError(error: _error!, onRetry: _fetchFactures)
-                : ListView(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF7F8F2),
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: Colors.black.withOpacity(0.04),
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.03),
-                              blurRadius: 14,
-                              offset: const Offset(0, 8),
+                : Stack(
+                  children: [
+                    ListView(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF7F8F2),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: Colors.black.withOpacity(0.04),
                             ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Historique des factures',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFF1F1F1F),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.03),
+                                blurRadius: 14,
+                                offset: const Offset(0, 8),
                               ),
-                            ),
-                            const SizedBox(height: 12),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                _FilterChip(
-                                  label: _formatRangeLabel(_dateRange),
-                                  icon: Icons.date_range,
-                                  onTap: _pickDateRange,
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Historique des factures',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF1F1F1F),
                                 ),
-                                if (_dateRange != null)
+                              ),
+                              const SizedBox(height: 12),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
                                   _FilterChip(
-                                    label: 'Effacer',
-                                    icon: Icons.close,
-                                    onTap: () {
+                                    label: _formatRangeLabel(_dateRange),
+                                    icon: Icons.date_range,
+                                    onTap: _pickDateRange,
+                                  ),
+                                  if (_dateRange != null)
+                                    _FilterChip(
+                                      label: 'Effacer',
+                                      icon: Icons.close,
+                                      onTap: () {
+                                        setState(() {
+                                          _dateRange = null;
+                                        });
+                                      },
+                                    ),
+                                  FilterChip(
+                                    label: const Text('Tous'),
+                                    selected: _typeFilter == null,
+                                    onSelected: (_) {
                                       setState(() {
-                                        _dateRange = null;
+                                        _typeFilter = null;
                                       });
                                     },
+                                    selectedColor: const Color(0xFFE9EFE6),
+                                    showCheckmark: false,
                                   ),
-                                FilterChip(
-                                  label: const Text('Tous'),
-                                  selected: _typeFilter == null,
-                                  onSelected: (_) {
-                                    setState(() {
-                                      _typeFilter = null;
-                                    });
-                                  },
-                                  selectedColor: const Color(0xFFE9EFE6),
-                                  showCheckmark: false,
-                                ),
-                                FilterChip(
-                                  label:
-                                      const Text('Vert livreur'),
-                                  selected: _typeFilter ==
-                                      FactureType.entrepriseVerseLivreur,
-                                  onSelected: (_) {
-                                    setState(() {
-                                      _typeFilter =
-                                          FactureType.entrepriseVerseLivreur;
-                                    });
-                                  },
-                                  selectedColor: const Color(0xFFE9EFE6),
-                                  showCheckmark: false,
-                                ),
-                                FilterChip(
-                                  label:
-                                      const Text('Vert entreprise'),
-                                  selected: _typeFilter ==
-                                      FactureType.livreurVerseEntreprise,
-                                  onSelected: (_) {
-                                    setState(() {
-                                      _typeFilter =
-                                          FactureType.livreurVerseEntreprise;
-                                    });
-                                  },
-                                  selectedColor: const Color(0xFFE9EFE6),
-                                  showCheckmark: false,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            filtered.isEmpty
-                                ? Text(
+                                  FilterChip(
+                                    label: const Text('Vert livreur'),
+                                    selected:
+                                        _typeFilter ==
+                                        FactureType.entrepriseVerseLivreur,
+                                    onSelected: (_) {
+                                      setState(() {
+                                        _typeFilter =
+                                            FactureType.entrepriseVerseLivreur;
+                                      });
+                                    },
+                                    selectedColor: const Color(0xFFE9EFE6),
+                                    showCheckmark: false,
+                                  ),
+                                  FilterChip(
+                                    label: const Text('Vert entreprise'),
+                                    selected:
+                                        _typeFilter ==
+                                        FactureType.livreurVerseEntreprise,
+                                    onSelected: (_) {
+                                      setState(() {
+                                        _typeFilter =
+                                            FactureType.livreurVerseEntreprise;
+                                      });
+                                    },
+                                    selectedColor: const Color(0xFFE9EFE6),
+                                    showCheckmark: false,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              filtered.isEmpty
+                                  ? Text(
                                     'Aucune facture disponible.',
                                     style: theme.textTheme.bodySmall?.copyWith(
                                       color: const Color(0xFF6B776E),
                                     ),
                                   )
-                                : SingleChildScrollView(
+                                  : SingleChildScrollView(
                                     scrollDirection: Axis.horizontal,
                                     child: DataTable(
                                       headingRowHeight: 40,
@@ -277,38 +369,59 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
                                       dataRowMaxHeight: 48,
                                       columnSpacing: 18,
                                       headingTextStyle: theme
-                                          .textTheme.labelSmall
+                                          .textTheme
+                                          .labelSmall
                                           ?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                        color: const Color(0xFF4E5A52),
-                                      ),
+                                            fontWeight: FontWeight.w700,
+                                            color: const Color(0xFF4E5A52),
+                                          ),
                                       columns: const [
                                         DataColumn(label: Text('Type')),
                                         DataColumn(label: Text('Date')),
                                         DataColumn(label: Text('Montant')),
                                       ],
-                                      rows: filtered.map((facture) {
-                                        return DataRow(
-                                          cells: [
-                                            DataCell(
-                                              Text(_labelForType(facture.type)),
-                                            ),
-                                            DataCell(
-                                              Text(_formatDate(facture.dateTimle)),
-                                            ),
-                                            DataCell(
-                                              Text(_formatMoney(facture.montant)),
-                                            ),
-                                          ],
-                                        );
-                                      }).toList(),
+                                      rows:
+                                          filtered.map((facture) {
+                                            return DataRow(
+                                              cells: [
+                                                DataCell(
+                                                  Text(
+                                                    _labelForType(facture.type),
+                                                  ),
+                                                ),
+                                                DataCell(
+                                                  Text(
+                                                    _formatDate(
+                                                      facture.dateTimle,
+                                                    ),
+                                                  ),
+                                                ),
+                                                DataCell(
+                                                  Text(
+                                                    _formatMoney(
+                                                      facture.montant,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            );
+                                          }).toList(),
                                     ),
                                   ),
-                          ],
+                            ],
+                          ),
                         ),
+                      ],
+                    ),
+                    if (_isRefreshing)
+                      const Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: LinearProgressIndicator(minHeight: 2),
                       ),
-                    ],
-                  ),
+                  ],
+                ),
       ),
     );
   }
@@ -361,10 +474,7 @@ class _FacturesError extends StatelessWidget {
   final String error;
   final VoidCallback onRetry;
 
-  const _FacturesError({
-    required this.error,
-    required this.onRetry,
-  });
+  const _FacturesError({required this.error, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
