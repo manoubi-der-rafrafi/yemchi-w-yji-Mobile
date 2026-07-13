@@ -1,14 +1,13 @@
-import 'dart:convert';
-
 // --- Enums ---
 
 enum Role { client, transporteur, admin }
+
 enum Statut { actif, inactif, banni }
 
 // --- Zones (assumant que vous n'avez pas besoin de Zone/SousZone, ou les simplifiant) ---
 // Note: Si vous avez besoin d'utiliser les Zones, vous pouvez les définir ici.
 // Par souci de simplicité et de concision, j'ai omis les longues énumérations Zone et SousZone,
-// car elles ne sont pas nécessaires pour le corps de la classe Utilisateur. 
+// car elles ne sont pas nécessaires pour le corps de la classe Utilisateur.
 // Si elles sont obligatoires, ajoutez-les ici.
 
 // --- Modèle Utilisateur ---
@@ -36,7 +35,7 @@ class Utilisateur {
   final double? longitude;
 
   // Assurez-vous d'utiliser String ou un modèle pour ces champs si nécessaire
-  // final SousZone? sousZone; 
+  // final SousZone? sousZone;
   // final Zone? zone;
 
   Utilisateur({
@@ -67,13 +66,17 @@ class Utilisateur {
       if (dateString == null) return null;
       // Java LocalDate (ex: [2024, 1, 1]) ou ISO string
       if (dateString is List && dateString.length >= 3) {
-          // Si le format est [year, month, day, hour, minute, second, nanosecond]
-          return DateTime(dateString[0], dateString[1], dateString[2], 
-                          dateString.length > 3 ? dateString[3] : 0, 
-                          dateString.length > 4 ? dateString[4] : 0);
+        // Si le format est [year, month, day, hour, minute, second, nanosecond]
+        return DateTime(
+          dateString[0],
+          dateString[1],
+          dateString[2],
+          dateString.length > 3 ? dateString[3] : 0,
+          dateString.length > 4 ? dateString[4] : 0,
+        );
       }
       if (dateString is String) {
-          return DateTime.tryParse(dateString);
+        return DateTime.tryParse(dateString);
       }
       return null;
     }
@@ -83,19 +86,23 @@ class Utilisateur {
       if (roleString == null) return Role.client;
       try {
         return Role.values.firstWhere(
-          (e) => e.toString().split('.').last.toLowerCase() == roleString.toLowerCase(),
+          (e) =>
+              e.toString().split('.').last.toLowerCase() ==
+              roleString.toLowerCase(),
           orElse: () => Role.client,
         );
       } catch (_) {
         return Role.client;
       }
     }
-    
+
     Statut parseStatut(String? statutString) {
       if (statutString == null) return Statut.actif;
       try {
         return Statut.values.firstWhere(
-          (e) => e.toString().split('.').last.toLowerCase() == statutString.toLowerCase(),
+          (e) =>
+              e.toString().split('.').last.toLowerCase() ==
+              statutString.toLowerCase(),
           orElse: () => Statut.actif,
         );
       } catch (_) {
@@ -104,13 +111,13 @@ class Utilisateur {
     }
 
     return Utilisateur(
-      // Les clés JSON sont typiquement en camelCase ou snake_case 
-      // selon la configuration de Jackson/Gson dans Spring Boot. 
+      // Les clés JSON sont typiquement en camelCase ou snake_case
+      // selon la configuration de Jackson/Gson dans Spring Boot.
       // J'utilise ici un mélange basé sur la convention.
       id: json['id'] as String?,
       nom: json['nom'] as String?,
       prenom: json['prenom'] as String?,
-      
+
       // dateNaissance peut être une String (ISO) ou un tableau [y, m, d]
       dateNaissance: parseDate(json['dateNaissance']),
 
@@ -123,7 +130,7 @@ class Utilisateur {
       adresse: json['adresse'] as String?,
       image: json['image'] as String?,
       statut: parseStatut(json['statut'] as String?),
-      
+
       dateCreation: parseDate(json['dateCreation']),
       lastSeen: parseDate(json['lastSeen']),
       online: json['online'] as bool? ?? false,
@@ -140,7 +147,8 @@ class Utilisateur {
       'nom': nom,
       'prenom': prenom,
       // Dart DateTime -> ISO String
-      'dateNaissance': dateNaissance?.toIso8601String().split('T').first, // LocalDate format
+      'dateNaissance':
+          dateNaissance?.toIso8601String().split('T').first, // LocalDate format
       'email': email,
       'motDePasse': motDePasse,
       'telephone': telephone,

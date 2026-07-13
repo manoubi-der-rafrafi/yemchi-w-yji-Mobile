@@ -6,6 +6,7 @@ import 'package:yemchi_wyji/features/coursier/pages/home/pages/profil_page.dart'
 import 'package:yemchi_wyji/features/coursier/pages/home/pages/historique_commandes_page.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/controllers/home_controller.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/pages/demandes_a_accepter_page.dart';
+
 class CourierDrawer extends StatelessWidget {
   final VoidCallback? onOpenMesCourses;
 
@@ -29,21 +30,28 @@ class CourierDrawer extends StatelessWidget {
               child: ValueListenableBuilder<Utilisateur?>(
                 valueListenable: auth.currentUser,
                 builder: (context, user, _) {
-                  String _safe(String? input) => input?.trim() ?? '';
+                  String safe(String? input) => input?.trim() ?? '';
 
-                  final prenom = _safe(user?.prenom);
-                  final nom = _safe(user?.nom);
-                  final email = _safe(user?.email);
-                  final fullName = [prenom, nom].where((s) => s.isNotEmpty).join(' ').trim();
-                  final displayName = fullName.isNotEmpty ? fullName : 'Nom du coursier';
-                  final displayEmail = email.isNotEmpty ? email : 'courier@yemchi.app';
-                  final initialsSource = (fullName.isNotEmpty ? fullName : displayEmail).trim();
-                  final initial = initialsSource.isNotEmpty ? initialsSource[0].toUpperCase() : 'A';
+                  final prenom = safe(user?.prenom);
+                  final nom = safe(user?.nom);
+                  final email = safe(user?.email);
+                  final fullName =
+                      [prenom, nom].where((s) => s.isNotEmpty).join(' ').trim();
+                  final displayName =
+                      fullName.isNotEmpty ? fullName : 'Nom du coursier';
+                  final displayEmail =
+                      email.isNotEmpty ? email : 'courier@yemchi.app';
+                  final initialsSource =
+                      (fullName.isNotEmpty ? fullName : displayEmail).trim();
+                  final initial =
+                      initialsSource.isNotEmpty
+                          ? initialsSource[0].toUpperCase()
+                          : 'A';
 
                   ImageProvider<Object>? avatarImage;
                   Widget? avatarChild;
 
-                  final imageUrl = _safe(user?.image);
+                  final imageUrl = safe(user?.image);
                   if (imageUrl.isNotEmpty) {
                     avatarImage = NetworkImage(imageUrl);
                   } else {
@@ -65,20 +73,23 @@ class CourierDrawer extends StatelessWidget {
                           children: [
                             Text(
                               displayName,
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               displayEmail,
-                              style: const TextStyle(color: Colors.black54, fontSize: 13),
+                              style: const TextStyle(
+                                color: Colors.black54,
+                                fontSize: 13,
+                              ),
                             ),
                           ],
                         ),
                       ),
-                      CircleAvatar(
-                        radius: 16,
-                        child: Text(initial),
-                      ),
+                      CircleAvatar(radius: 16, child: Text(initial)),
                     ],
                   );
                 },
@@ -99,9 +110,7 @@ class CourierDrawer extends StatelessWidget {
               onTap: () {
                 Navigator.of(context).pop();
                 Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const ProfilPage(),
-                  ),
+                  MaterialPageRoute<void>(builder: (_) => const ProfilPage()),
                 );
               },
             ),
@@ -148,10 +157,11 @@ class CourierDrawer extends StatelessWidget {
                 Navigator.of(context).pop();
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) => ChangeNotifierProvider<HomeController>.value(
-                      value: homeController,
-                      child: const DemandesAAccepterPage(),
-                    ),
+                    builder:
+                        (_) => ChangeNotifierProvider<HomeController>.value(
+                          value: homeController,
+                          child: const DemandesAAccepterPage(),
+                        ),
                   ),
                 );
               },
@@ -247,12 +257,13 @@ class _Item extends StatelessWidget {
     return ListTile(
       dense: false,
       leading: Icon(icon, color: Colors.black87),
-      title: Text(label, style: const TextStyle(fontSize: 15, color: Colors.black87)),
+      title: Text(
+        label,
+        style: const TextStyle(fontSize: 15, color: Colors.black87),
+      ),
       trailing: trailing,
       onTap: onTap,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.zero,
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
     );
   }

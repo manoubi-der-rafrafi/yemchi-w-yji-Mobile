@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -41,15 +40,21 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      await context.read<AuthController>().login(_idCtrl.text.trim(), _pwdCtrl.text);
+      await context.read<AuthController>().login(
+        _idCtrl.text.trim(),
+        _pwdCtrl.text,
+      );
       if (mounted) Navigator.of(context).maybePop();
     } catch (e) {
       setState(() => _error = e.toString());
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_error ?? 'Erreur inconnue')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_error ?? 'Erreur inconnue')));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -73,7 +78,10 @@ class _LoginPageState extends State<LoginPage> {
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 1080),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 24,
+                      ),
                       child: isWide ? _wide() : _narrow(),
                     ),
                   ),
@@ -189,7 +197,10 @@ class _HeroHeader extends StatelessWidget {
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [Color(0xFF0057D6), Color(0xFF18C0F9)], // bleu → cyan
+                      colors: [
+                        Color(0xFF0057D6),
+                        Color(0xFF18C0F9),
+                      ], // bleu → cyan
                     ),
                   ),
                 ),
@@ -207,12 +218,23 @@ class _DiagonalClipper extends CustomClipper<Path> {
   Path getClip(Size size) {
     final p = Path();
     p.lineTo(0, size.height - 60);
-    p.quadraticBezierTo(size.width * .25, size.height, size.width * .5, size.height - 40);
-    p.quadraticBezierTo(size.width * .8, size.height - 90, size.width, size.height - 20);
+    p.quadraticBezierTo(
+      size.width * .25,
+      size.height,
+      size.width * .5,
+      size.height - 40,
+    );
+    p.quadraticBezierTo(
+      size.width * .8,
+      size.height - 90,
+      size.width,
+      size.height - 20,
+    );
     p.lineTo(size.width, 0);
     p.close();
     return p;
   }
+
   @override
   bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }
@@ -225,7 +247,8 @@ class _BrandLockup extends StatelessWidget {
   Widget build(BuildContext context) {
     final align = centered ? MainAxisAlignment.center : MainAxisAlignment.start;
     return Column(
-      crossAxisAlignment: centered ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+      crossAxisAlignment:
+          centered ? CrossAxisAlignment.center : CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: align,
@@ -234,10 +257,14 @@ class _BrandLockup extends StatelessWidget {
             Image.asset(
               'assets/images/LOGO_YEMCHI W YJI.jpg',
               height: 90,
-              errorBuilder: (_, __, ___) => const Icon(Icons.local_shipping, size: 90, color: Colors.white),
+              errorBuilder:
+                  (_, __, ___) => const Icon(
+                    Icons.local_shipping,
+                    size: 90,
+                    color: Colors.white,
+                  ),
             ),
             const SizedBox(width: 12),
-            
           ],
         ),
         const SizedBox(height: 6),
@@ -317,11 +344,18 @@ class _CardForm extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: const Color(0xFFFF8A80)),
                   ),
-                  child: Row(children: [
-                    const Icon(Icons.error_outline, color: Color(0xFFD32F2F)),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(error!, style: const TextStyle(color: Color(0xFFD32F2F)))),
-                  ]),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: Color(0xFFD32F2F)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          error!,
+                          style: const TextStyle(color: Color(0xFFD32F2F)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               const SizedBox(height: 6),
               _filledField(
@@ -331,7 +365,9 @@ class _CardForm extends StatelessWidget {
                 hint: 'ex: client@mail.com ou client01',
                 icon: Icons.person_outline,
                 textInputAction: TextInputAction.next,
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Champ requis' : null,
+                validator:
+                    (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Champ requis' : null,
               ),
               const SizedBox(height: 14),
               _filledField(
@@ -346,17 +382,17 @@ class _CardForm extends StatelessWidget {
                   icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
                 ),
                 onFieldSubmitted: (_) => onSubmit(),
-                validator: (v) => (v == null || v.isEmpty) ? 'Champ requis' : null,
+                validator:
+                    (v) => (v == null || v.isEmpty) ? 'Champ requis' : null,
               ),
               const SizedBox(height: 8),
               Row(
                 children: [
-                  
                   const Spacer(),
                   TextButton(
                     onPressed: loading ? null : () {},
                     child: const Text('Mot de passe oublié ?'),
-                  )
+                  ),
                 ],
               ),
               const SizedBox(height: 6),
@@ -414,7 +450,10 @@ class _CardForm extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFF0EA5E9), width: 1.4), // cyan accent
+          borderSide: const BorderSide(
+            color: Color(0xFF0EA5E9),
+            width: 1.4,
+          ), // cyan accent
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -424,14 +463,21 @@ class _CardForm extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: Color(0xFFD32F2F)),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 16,
+        ),
       ),
     );
   }
 }
 
 class _PrimaryCTA extends StatelessWidget {
-  const _PrimaryCTA({required this.onPressed, required this.loading, required this.label});
+  const _PrimaryCTA({
+    required this.onPressed,
+    required this.loading,
+    required this.label,
+  });
   final VoidCallback? onPressed;
   final bool loading;
   final String label;
@@ -447,7 +493,9 @@ class _PrimaryCTA extends StatelessWidget {
           shape: WidgetStateProperty.all(
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           ),
-          backgroundColor: WidgetStateProperty.resolveWith((states) => Colors.transparent),
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (states) => Colors.transparent,
+          ),
           padding: WidgetStateProperty.all(EdgeInsets.zero),
         ),
         child: Ink(
@@ -460,12 +508,23 @@ class _PrimaryCTA extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
           ),
           child: Center(
-            child: loading
-                ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : Text(
-                    label,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-                  ),
+            child:
+                loading
+                    ? const SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                    : Text(
+                      label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
           ),
         ),
       ),

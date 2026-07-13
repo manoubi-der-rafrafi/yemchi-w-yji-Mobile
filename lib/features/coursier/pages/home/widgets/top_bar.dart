@@ -21,10 +21,11 @@ class TopBar extends StatelessWidget {
               shape: const CircleBorder(),
               elevation: 1,
               child: Builder(
-                builder: (ctx) => IconButton(
-                  icon: const Icon(Icons.menu),
-                  onPressed: () => Scaffold.of(ctx).openDrawer(),
-                ),
+                builder:
+                    (ctx) => IconButton(
+                      icon: const Icon(Icons.menu),
+                      onPressed: () => Scaffold.of(ctx).openDrawer(),
+                    ),
               ),
             ),
             const SizedBox(width: 12),
@@ -48,32 +49,35 @@ class TopBar extends StatelessWidget {
                 },
                 showSelectedIcon: false,
                 style: ButtonStyle(
-                  padding: MaterialStateProperty.all(
+                  padding: WidgetStateProperty.all(
                     const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                   ),
-                  backgroundColor: MaterialStateProperty.resolveWith(
-                    (states) => states.contains(MaterialState.selected)
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.white,
+                  backgroundColor: WidgetStateProperty.resolveWith(
+                    (states) =>
+                        states.contains(WidgetState.selected)
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.white,
                   ),
-                  foregroundColor: MaterialStateProperty.resolveWith(
-                    (states) => states.contains(MaterialState.selected)
-                        ? Theme.of(context).colorScheme.onPrimary
-                        : Theme.of(context).colorScheme.onSurface,
+                  foregroundColor: WidgetStateProperty.resolveWith(
+                    (states) =>
+                        states.contains(WidgetState.selected)
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : Theme.of(context).colorScheme.onSurface,
                   ),
-                  side: MaterialStateProperty.resolveWith(
+                  side: WidgetStateProperty.resolveWith(
                     (states) => BorderSide(
-                      color: states.contains(MaterialState.selected)
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.transparent,
+                      color:
+                          states.contains(WidgetState.selected)
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.transparent,
                     ),
                   ),
-                  shape: MaterialStateProperty.all(
+                  shape: WidgetStateProperty.all(
                     RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(22),
                     ),
                   ),
-                  elevation: MaterialStateProperty.all(0),
+                  elevation: WidgetStateProperty.all(0),
                 ),
               ),
             ),

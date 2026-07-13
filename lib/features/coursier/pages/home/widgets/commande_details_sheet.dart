@@ -41,8 +41,7 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
     });
 
     try {
-      final produits =
-          await _produitService.getByCommande(widget.commande.id);
+      final produits = await _produitService.getByCommande(widget.commande.id);
       if (!mounted) return;
       setState(() {
         _produits = produits;
@@ -63,29 +62,26 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
   }
 
   void _onAccepter() async {
-  final auth = context.read<AuthController>();
-  final currentUserId = auth.currentUser.value?.id;
+    final auth = context.read<AuthController>();
+    final currentUserId = auth.currentUser.value?.id;
 
-  if (currentUserId == null) {
-    debugPrint('Aucun utilisateur courant -> assignation impossible.');
-    return;
+    if (currentUserId == null) {
+      debugPrint('Aucun utilisateur courant -> assignation impossible.');
+      return;
+    }
+
+    try {
+      final api = context.read<Api>();
+      final service = CommandeService(api);
+
+      await service.assignerTransporteur(widget.commande.id, currentUserId);
+
+      if (!mounted) return;
+      Navigator.of(context).maybePop(true);
+    } catch (e) {
+      debugPrint('Erreur assignation transporteur: $e');
+    }
   }
-
-  try {
-    final api = context.read<Api>();
-    final service = CommandeService(api);
-
-    await service.assignerTransporteur(
-      widget.commande.id,
-      currentUserId,
-    );
-
-    if (!mounted) return;
-    Navigator.of(context).maybePop(true);
-  } catch (e) {
-    debugPrint('Erreur assignation transporteur: $e');
-  }
-}
 
   void _onRefuser() {
     Navigator.of(context).maybePop(false);
@@ -260,10 +256,7 @@ class _ProduitTile extends StatelessWidget {
   final Produit produit;
   final VoidCallback onDetails;
 
-  const _ProduitTile({
-    required this.produit,
-    required this.onDetails,
-  });
+  const _ProduitTile({required this.produit, required this.onDetails});
 
   @override
   Widget build(BuildContext context) {
@@ -274,9 +267,7 @@ class _ProduitTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant,
-        ),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
         boxShadow: [
           BoxShadow(
             color: theme.shadowColor.withOpacity(0.05),
@@ -315,10 +306,7 @@ class _ModePaiementBadge extends StatelessWidget {
   final String label;
   final Color color;
 
-  const _ModePaiementBadge({
-    required this.label,
-    required this.color,
-  });
+  const _ModePaiementBadge({required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -373,7 +361,8 @@ class _ProduitImage extends StatelessWidget {
         width: size,
         height: size,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _PlaceholderImage(theme: theme, size: size),
+        errorBuilder:
+            (_, __, ___) => _PlaceholderImage(theme: theme, size: size),
       ),
     );
   }
@@ -392,10 +381,8 @@ class _PlaceholderImage extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
-        color: theme.colorScheme.surfaceVariant,
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant,
-        ),
+        color: theme.colorScheme.surfaceContainerHighest,
+        border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       alignment: Alignment.center,
       child: Icon(

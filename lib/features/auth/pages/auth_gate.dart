@@ -37,13 +37,14 @@ class _AuthGateState extends State<AuthGate> {
     return ValueListenableBuilder(
       valueListenable: auth.currentUser,
       builder: (context, user, _) {
-        if (user == null ) return LoginPage();
-        else if (user.role == Role.client) {
+        if (user == null) {
+          return LoginPage();
+        } else if (user.role == Role.client) {
           return ClientHome();
         } else if (user.role == Role.transporteur) {
           return HomeCoursierPage();
-        }
-        else return LoginPage();
+        } else
+          return LoginPage();
       },
     );
   }

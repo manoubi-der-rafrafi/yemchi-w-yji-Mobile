@@ -15,8 +15,8 @@ class CommandeDto {
   final double? longitudeDestination;
   final double? distanceKm;
 
-  final String? statut;       // enum Java -> String
-  final double? prix;         // BigDecimal -> double
+  final String? statut; // enum Java -> String
+  final double? prix; // BigDecimal -> double
 
   final String? modePaiement; // enum Java: EN_LIGNE, DEPART, ARRIVEE
   final String? instructions;
@@ -78,7 +78,7 @@ class CommandeDto {
   }
 
   factory CommandeDto.fromJson(Map<String, dynamic> raw) {
-    T? _pick<T>(Map<String, dynamic> m, List<String> keys) {
+    T? pick<T>(Map<String, dynamic> m, List<String> keys) {
       for (final k in keys) {
         if (m.containsKey(k) && m[k] != null) return m[k] as T?;
       }
@@ -86,47 +86,57 @@ class CommandeDto {
     }
 
     return CommandeDto(
-      clientId: _toStringOrNull(_pick(raw, ['clientId', 'client_id'])),
+      clientId: _toStringOrNull(pick(raw, ['clientId', 'client_id'])),
       transporteurId: _toStringOrNull(
-        _pick(raw, ['transporteurId', 'transporteur_id', 'id_transporteur']),
+        pick(raw, ['transporteurId', 'transporteur_id', 'id_transporteur']),
       ),
-      idAmie: _toStringOrNull(_pick(raw, ['idAmie', 'id_amie'])),
+      idAmie: _toStringOrNull(pick(raw, ['idAmie', 'id_amie'])),
 
       localisationDepart: _toStringOrNull(
-        _pick(raw, ['localisationDepart', 'localisation_depart']),
+        pick(raw, ['localisationDepart', 'localisation_depart']),
       ),
-      destination: _toStringOrNull(_pick(raw, ['destination'])),
+      destination: _toStringOrNull(pick(raw, ['destination'])),
 
-      latitudeDepart: _toDouble(_pick(raw, ['latitudeDepart', 'latitude_depart'])),
-      longitudeDepart: _toDouble(_pick(raw, ['longitudeDepart', 'longitude_depart'])),
+      latitudeDepart: _toDouble(
+        pick(raw, ['latitudeDepart', 'latitude_depart']),
+      ),
+      longitudeDepart: _toDouble(
+        pick(raw, ['longitudeDepart', 'longitude_depart']),
+      ),
       latitudeDestination: _toDouble(
-          _pick(raw, ['latitudeDestination', 'latitude_destination'])),
+        pick(raw, ['latitudeDestination', 'latitude_destination']),
+      ),
       longitudeDestination: _toDouble(
-          _pick(raw, ['longitudeDestination', 'longitude_destination'])),
-      distanceKm: _toDouble(_pick(raw, ['distanceKm', 'distance_km'])),
+        pick(raw, ['longitudeDestination', 'longitude_destination']),
+      ),
+      distanceKm: _toDouble(pick(raw, ['distanceKm', 'distance_km'])),
 
-      statut: _toStringOrNull(_pick(raw, ['statut'])),
-      prix: _toDouble(_pick(raw, ['prix'])),
+      statut: _toStringOrNull(pick(raw, ['statut'])),
+      prix: _toDouble(pick(raw, ['prix'])),
 
-      modePaiement: _toStringOrNull(_pick(raw, ['modePaiement', 'mode_paiement'])),
-      instructions: _toStringOrNull(_pick(raw, ['instructions'])),
-      telDepart: _toStringOrNull(_pick(raw, ['telDepart', 'tel_depart'])),
-      telArrivee: _toStringOrNull(_pick(raw, ['telArrivee', 'tel_arrivee'])),
+      modePaiement: _toStringOrNull(
+        pick(raw, ['modePaiement', 'mode_paiement']),
+      ),
+      instructions: _toStringOrNull(pick(raw, ['instructions'])),
+      telDepart: _toStringOrNull(pick(raw, ['telDepart', 'tel_depart'])),
+      telArrivee: _toStringOrNull(pick(raw, ['telArrivee', 'tel_arrivee'])),
 
-      dateDemande: _toDate(_pick(raw, ['dateDemande', 'date_demande'])),
-      dateDebut: _toDate(_pick(raw, ['dateDebut', 'date_debut'])),
-      dateFin: _toDate(_pick(raw, ['dateFin', 'date_fin'])),
-      majLe: _toDate(_pick(raw, ['majLe'])),
+      dateDemande: _toDate(pick(raw, ['dateDemande', 'date_demande'])),
+      dateDebut: _toDate(pick(raw, ['dateDebut', 'date_debut'])),
+      dateFin: _toDate(pick(raw, ['dateFin', 'date_fin'])),
+      majLe: _toDate(pick(raw, ['majLe'])),
 
-      sousZoneDepart:
-          _toStringOrNull(_pick(raw, ['sousZoneDepart', 'sous_zone_depart'])),
-      sousZoneArrivee:
-          _toStringOrNull(_pick(raw, ['sousZoneArrivee', 'sous_zone_arrivee'])),
+      sousZoneDepart: _toStringOrNull(
+        pick(raw, ['sousZoneDepart', 'sous_zone_depart']),
+      ),
+      sousZoneArrivee: _toStringOrNull(
+        pick(raw, ['sousZoneArrivee', 'sous_zone_arrivee']),
+      ),
       zonePrincipaleDepart: _toStringOrNull(
-        _pick(raw, ['zonePrincipaleDepart', 'zone_principale_depart']),
+        pick(raw, ['zonePrincipaleDepart', 'zone_principale_depart']),
       ),
       zonePrincipaleArrivee: _toStringOrNull(
-        _pick(raw, ['zonePrincipaleArrivee', 'zone_principale_arrivee']),
+        pick(raw, ['zonePrincipaleArrivee', 'zone_principale_arrivee']),
       ),
     );
   }
@@ -246,8 +256,7 @@ class CommandeDto {
       majLe: majLe ?? this.majLe,
       sousZoneDepart: sousZoneDepart ?? this.sousZoneDepart,
       sousZoneArrivee: sousZoneArrivee ?? this.sousZoneArrivee,
-      zonePrincipaleDepart:
-          zonePrincipaleDepart ?? this.zonePrincipaleDepart,
+      zonePrincipaleDepart: zonePrincipaleDepart ?? this.zonePrincipaleDepart,
       zonePrincipaleArrivee:
           zonePrincipaleArrivee ?? this.zonePrincipaleArrivee,
     );

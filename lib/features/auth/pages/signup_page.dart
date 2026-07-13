@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../core/models/utilisateur.dart';
+import '../controllers/auth_controller.dart';
 import '../widgets/auth_text_field.dart';
 
-/// Inscription en 3 étapes (statique, sans backend)
+/// Inscription en 3 étapes
 /// 1) Téléphone, Date de naissance, Adresse
-/// 2) Nom, Prénom, Email (+ bouton Continuer avec Google UI only)
+/// 2) Nom, Prénom, Email
 /// 3) Mot de passe & Confirmation
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -20,6 +23,7 @@ class _SignUpPageState extends State<SignUpPage> {
   ];
 
   int _currentStep = 0;
+  bool _isLoading = false;
 
   // STEP 1
   final _phone = TextEditingController();
@@ -82,6 +86,7 @@ class _SignUpPageState extends State<SignUpPage> {
   }
 
   void _onBack() {
+    if (_isLoading) return;
     if (_currentStep > 0) {
       setState(() => _currentStep--);
     } else {
@@ -89,13 +94,101 @@ class _SignUpPageState extends State<SignUpPage> {
     }
   }
 
-  void _onSubmit() {
-    // Validation finale + message statique
-    if (_formKeys.every((k) => k.currentState?.validate() == true)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Compte créé (statique). Vous pouvez vous connecter.')),
+  Future<void> _onSubmit() async {
+    // Only validate the current step (step 2) — previous steps were
+    // already validated before advancing, so their form keys are no
+    // longer in the tree and currentState is null.
+    if (_formKeys[2].currentState?.validate() != true) return;
+
+    setState(() => _isLoading = true);
+
+    // Convert "DD/MM/YYYY" → "YYYY-MM-DD" for the backend
+    final dobParts = _dob.text.split('/');
+    final dateNaissance = dobParts.length == 3
+        ? '${dobParts[2]}-${dobParts[1]}-${dobParts[0]}'
+        : _dob.text;
+
+    final auth = context.read<AuthController>();
+    final success = await auth.register(
+      email: _email.text.trim(),
+      password: _password.text,
+      nom: _lastName.text.trim(),
+      prenom: _firstName.text.trim(),
+      telephone: _phone.text.trim(),
+      adresse: _address.text.trim(),
+      dateNaissance: dateNaissance,
+    );
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (success) {
+      final role = auth.currentUser.value?.role;
+      final destination = role == Role.transporteur ? '/home_coursier' : '/home_client';
+
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF0F6DDA), Color(0xFF18C0F9)],
+                  ),
+                ),
+                child: const Icon(Icons.check, color: Colors.white, size: 36),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Compte créé !',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Bienvenue sur Yemchi w Yji.\nVotre compte a été créé avec succès.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F6DDA),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: const Text(
+                    'Commencer',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       );
-      Navigator.pop(context); // retour vers /login
+
+      if (!mounted) return;
+      Navigator.of(context).pushReplacementNamed(destination);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(auth.error.value ?? 'Erreur lors de l\'inscription'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -221,8 +314,8 @@ class _SignUpPageState extends State<SignUpPage> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: _PrimaryCTA(
-                    onPressed: _onContinue,
-                    loading: false,
+                    onPressed: _isLoading ? null : _onContinue,
+                    loading: _isLoading,
                     label: _currentStep == 2 ? 'Terminer' : 'Continuer',
                   ),
                 ),

@@ -75,10 +75,9 @@ class _CommandeProduitsPageState extends State<CommandeProduitsPage> {
             Text(
               _errorMessage!,
               textAlign: TextAlign.center,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: Theme.of(context).colorScheme.error),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.error,
+              ),
             ),
             const SizedBox(height: 12),
             TextButton.icon(
@@ -120,7 +119,8 @@ class _ProduitTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final quantityLabel = produit.quantite != null ? '${produit.quantite}' : '-';
+    final quantityLabel =
+        produit.quantite != null ? '${produit.quantite}' : '-';
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -187,8 +187,8 @@ class _ProduitImage extends StatelessWidget {
         width: size,
         height: size,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) =>
-            _PlaceholderImage(theme: theme, size: size),
+        errorBuilder:
+            (_, __, ___) => _PlaceholderImage(theme: theme, size: size),
       ),
     );
   }
@@ -207,7 +207,7 @@ class _PlaceholderImage extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
-        color: theme.colorScheme.surfaceVariant,
+        color: theme.colorScheme.surfaceContainerHighest,
         border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       alignment: Alignment.center,

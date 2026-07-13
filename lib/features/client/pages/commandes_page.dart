@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
-
 
 class CommandesPage extends StatefulWidget {
   const CommandesPage({super.key});
@@ -99,26 +97,29 @@ class _CommandesPageState extends State<CommandesPage> {
   };
 
   List<Map<String, dynamic>> get filtered {
-    var list = allOrders
-        .where((o) =>
-            (viewMode == 'mes'
-                ? true
-                : o['statut'].toString().toLowerCase() == 'envoyee') &&
-            (status == 'tous' ||
-                (o['statut'] ?? '')
-                        .toLowerCase()
-                        .replaceAll("é", "e")
-                        .replaceAll("è", "e") ==
-                    status) &&
-            (search.isEmpty ||
-                o['id'] == search ||
-                (o['localisation_depart'] as String)
-                    .toLowerCase()
-                    .contains(search.toLowerCase()) ||
-                (o['destination'] as String)
-                    .toLowerCase()
-                    .contains(search.toLowerCase())))
-        .toList();
+    var list =
+        allOrders
+            .where(
+              (o) =>
+                  (viewMode == 'mes'
+                      ? true
+                      : o['statut'].toString().toLowerCase() == 'envoyee') &&
+                  (status == 'tous' ||
+                      (o['statut'] ?? '')
+                              .toLowerCase()
+                              .replaceAll("é", "e")
+                              .replaceAll("è", "e") ==
+                          status) &&
+                  (search.isEmpty ||
+                      o['id'] == search ||
+                      (o['localisation_depart'] as String)
+                          .toLowerCase()
+                          .contains(search.toLowerCase()) ||
+                      (o['destination'] as String).toLowerCase().contains(
+                        search.toLowerCase(),
+                      )),
+            )
+            .toList();
     return list;
   }
 
@@ -192,13 +193,12 @@ class _CommandesPageState extends State<CommandesPage> {
   }
 
   void onChangePageSize(int? newSize) {
-  if (newSize == null) return;
-  setState(() {
-    pageSize = newSize;
-    pageIndex = 1;
-  });
-}
-
+    if (newSize == null) return;
+    setState(() {
+      pageSize = newSize;
+      pageIndex = 1;
+    });
+  }
 
   void prev() {
     if (pageIndex > 1) setState(() => pageIndex--);
@@ -220,321 +220,456 @@ class _CommandesPageState extends State<CommandesPage> {
         centerTitle: true,
         backgroundColor: Colors.green,
       ),
-      body: loading
-          ? const Center(child: CircularProgressIndicator())
-          : error != null
+      body:
+          loading
+              ? const Center(child: CircularProgressIndicator())
+              : error != null
               ? Center(
-                  child: Text(error!,
-                      style: const TextStyle(
-                          color: Colors.red, fontSize: 20)),
-                )
+                child: Text(
+                  error!,
+                  style: const TextStyle(color: Colors.red, fontSize: 20),
+                ),
+              )
               : Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Title & subtitle
-                      const Text(
-                        "Historique de mes commandes",
-                        style: TextStyle(
-                            fontSize: 22, fontWeight: FontWeight.w600),
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Title & subtitle
+                    const Text(
+                      "Historique de mes commandes",
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w600,
                       ),
-                      const SizedBox(height: 2),
-                      Text("Consultez et suivez vos commandes passées facilement",
-                          style: TextStyle(
-                              color: Colors.grey.shade600, fontSize: 14)),
-                      const SizedBox(height: 18),
-                      // Segmented control & filters
-                      Row(
-                        children: [
-                          // Segment
-                          Expanded(
-                            child: Row(
-                              children: [
-                                ElevatedButton(
-                                  onPressed: () {
-                                    setState(() => viewMode = 'mes');
-                                    applyFilters();
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                      backgroundColor: viewMode == 'mes'
-                                          ? Colors.green
-                                          : Colors.grey.shade200,
-                                      foregroundColor: viewMode == 'mes'
-                                          ? Colors.white
-                                          : Colors.black87,
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.only(
-                                              topLeft: Radius.circular(14),
-                                              bottomLeft: Radius.circular(14))),
-                                      elevation: 0),
-                                  child: const Text('Mes commandes'),
-                                ),
-                                ElevatedButton(
-                                  onPressed: () {
-                                    setState(() => viewMode = 'envoyees');
-                                    applyFilters();
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                      backgroundColor: viewMode == 'envoyees'
-                                          ? Colors.green
-                                          : Colors.grey.shade200,
-                                      foregroundColor: viewMode == 'envoyees'
-                                          ? Colors.white
-                                          : Colors.black87,
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.only(
-                                              topRight: Radius.circular(14),
-                                              bottomRight: Radius.circular(14))),
-                                      elevation: 0),
-                                  child: const Text('Commandes envoyées'),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          // Search
-                          Expanded(
-                            flex: 2,
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: TextField(
-                                    decoration: InputDecoration(
-                                      hintText:
-                                          'Rechercher (id, départ, destination)…',
-                                      contentPadding: const EdgeInsets.symmetric(
-                                          vertical: 6, horizontal: 12),
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      suffixIcon: const Icon(Icons.search),
-                                    ),
-                                    onChanged: (s) {
-                                      setState(() {
-                                        search = s;
-                                        applyFilters();
-                                      });
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                // Status dropdown
-                                DropdownButton<String>(
-                                  value: status,
-                                  borderRadius: BorderRadius.circular(12),
-                                  items: [
-                                    'tous',
-                                    'en attente',
-                                    'confirmee',
-                                    'en cours',
-                                    'livree',
-                                    'annulee',
-                                    'envoyee',
-                                    'accepter'
-                                  ]
-                                      .map((s) => DropdownMenuItem(
-                                            value: s,
-                                            child: Text(s[0].toUpperCase() +
-                                                s.substring(1)),
-                                          ))
-                                      .toList(),
-                                  onChanged: (val) {
-                                    setState(() {
-                                      status = val!;
-                                      applyFilters();
-                                    });
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      "Consultez et suivez vos commandes passées facilement",
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 14,
                       ),
-                      const SizedBox(height: 10),
-                      // Orders table/list
-                      Expanded(
-                        child: pageSlice.isEmpty
-                            ? Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.only(top: 22),
-                                  child: Text(
-                                      viewMode == 'mes'
-                                          ? 'Aucune commande trouvée.'
-                                          : 'Aucune commande envoyée à vous par un ami.',
-                                      style: TextStyle(
-                                          color: Colors.grey.shade600,
-                                          fontSize: 16)),
-                                ),
-                              )
-                            : ListView(
-                                children: [
-                                  DataTable(
-                                    columns: viewMode == 'mes'
-                                        ? const [
-                                            DataColumn(label: Text('Date')),
-                                            DataColumn(label: Text('Départ')),
-                                            DataColumn(label: Text('Destination')),
-                                            DataColumn(label: Text('Statut')),
-                                            DataColumn(label: Text('Prix')),
-                                            DataColumn(label: Text('Paiement')),
-                                          ]
-                                        : const [
-                                            DataColumn(label: Text('Expéditeur')),
-                                            DataColumn(label: Text('Départ')),
-                                            DataColumn(label: Text('Statut')),
-                                          ],
-                                    rows: pageSlice.map((c) {
-                                      if (viewMode == 'mes') {
-                                        return DataRow(
-                                          cells: [
-                                            DataCell(Text(
-                                                "${c['date_demande'].year}-${c['date_demande'].month.toString().padLeft(2, '0')}-${c['date_demande'].day.toString().padLeft(2, '0')} ${c['date_demande'].hour.toString().padLeft(2, '0')}:${c['date_demande'].minute.toString().padLeft(2, '0')}")),
-                                            DataCell(Text(c['localisation_depart'])),
-                                            DataCell(Text(c['destination'])),
-                                            DataCell(
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(
-                                                    vertical: 3,
-                                                    horizontal: 10
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: getStatusColor(
-                                                      c['statut'])
-                                                      .withOpacity(0.12),
-                                                  borderRadius: BorderRadius.circular(12),
-                                                ),
-                                                child: Text(
-                                                  c['statut'],
-                                                  style: TextStyle(
-                                                    color: getStatusColor(c['statut']),
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                            DataCell(Text(c['statut'].toString().toLowerCase() != 'envoyee'
-                                                ? "${c['prix']} DT"
-                                                : "--")),
-                                            DataCell(Text(c['statut'].toString().toLowerCase() != 'envoyee'
-                                                ? mapPaiement(c['mode_paiement'])
-                                                : "--")),
-                                          ],
-                                        );
-                                      } else {
-                                        // envoyees
-                                        final cli = clients[(c['clientId']).toString()];
-                                        return DataRow(
-                                          cells: [
-                                            DataCell(Row(
-                                              children: [
-                                                CircleAvatar(
-                                                  backgroundImage: AssetImage(cli?['image'] ?? 'assets/avatar.png'),
-                                                  radius: 17,
-                                                ),
-                                                const SizedBox(width: 7),
-                                                Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text('${cli?['nom'] ?? "—"} ${cli?['prenom'] ?? ""}',
-                                                        style: const TextStyle(fontWeight: FontWeight.w500)),
-                                                    Row(
-                                                      children: [
-                                                        Text(cli?['telephone'] ?? "—",
-                                                            style: const TextStyle(fontSize: 12)),
-                                                        Text(" • ", style: TextStyle(color: Colors.grey.shade600)),
-                                                        Text(cli?['email'] ?? "—", style: const TextStyle(fontSize: 12)),
-                                                      ],
-                                                    )
-                                                  ],
-                                                ),
-                                              ],
-                                            )),
-                                            DataCell(Text(c['localisation_depart'])),
-                                            DataCell(
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(
-                                                    vertical: 3,
-                                                    horizontal: 10
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: getStatusColor(
-                                                      c['statut'])
-                                                      .withOpacity(0.12),
-                                                  borderRadius: BorderRadius.circular(12),
-                                                ),
-                                                child: Text(
-                                                  c['statut'],
-                                                  style: TextStyle(
-                                                    color: getStatusColor(c['statut']),
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        );
-                                      }
-                                    }).toList(),
-                                  ),
-                                ],
-                              ),
-                      ),
-                      // Pagination bar
-                      if (pageSlice.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12, bottom: 10),
+                    ),
+                    const SizedBox(height: 18),
+                    // Segmented control & filters
+                    Row(
+                      children: [
+                        // Segment
+                        Expanded(
                           child: Row(
                             children: [
-                              const Text("Afficher", style: TextStyle(fontSize: 14)),
-                              const SizedBox(width: 6),
-                              DropdownButton<int>(
-                                value: pageSize,
-                                onChanged: onChangePageSize,
-                                items: pageSizes
-                                    .map((s) => DropdownMenuItem(value: s, child: Text('$s')))
-                                    .toList(),
-                              ),
-                              const Text("par page"),
-                              const SizedBox(width: 20),
-                              Text(
-                                "• ${(pageIndex - 1) * pageSize + 1}"
-                                " – "
-                                "${(pageIndex * pageSize).clamp(1, totalItems)}"
-                                " sur $totalItems",
-                                style: const TextStyle(color: Colors.grey),
-                              ),
-                              const Spacer(),
-                              IconButton(
-                                onPressed: pageIndex == 1 ? null : prev,
-                                icon: const Icon(Icons.chevron_left),
-                              ),
-                              for (int i = 1; i <= totalPages; i++)
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 1),
-                                  child: TextButton(
-                                    style: TextButton.styleFrom(
-                                        foregroundColor: i == pageIndex
-                                            ? Colors.green
-                                            : Colors.black),
-                                    onPressed: () => goToPage(i),
-                                    child: Text('$i',
-                                        style: TextStyle(
-                                            fontWeight: i == pageIndex
-                                                ? FontWeight.bold
-                                                : FontWeight.normal)),
+                              ElevatedButton(
+                                onPressed: () {
+                                  setState(() => viewMode = 'mes');
+                                  applyFilters();
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor:
+                                      viewMode == 'mes'
+                                          ? Colors.green
+                                          : Colors.grey.shade200,
+                                  foregroundColor:
+                                      viewMode == 'mes'
+                                          ? Colors.white
+                                          : Colors.black87,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.only(
+                                      topLeft: Radius.circular(14),
+                                      bottomLeft: Radius.circular(14),
+                                    ),
                                   ),
+                                  elevation: 0,
                                 ),
-                              IconButton(
-                                onPressed: pageIndex == totalPages ? null : next,
-                                icon: const Icon(Icons.chevron_right),
+                                child: const Text('Mes commandes'),
+                              ),
+                              ElevatedButton(
+                                onPressed: () {
+                                  setState(() => viewMode = 'envoyees');
+                                  applyFilters();
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor:
+                                      viewMode == 'envoyees'
+                                          ? Colors.green
+                                          : Colors.grey.shade200,
+                                  foregroundColor:
+                                      viewMode == 'envoyees'
+                                          ? Colors.white
+                                          : Colors.black87,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.only(
+                                      topRight: Radius.circular(14),
+                                      bottomRight: Radius.circular(14),
+                                    ),
+                                  ),
+                                  elevation: 0,
+                                ),
+                                child: const Text('Commandes envoyées'),
                               ),
                             ],
                           ),
                         ),
-                    ],
-                  ),
+                        const SizedBox(width: 12),
+                        // Search
+                        Expanded(
+                          flex: 2,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  decoration: InputDecoration(
+                                    hintText:
+                                        'Rechercher (id, départ, destination)…',
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      vertical: 6,
+                                      horizontal: 12,
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    suffixIcon: const Icon(Icons.search),
+                                  ),
+                                  onChanged: (s) {
+                                    setState(() {
+                                      search = s;
+                                      applyFilters();
+                                    });
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              // Status dropdown
+                              DropdownButton<String>(
+                                value: status,
+                                borderRadius: BorderRadius.circular(12),
+                                items:
+                                    [
+                                          'tous',
+                                          'en attente',
+                                          'confirmee',
+                                          'en cours',
+                                          'livree',
+                                          'annulee',
+                                          'envoyee',
+                                          'accepter',
+                                        ]
+                                        .map(
+                                          (s) => DropdownMenuItem(
+                                            value: s,
+                                            child: Text(
+                                              s[0].toUpperCase() +
+                                                  s.substring(1),
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                onChanged: (val) {
+                                  setState(() {
+                                    status = val!;
+                                    applyFilters();
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // Orders table/list
+                    Expanded(
+                      child:
+                          pageSlice.isEmpty
+                              ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 22),
+                                  child: Text(
+                                    viewMode == 'mes'
+                                        ? 'Aucune commande trouvée.'
+                                        : 'Aucune commande envoyée à vous par un ami.',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ),
+                              )
+                              : ListView(
+                                children: [
+                                  DataTable(
+                                    columns:
+                                        viewMode == 'mes'
+                                            ? const [
+                                              DataColumn(label: Text('Date')),
+                                              DataColumn(label: Text('Départ')),
+                                              DataColumn(
+                                                label: Text('Destination'),
+                                              ),
+                                              DataColumn(label: Text('Statut')),
+                                              DataColumn(label: Text('Prix')),
+                                              DataColumn(
+                                                label: Text('Paiement'),
+                                              ),
+                                            ]
+                                            : const [
+                                              DataColumn(
+                                                label: Text('Expéditeur'),
+                                              ),
+                                              DataColumn(label: Text('Départ')),
+                                              DataColumn(label: Text('Statut')),
+                                            ],
+                                    rows:
+                                        pageSlice.map((c) {
+                                          if (viewMode == 'mes') {
+                                            return DataRow(
+                                              cells: [
+                                                DataCell(
+                                                  Text(
+                                                    "${c['date_demande'].year}-${c['date_demande'].month.toString().padLeft(2, '0')}-${c['date_demande'].day.toString().padLeft(2, '0')} ${c['date_demande'].hour.toString().padLeft(2, '0')}:${c['date_demande'].minute.toString().padLeft(2, '0')}",
+                                                  ),
+                                                ),
+                                                DataCell(
+                                                  Text(
+                                                    c['localisation_depart'],
+                                                  ),
+                                                ),
+                                                DataCell(
+                                                  Text(c['destination']),
+                                                ),
+                                                DataCell(
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          vertical: 3,
+                                                          horizontal: 10,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: getStatusColor(
+                                                        c['statut'],
+                                                      ).withOpacity(0.12),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
+                                                    ),
+                                                    child: Text(
+                                                      c['statut'],
+                                                      style: TextStyle(
+                                                        color: getStatusColor(
+                                                          c['statut'],
+                                                        ),
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                DataCell(
+                                                  Text(
+                                                    c['statut']
+                                                                .toString()
+                                                                .toLowerCase() !=
+                                                            'envoyee'
+                                                        ? "${c['prix']} DT"
+                                                        : "--",
+                                                  ),
+                                                ),
+                                                DataCell(
+                                                  Text(
+                                                    c['statut']
+                                                                .toString()
+                                                                .toLowerCase() !=
+                                                            'envoyee'
+                                                        ? mapPaiement(
+                                                          c['mode_paiement'],
+                                                        )
+                                                        : "--",
+                                                  ),
+                                                ),
+                                              ],
+                                            );
+                                          } else {
+                                            // envoyees
+                                            final cli =
+                                                clients[(c['clientId'])
+                                                    .toString()];
+                                            return DataRow(
+                                              cells: [
+                                                DataCell(
+                                                  Row(
+                                                    children: [
+                                                      CircleAvatar(
+                                                        backgroundImage: AssetImage(
+                                                          cli?['image'] ??
+                                                              'assets/avatar.png',
+                                                        ),
+                                                        radius: 17,
+                                                      ),
+                                                      const SizedBox(width: 7),
+                                                      Column(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .start,
+                                                        children: [
+                                                          Text(
+                                                            '${cli?['nom'] ?? "—"} ${cli?['prenom'] ?? ""}',
+                                                            style:
+                                                                const TextStyle(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w500,
+                                                                ),
+                                                          ),
+                                                          Row(
+                                                            children: [
+                                                              Text(
+                                                                cli?['telephone'] ??
+                                                                    "—",
+                                                                style:
+                                                                    const TextStyle(
+                                                                      fontSize:
+                                                                          12,
+                                                                    ),
+                                                              ),
+                                                              Text(
+                                                                " • ",
+                                                                style: TextStyle(
+                                                                  color:
+                                                                      Colors
+                                                                          .grey
+                                                                          .shade600,
+                                                                ),
+                                                              ),
+                                                              Text(
+                                                                cli?['email'] ??
+                                                                    "—",
+                                                                style:
+                                                                    const TextStyle(
+                                                                      fontSize:
+                                                                          12,
+                                                                    ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                DataCell(
+                                                  Text(
+                                                    c['localisation_depart'],
+                                                  ),
+                                                ),
+                                                DataCell(
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          vertical: 3,
+                                                          horizontal: 10,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: getStatusColor(
+                                                        c['statut'],
+                                                      ).withOpacity(0.12),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
+                                                    ),
+                                                    child: Text(
+                                                      c['statut'],
+                                                      style: TextStyle(
+                                                        color: getStatusColor(
+                                                          c['statut'],
+                                                        ),
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            );
+                                          }
+                                        }).toList(),
+                                  ),
+                                ],
+                              ),
+                    ),
+                    // Pagination bar
+                    if (pageSlice.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12, bottom: 10),
+                        child: Row(
+                          children: [
+                            const Text(
+                              "Afficher",
+                              style: TextStyle(fontSize: 14),
+                            ),
+                            const SizedBox(width: 6),
+                            DropdownButton<int>(
+                              value: pageSize,
+                              onChanged: onChangePageSize,
+                              items:
+                                  pageSizes
+                                      .map(
+                                        (s) => DropdownMenuItem(
+                                          value: s,
+                                          child: Text('$s'),
+                                        ),
+                                      )
+                                      .toList(),
+                            ),
+                            const Text("par page"),
+                            const SizedBox(width: 20),
+                            Text(
+                              "• ${(pageIndex - 1) * pageSize + 1}"
+                              " – "
+                              "${(pageIndex * pageSize).clamp(1, totalItems)}"
+                              " sur $totalItems",
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                            const Spacer(),
+                            IconButton(
+                              onPressed: pageIndex == 1 ? null : prev,
+                              icon: const Icon(Icons.chevron_left),
+                            ),
+                            for (int i = 1; i <= totalPages; i++)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 1,
+                                ),
+                                child: TextButton(
+                                  style: TextButton.styleFrom(
+                                    foregroundColor:
+                                        i == pageIndex
+                                            ? Colors.green
+                                            : Colors.black,
+                                  ),
+                                  onPressed: () => goToPage(i),
+                                  child: Text(
+                                    '$i',
+                                    style: TextStyle(
+                                      fontWeight:
+                                          i == pageIndex
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            IconButton(
+                              onPressed: pageIndex == totalPages ? null : next,
+                              icon: const Icon(Icons.chevron_right),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
+              ),
       backgroundColor: Colors.grey.shade100,
     );
   }

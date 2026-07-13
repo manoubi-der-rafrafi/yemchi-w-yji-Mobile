@@ -22,16 +22,13 @@ class _MesCoursesPageState extends State<MesCoursesPage> {
 
   Future<Utilisateur?>? _futureForClient(String? clientId) {
     if (clientId == null || clientId.trim().isEmpty) return null;
-    return _clientFutures.putIfAbsent(
-      clientId,
-      () async {
-        try {
-          return await context.read<AuthUserService>().getById(clientId);
-        } catch (_) {
-          return null;
-        }
-      },
-    );
+    return _clientFutures.putIfAbsent(clientId, () async {
+      try {
+        return await context.read<AuthUserService>().getById(clientId);
+      } catch (_) {
+        return null;
+      }
+    });
   }
 
   @override
@@ -40,19 +37,14 @@ class _MesCoursesPageState extends State<MesCoursesPage> {
     final commandes = _filteredCommandes(home.mesCommandes);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Courses en cours'),
-      ),
+      appBar: AppBar(title: const Text('Courses en cours')),
       body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: SegmentedButton<MesCourseFilter>(
               segments: const [
-                ButtonSegment(
-                  value: MesCourseFilter.tous,
-                  label: Text('Tous'),
-                ),
+                ButtonSegment(value: MesCourseFilter.tous, label: Text('Tous')),
                 ButtonSegment(
                   value: MesCourseFilter.recuperer,
                   label: Text('À récupérer'),
@@ -70,51 +62,56 @@ class _MesCoursesPageState extends State<MesCoursesPage> {
               },
               showSelectedIcon: false,
               style: ButtonStyle(
-                padding: MaterialStateProperty.all(
+                padding: WidgetStateProperty.all(
                   const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                 ),
-                backgroundColor: MaterialStateProperty.resolveWith(
-                  (states) => states.contains(MaterialState.selected)
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.white,
+                backgroundColor: WidgetStateProperty.resolveWith(
+                  (states) =>
+                      states.contains(WidgetState.selected)
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.white,
                 ),
-                foregroundColor: MaterialStateProperty.resolveWith(
-                  (states) => states.contains(MaterialState.selected)
-                      ? Theme.of(context).colorScheme.onPrimary
-                      : Theme.of(context).colorScheme.onSurface,
+                foregroundColor: WidgetStateProperty.resolveWith(
+                  (states) =>
+                      states.contains(WidgetState.selected)
+                          ? Theme.of(context).colorScheme.onPrimary
+                          : Theme.of(context).colorScheme.onSurface,
                 ),
-                side: MaterialStateProperty.resolveWith(
+                side: WidgetStateProperty.resolveWith(
                   (states) => BorderSide(
-                    color: states.contains(MaterialState.selected)
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.transparent,
+                    color:
+                        states.contains(WidgetState.selected)
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.transparent,
                   ),
                 ),
-                shape: MaterialStateProperty.all(
+                shape: WidgetStateProperty.all(
                   RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(22),
                   ),
                 ),
-                elevation: MaterialStateProperty.all(0),
+                elevation: WidgetStateProperty.all(0),
               ),
             ),
           ),
           Expanded(
-            child: commandes.isEmpty
-                ? const _EmptyState()
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                    itemCount: commandes.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final commande = commandes[index];
-                return _CommandeCard(
-                  commande: commande,
-                  clientFuture: _futureForClient(commande.clientId),
-                  onStartNavigation: () => _handleStartCommande(commande),
-                );
-              },
-            ),
+            child:
+                commandes.isEmpty
+                    ? const _EmptyState()
+                    : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                      itemCount: commandes.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final commande = commandes[index];
+                        return _CommandeCard(
+                          commande: commande,
+                          clientFuture: _futureForClient(commande.clientId),
+                          onStartNavigation:
+                              () => _handleStartCommande(commande),
+                        );
+                      },
+                    ),
           ),
         ],
       ),
@@ -216,10 +213,7 @@ class _CommandeCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _ClientHeader(
-              commande: commande,
-              future: clientFuture,
-            ),
+            _ClientHeader(commande: commande, future: clientFuture),
             const SizedBox(height: 8),
             _StatusBadge(
               label: isPickupDone ? 'En livraison' : 'À récupérer',
@@ -233,7 +227,9 @@ class _CommandeCard extends StatelessWidget {
             const SizedBox(height: 12),
             DecoratedBox(
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                color: theme.colorScheme.surfaceContainerHighest.withOpacity(
+                  0.5,
+                ),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Padding(
@@ -289,8 +285,8 @@ class _CommandeCard extends StatelessWidget {
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) =>
-                            CommandeProduitsPage(commande: commande),
+                        builder:
+                            (_) => CommandeProduitsPage(commande: commande),
                       ),
                     );
                   },
@@ -316,19 +312,12 @@ class _ClientHeader extends StatelessWidget {
   final Commande commande;
   final Future<Utilisateur?>? future;
 
-  const _ClientHeader({
-    required this.commande,
-    required this.future,
-  });
+  const _ClientHeader({required this.commande, required this.future});
 
   @override
   Widget build(BuildContext context) {
     if (future == null) {
-      return _ClientRow(
-        user: null,
-        isLoading: false,
-        commande: commande,
-      );
+      return _ClientRow(user: null, isLoading: false, commande: commande);
     }
     return FutureBuilder<Utilisateur?>(
       future: future,
@@ -367,16 +356,19 @@ class _ClientRow extends StatelessWidget {
         CircleAvatar(
           radius: 26,
           backgroundImage:
-              (avatarImage != null && avatarImage.isNotEmpty) ? NetworkImage(avatarImage) : null,
-          child: (avatarImage == null || avatarImage.isEmpty)
-              ? (isLoading
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.person))
-              : null,
+              (avatarImage != null && avatarImage.isNotEmpty)
+                  ? NetworkImage(avatarImage)
+                  : null,
+          child:
+              (avatarImage == null || avatarImage.isEmpty)
+                  ? (isLoading
+                      ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.person))
+                  : null,
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -385,10 +377,14 @@ class _ClientRow extends StatelessWidget {
             children: [
               Text(
                 _fallback(
-                  user != null ? '${user!.prenom ?? ''} ${user!.nom ?? ''}'.trim() : '',
+                  user != null
+                      ? '${user!.prenom ?? ''} ${user!.nom ?? ''}'.trim()
+                      : '',
                   'Client inconnu',
                 ),
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 4),
@@ -398,7 +394,10 @@ class _ClientRow extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                _fallback(user?.telephone ?? commande.telDepart, 'Numero indisponible'),
+                _fallback(
+                  user?.telephone ?? commande.telDepart,
+                  'Numero indisponible',
+                ),
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ],
@@ -439,7 +438,9 @@ class _RouteRow extends StatelessWidget {
               ),
               Text(
                 value,
-                style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
@@ -453,10 +454,7 @@ class _StatusBadge extends StatelessWidget {
   final String label;
   final Color color;
 
-  const _StatusBadge({
-    required this.label,
-    required this.color,
-  });
+  const _StatusBadge({required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -469,10 +467,10 @@ class _StatusBadge extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(context)
-            .textTheme
-            .labelMedium
-            ?.copyWith(color: color, fontWeight: FontWeight.w600),
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -482,10 +480,7 @@ class _ModePaiementBadge extends StatelessWidget {
   final String label;
   final Color color;
 
-  const _ModePaiementBadge({
-    required this.label,
-    required this.color,
-  });
+  const _ModePaiementBadge({required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -556,7 +551,9 @@ class _InfoChip extends StatelessWidget {
                 ),
                 Text(
                   value,
-                  style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),

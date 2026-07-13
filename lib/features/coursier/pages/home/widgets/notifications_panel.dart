@@ -33,24 +33,28 @@ class NotificationsPanel extends StatelessWidget {
             onClose: () {
               final mapState = mapKey.currentState;
               if (mapState != null) {
-                mapState.stopNavigation(); // 🛑 Stoppe la navigation avant de fermer
+                mapState
+                    .stopNavigation(); // 🛑 Stoppe la navigation avant de fermer
               }
-              context.read<HomeController>().clearSelection(); // 🔚 Ferme le panneau
+              context
+                  .read<HomeController>()
+                  .clearSelection(); // 🔚 Ferme le panneau
             },
 
             onDetails: () => mapKey.currentState?.openCommandeDetails(commande),
             isNavigationActive: ctrl.isNavigationMode,
-            onToggleNavigation: ctrl.isSelectedCommandeMine
-                ? () async {
-                    final mapState = mapKey.currentState;
-                    if (mapState == null) return;
-                    if (ctrl.isNavigationMode) {
-                      mapState.stopNavigation();
-                    } else {
-                      await mapState.startNavigationFor(commande);
+            onToggleNavigation:
+                ctrl.isSelectedCommandeMine
+                    ? () async {
+                      final mapState = mapKey.currentState;
+                      if (mapState == null) return;
+                      if (ctrl.isNavigationMode) {
+                        mapState.stopNavigation();
+                      } else {
+                        await mapState.startNavigationFor(commande);
+                      }
                     }
-                  }
-                : null,
+                    : null,
           ),
         ),
       ),
@@ -113,9 +117,10 @@ class _CommandeSelectionCardState extends State<_CommandeSelectionCard> {
     if (_isCalling) return;
 
     final bool departScanne = widget.commande.qrCodeDepartScanne == true;
-    final rawNumber = departScanne
-        ? (widget.commande.telArrivee ?? widget.commande.telDepart)
-        : (widget.commande.telDepart ?? widget.commande.telArrivee);
+    final rawNumber =
+        departScanne
+            ? (widget.commande.telArrivee ?? widget.commande.telDepart)
+            : (widget.commande.telDepart ?? widget.commande.telArrivee);
     final number = rawNumber?.replaceAll(RegExp(r'[^0-9+]'), '');
 
     if (number == null || number.isEmpty) {
@@ -149,20 +154,21 @@ class _CommandeSelectionCardState extends State<_CommandeSelectionCard> {
     final homeCtrl = context.watch<HomeController>();
     final double? distanceMetersFromRoute =
         homeCtrl.currentRouteDistanceMeters ??
-            (widget.commande.distanceKm != null
-                ? widget.commande.distanceKm! * 1000
-                : null);
-    final Duration? eta = homeCtrl.currentRouteEta ??
+        (widget.commande.distanceKm != null
+            ? widget.commande.distanceKm! * 1000
+            : null);
+    final Duration? eta =
+        homeCtrl.currentRouteEta ??
         (distanceMetersFromRoute != null
             ? _etaFromDistance(distanceMetersFromRoute)
             : null);
-    final distanceText = distanceMetersFromRoute != null
-        ? _formatDistance(distanceMetersFromRoute)
-        : null;
+    final distanceText =
+        distanceMetersFromRoute != null
+            ? _formatDistance(distanceMetersFromRoute)
+            : null;
     final durationText = eta != null ? _formatDuration(eta) : null;
-    final priceText = !widget.isNavigationActive
-        ? _formatPrice(widget.commande.prix)
-        : null;
+    final priceText =
+        !widget.isNavigationActive ? _formatPrice(widget.commande.prix) : null;
     final bool hasMetrics =
         distanceText != null || durationText != null || priceText != null;
 
@@ -218,17 +224,22 @@ class _CommandeSelectionCardState extends State<_CommandeSelectionCard> {
               if (widget.isMine) ...[
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: widget.isNavigationActive
-                        ? () => _callClient()
-                        : widget.onDetails,
-                    child: Text(widget.isNavigationActive ? 'Appeler' : 'Details'),
+                    onPressed:
+                        widget.isNavigationActive
+                            ? () => _callClient()
+                            : widget.onDetails,
+                    child: Text(
+                      widget.isNavigationActive ? 'Appeler' : 'Details',
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton(
                     onPressed: widget.onToggleNavigation,
-                    child: Text(widget.isNavigationActive ? 'Arrêter' : 'Démarrer'),
+                    child: Text(
+                      widget.isNavigationActive ? 'Arrêter' : 'Démarrer',
+                    ),
                   ),
                 ),
               ] else ...[
@@ -308,17 +319,9 @@ class _RouteMetrics extends StatelessWidget {
           value: distance!,
         ),
       if (eta != null)
-        _RouteMetric(
-          icon: Icons.timer,
-          label: 'Temps restant',
-          value: eta!,
-        ),
+        _RouteMetric(icon: Icons.timer, label: 'Temps restant', value: eta!),
       if (price != null)
-        _RouteMetric(
-          icon: Icons.payments,
-          label: 'Prix',
-          value: price!,
-        ),
+        _RouteMetric(icon: Icons.payments, label: 'Prix', value: price!),
     ];
     if (metrics.isEmpty) return const SizedBox.shrink();
 
@@ -352,7 +355,7 @@ class _RouteMetrics extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceVariant.withOpacity(0.35),
+            color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.35),
             borderRadius: BorderRadius.circular(16),
           ),
           child: content,
@@ -387,11 +390,7 @@ class _MetricTile extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(
-              data.icon,
-              size: 18,
-              color: theme.colorScheme.primary,
-            ),
+            Icon(data.icon, size: 18, color: theme.colorScheme.primary),
             const SizedBox(width: 6),
             Text(
               data.label,
@@ -471,19 +470,23 @@ class _ClientInfos extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final parts = [user?.prenom, user?.nom]
-        .whereType<String>()
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .toList();
-    final fullName =
-        parts.isNotEmpty ? parts.join(' ') : 'Utilisateur inconnu';
+    final parts =
+        [user?.prenom, user?.nom]
+            .whereType<String>()
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toList();
+    final fullName = parts.isNotEmpty ? parts.join(' ') : 'Utilisateur inconnu';
 
     final email = _fallback(user?.email, 'Email indisponible');
-    final telDepart =
-        _fallback(commande.telDepart, 'Numero depart indisponible');
-    final telArrivee =
-        _fallback(commande.telArrivee, 'Numero arrivee indisponible');
+    final telDepart = _fallback(
+      commande.telDepart,
+      'Numero depart indisponible',
+    );
+    final telArrivee = _fallback(
+      commande.telArrivee,
+      'Numero arrivee indisponible',
+    );
 
     final imageUrl = user?.image?.trim();
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
@@ -499,23 +502,23 @@ class _ClientInfos extends StatelessWidget {
       ),
       child: CircleAvatar(
         radius: 26,
-        backgroundColor: theme.colorScheme.surfaceVariant.withOpacity(0.35),
-        backgroundImage: hasImage ? NetworkImage(imageUrl!) : null,
-        child: hasImage
-            ? null
-            : isLoading
+        backgroundColor: theme.colorScheme.surfaceContainerHighest.withOpacity(
+          0.35,
+        ),
+        backgroundImage: hasImage ? NetworkImage(imageUrl) : null,
+        child:
+            hasImage
+                ? null
+                : isLoading
                 ? SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: theme.colorScheme.primary,
-                    ),
-                  )
-                : Icon(
-                    Icons.person,
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
                     color: theme.colorScheme.primary,
                   ),
+                )
+                : Icon(Icons.person, color: theme.colorScheme.primary),
       ),
     );
 

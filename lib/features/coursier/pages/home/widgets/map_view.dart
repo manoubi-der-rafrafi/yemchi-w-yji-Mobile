@@ -53,13 +53,15 @@ class MapViewState extends State<MapView>
   static const Duration _headingStaleTimeout = Duration(seconds: 12);
   static const Duration _cameraAnimationDuration = Duration(milliseconds: 350);
   late final AnimationController _cameraAnimationController;
-  static const Duration _userMarkerAnimationDuration =
-      Duration(milliseconds: 250);
+  static const Duration _userMarkerAnimationDuration = Duration(
+    milliseconds: 250,
+  );
   late final AnimationController _userMarkerAnimationController;
   Animation<LatLng>? _userMarkerAnimation;
   VoidCallback? _userMarkerAnimationListener;
-  static const Duration _userMarkerCoalesceDuration =
-      Duration(milliseconds: 140);
+  static const Duration _userMarkerCoalesceDuration = Duration(
+    milliseconds: 140,
+  );
   Timer? _userMarkerCoalesceTimer;
   LatLng? _pendingUserMarkerTarget;
   bool _pendingUserMarkerFlushAfterAnimation = false;
@@ -78,23 +80,25 @@ class MapViewState extends State<MapView>
   static const double _followCameraHeadingThresholdDegrees = 4;
   static const Duration _followCameraMinInterval = Duration(milliseconds: 1200);
   static const double _cameraRotationSnapThresholdDegrees = 25;
-  static const Duration _cameraRotationMinInterval =
-      Duration(milliseconds: 320);
+  static const Duration _cameraRotationMinInterval = Duration(
+    milliseconds: 320,
+  );
   static const bool _enableUserNotifierDebounce = true;
   static const double _userNotifierDistanceThresholdMeters = 1.5;
   static const double _userNotifierHeadingThresholdDegrees = 7;
-  static const Duration _polylineUpdateMinInterval =
-      Duration(milliseconds: 450);
+  static const Duration _polylineUpdateMinInterval = Duration(
+    milliseconds: 450,
+  );
   HomeController? _homeController;
   VoidCallback? _homeControllerListener;
   final ValueNotifier<List<LatLng>?> _polylineNotifier =
       ValueNotifier<List<LatLng>?>(null);
   final ValueNotifier<List<Marker>> _commandeMarkersNotifier =
       ValueNotifier<List<Marker>>(const <Marker>[]);
-  final ValueNotifier<LatLng?> _routeArrivalNotifier =
-      ValueNotifier<LatLng?>(null);
-  final ValueNotifier<double> _mapRotationNotifier =
-      ValueNotifier<double>(0.0);
+  final ValueNotifier<LatLng?> _routeArrivalNotifier = ValueNotifier<LatLng?>(
+    null,
+  );
+  final ValueNotifier<double> _mapRotationNotifier = ValueNotifier<double>(0.0);
   LatLng? _lastCameraUpdateCenter;
   double? _lastCameraUpdateRotation;
   DateTime? _lastCameraUpdateAt;
@@ -174,8 +178,9 @@ class MapViewState extends State<MapView>
     _posSub?.cancel();
     _mapEventSub?.cancel();
     if (_userMarkerAnimationListener != null) {
-      _userMarkerAnimationController
-          .removeListener(_userMarkerAnimationListener!);
+      _userMarkerAnimationController.removeListener(
+        _userMarkerAnimationListener!,
+      );
     }
     if (_homeControllerListener != null && _homeController != null) {
       _homeController!.removeListener(_homeControllerListener!);
@@ -237,7 +242,6 @@ class MapViewState extends State<MapView>
       );
     }
   }
-
 
   void _handleNavigationModeChanged(bool enabled) {
     if (!mounted || _navigationModeActive == enabled) return;
@@ -303,9 +307,10 @@ class MapViewState extends State<MapView>
     if (!mounted) return;
     _myPos = latLng;
     _lastAcceptedGpsAt = DateTime.now();
-    final double movedMeters = previousPos == null
-        ? 0
-        : _distance.as(LengthUnit.Meter, previousPos, latLng);
+    final double movedMeters =
+        previousPos == null
+            ? 0
+            : _distance.as(LengthUnit.Meter, previousPos, latLng);
     _maybeUpdateHeading(
       previous: previousPos,
       current: latLng,
@@ -354,13 +359,7 @@ class MapViewState extends State<MapView>
         );
       }
     } else if (jumpToMap) {
-      unawaited(
-        _applyCameraUpdate(
-          center: latLng,
-          zoom: 15,
-          animated: false,
-        ),
-      );
+      unawaited(_applyCameraUpdate(center: latLng, zoom: 15, animated: false));
     }
 
     if (rotationEnabled && !_following) {
@@ -454,8 +453,7 @@ class MapViewState extends State<MapView>
 
     final deviation = projection.distanceMeters;
     final accuracy = _accuracyMeters ?? 0;
-    final strictNavigation =
-        _navigationModeActive && homeCtrl.isNavigationMode;
+    final strictNavigation = _navigationModeActive && homeCtrl.isNavigationMode;
     final onRouteTolerance = _resolveDeviationTolerance(
       accuracy,
       strictNavigation: strictNavigation,
@@ -479,11 +477,12 @@ class MapViewState extends State<MapView>
     double accuracyMeters, {
     required bool strictNavigation,
   }) {
-    final safeAccuracy = accuracyMeters.isFinite && accuracyMeters > 0
-        ? accuracyMeters
-        : (strictNavigation
-            ? _navigationDeviationFloorMeters
-            : _minorDeviationMeters);
+    final safeAccuracy =
+        accuracyMeters.isFinite && accuracyMeters > 0
+            ? accuracyMeters
+            : (strictNavigation
+                ? _navigationDeviationFloorMeters
+                : _minorDeviationMeters);
     if (!strictNavigation) {
       return math.max(_minorDeviationMeters, safeAccuracy);
     }
@@ -527,7 +526,9 @@ class MapViewState extends State<MapView>
 
   bool _shouldAcceptGpsSample(LatLng candidate, double? accuracyMeters) {
     final double? accuracy =
-        (accuracyMeters != null && accuracyMeters.isFinite) ? accuracyMeters : null;
+        (accuracyMeters != null && accuracyMeters.isFinite)
+            ? accuracyMeters
+            : null;
     final now = DateTime.now();
     if (accuracy != null && accuracy > _gpsAccuracyIgnoreAboveMeters) {
       if (_lastAcceptedGpsAt != null &&
@@ -568,14 +569,16 @@ class MapViewState extends State<MapView>
     final bool zoomChanged =
         (cameraBeforeUpdate.zoom - resolvedZoom).abs() >= 0.001;
     if (animated && desiredRotation != null) {
-      final double rotationDelta =
-          _angleDelta(resolvedRotation, cameraBeforeUpdate.rotation);
+      final double rotationDelta = _angleDelta(
+        resolvedRotation,
+        cameraBeforeUpdate.rotation,
+      );
       final bool rotationChanged = rotationDelta >= 0.1;
       final bool shouldSnapRotation =
           rotationChanged &&
-              (centerChanged ||
-                  zoomChanged ||
-                  rotationDelta >= _cameraRotationSnapThresholdDegrees);
+          (centerChanged ||
+              zoomChanged ||
+              rotationDelta >= _cameraRotationSnapThresholdDegrees);
       if (shouldSnapRotation) {
         _mapController.moveAndRotate(
           cameraBeforeUpdate.center,
@@ -584,10 +587,7 @@ class MapViewState extends State<MapView>
         );
         if (!centerChanged && !zoomChanged) {
           if (recordUpdate) {
-            _registerCameraUpdate(
-              cameraBeforeUpdate.center,
-              resolvedRotation,
-            );
+            _registerCameraUpdate(cameraBeforeUpdate.center, resolvedRotation);
           }
           return;
         }
@@ -637,22 +637,21 @@ class MapViewState extends State<MapView>
       curve: Curves.easeOutCubic,
     );
 
-    final centerAnim =
-        _LatLngTween(begin: startCenter, end: center).animate(curved);
-    final zoomAnim =
-        Tween<double>(begin: startZoom, end: zoom).animate(curved);
-    final rotationAnim =
-        Tween<double>(begin: startRotation, end: rotation).animate(curved);
+    final centerAnim = _LatLngTween(
+      begin: startCenter,
+      end: center,
+    ).animate(curved);
+    final zoomAnim = Tween<double>(begin: startZoom, end: zoom).animate(curved);
+    final rotationAnim = Tween<double>(
+      begin: startRotation,
+      end: rotation,
+    ).animate(curved);
 
     void listener() {
       final currentCenter = centerAnim.value;
       final currentZoom = zoomAnim.value;
       final currentRotation = rotationAnim.value;
-      _mapController.moveAndRotate(
-        currentCenter,
-        currentZoom,
-        currentRotation,
-      );
+      _mapController.moveAndRotate(currentCenter, currentZoom, currentRotation);
     }
 
     _cameraAnimationController.addListener(listener);
@@ -693,12 +692,14 @@ class MapViewState extends State<MapView>
     final currentPolyline = controller.currentPolyline;
     final activeCommandes = controller.activeCommandes;
     final mesCommandes = controller.mesCommandes;
-    final List<LatLng>? nextPolylineSnapshot = currentPolyline == null
-        ? null
-        : List<LatLng>.unmodifiable(currentPolyline);
-    final List<LatLng>? baselineSnapshot = _hasPendingPolylineSnapshot
-        ? _pendingPolylineSnapshot
-        : _lastPolylineSnapshot;
+    final List<LatLng>? nextPolylineSnapshot =
+        currentPolyline == null
+            ? null
+            : List<LatLng>.unmodifiable(currentPolyline);
+    final List<LatLng>? baselineSnapshot =
+        _hasPendingPolylineSnapshot
+            ? _pendingPolylineSnapshot
+            : _lastPolylineSnapshot;
     if (!_latLngListEquals(baselineSnapshot, nextPolylineSnapshot)) {
       _schedulePolylineSnapshot(nextPolylineSnapshot);
     }
@@ -710,9 +711,7 @@ class MapViewState extends State<MapView>
     if (selectionChanged ||
         activeSignature != _lastActiveCommandesSignature ||
         mesSignature != _lastMesCommandesSignature) {
-      final mesCommandesById = {
-        for (final c in mesCommandes) c.id: c,
-      };
+      final mesCommandesById = {for (final c in mesCommandes) c.id: c};
       final markers = _buildCommandeMarkers(
         activeCommandes,
         selectedCommandeId: selectedId,
@@ -730,13 +729,14 @@ class MapViewState extends State<MapView>
     }
 
     final Commande? selectedCommande = controller.selectedCommande;
-    final _RouteRequest? requestPreview = selectedCommande == null
-        ? null
-        : _deriveRouteRequest(
-            selectedCommande,
-            isMine: controller.isSelectedCommandeMine,
-            currentPos: _myPos,
-          );
+    final _RouteRequest? requestPreview =
+        selectedCommande == null
+            ? null
+            : _deriveRouteRequest(
+              selectedCommande,
+              isMine: controller.isSelectedCommandeMine,
+              currentPos: _myPos,
+            );
     _handleRoutePrefetchState(
       selectedCommande: selectedCommande,
       isPanelOpen: controller.isPanelOpen,
@@ -763,8 +763,7 @@ class MapViewState extends State<MapView>
       if (elapsed < _polylineUpdateMinInterval) {
         final remaining = _polylineUpdateMinInterval - elapsed;
         _polylineThrottleTimer?.cancel();
-        _polylineThrottleTimer =
-            Timer(remaining, _tryFlushPolylineSnapshot);
+        _polylineThrottleTimer = Timer(remaining, _tryFlushPolylineSnapshot);
         return;
       }
     }
@@ -802,21 +801,14 @@ class MapViewState extends State<MapView>
     }
   }
 
-  void _rotateMapToHeading({
-    bool force = false,
-    double? fallbackHeading,
-  }) {
+  void _rotateMapToHeading({bool force = false, double? fallbackHeading}) {
     if (!force && !_navigationModeActive && !_following) return;
     final heading = fallbackHeading ?? _headingDegrees;
     if (heading == null) return;
     final center = _mapController.camera.center;
     final zoom = _mapController.camera.zoom;
     unawaited(
-      _applyCameraUpdate(
-        center: center,
-        zoom: zoom,
-        rotation: heading,
-      ),
+      _applyCameraUpdate(center: center, zoom: zoom, rotation: heading),
     );
   }
 
@@ -860,7 +852,8 @@ class MapViewState extends State<MapView>
     _pendingUserMarkerFlushAfterAnimation = false;
     final current = _displayedMyPos ?? _myPos ?? target;
     if (_latLngAlmostEquals(current, target)) {
-      final alreadySet = _smoothedMyPos != null &&
+      final alreadySet =
+          _smoothedMyPos != null &&
           _latLngAlmostEquals(_smoothedMyPos!, target);
       if (!alreadySet) {
         _smoothedMyPos = target;
@@ -870,8 +863,9 @@ class MapViewState extends State<MapView>
     }
 
     if (_userMarkerAnimationListener != null) {
-      _userMarkerAnimationController
-          .removeListener(_userMarkerAnimationListener!);
+      _userMarkerAnimationController.removeListener(
+        _userMarkerAnimationListener!,
+      );
       _userMarkerAnimationListener = null;
     }
     _userMarkerAnimation = null;
@@ -880,14 +874,16 @@ class MapViewState extends State<MapView>
       parent: _userMarkerAnimationController,
       curve: Curves.easeOutCubic,
     );
-    _userMarkerAnimation =
-        _LatLngTween(begin: current, end: target).animate(curved);
+    _userMarkerAnimation = _LatLngTween(
+      begin: current,
+      end: target,
+    ).animate(curved);
 
-    final listener = () {
+    Null listener() {
       if (!mounted || _userMarkerAnimation == null) return;
       _smoothedMyPos = _userMarkerAnimation!.value;
       _notifyUserLocationVisual();
-    };
+    }
 
     _userMarkerAnimationListener = listener;
 
@@ -912,13 +908,9 @@ class MapViewState extends State<MapView>
     });
   }
 
-  void _triggerRouteRecalculation(
-    String commandeId, {
-    bool force = false,
-  }) {
+  void _triggerRouteRecalculation(String commandeId, {bool force = false}) {
     if (_cameraAnimationActive) {
-      final bool sameDeferred =
-          _deferredRouteRefreshCommandeId == commandeId;
+      final bool sameDeferred = _deferredRouteRefreshCommandeId == commandeId;
       _deferredRouteRefreshCommandeId = commandeId;
       _deferredRouteRefreshForce =
           force || (sameDeferred && _deferredRouteRefreshForce);
@@ -927,10 +919,7 @@ class MapViewState extends State<MapView>
     _executeRouteRecalculation(commandeId, force: force);
   }
 
-  void _executeRouteRecalculation(
-    String commandeId, {
-    bool force = false,
-  }) {
+  void _executeRouteRecalculation(String commandeId, {bool force = false}) {
     if (_pendingRouteCommandeId != null) return;
     final now = DateTime.now();
     if (!force &&
@@ -962,8 +951,7 @@ class MapViewState extends State<MapView>
       return;
     }
 
-    final strictNavigation =
-        _navigationModeActive && homeCtrl.isNavigationMode;
+    final strictNavigation = _navigationModeActive && homeCtrl.isNavigationMode;
     final minorThreshold = _resolveDeviationTolerance(
       accuracy,
       strictNavigation: strictNavigation,
@@ -1020,8 +1008,11 @@ class MapViewState extends State<MapView>
       final start = route[i];
       final end = route[i + 1];
       final projected = _projectPointOnSegment(start, end, position);
-      final distanceMeters =
-          _distance.as(LengthUnit.Meter, position, projected);
+      final distanceMeters = _distance.as(
+        LengthUnit.Meter,
+        position,
+        projected,
+      );
       if (distanceMeters < bestDistance) {
         bestDistance = distanceMeters;
         bestMatch = _RouteProjection(
@@ -1034,11 +1025,7 @@ class MapViewState extends State<MapView>
     return bestMatch;
   }
 
-  LatLng _projectPointOnSegment(
-    LatLng start,
-    LatLng end,
-    LatLng point,
-  ) {
+  LatLng _projectPointOnSegment(LatLng start, LatLng end, LatLng point) {
     final ax = start.longitude;
     final ay = start.latitude;
     final bx = end.longitude;
@@ -1052,10 +1039,7 @@ class MapViewState extends State<MapView>
     double t = segLen2 == 0 ? 0 : ((px - ax) * dx + (py - ay) * dy) / segLen2;
     t = t.clamp(0.0, 1.0);
 
-    return LatLng(
-      ay + dy * t,
-      ax + dx * t,
-    );
+    return LatLng(ay + dy * t, ax + dx * t);
   }
 
   bool _latLngAlmostEquals(LatLng a, LatLng b) {
@@ -1117,10 +1101,11 @@ class MapViewState extends State<MapView>
         movedMeters >= _followCameraDistanceThresholdMeters;
     bool headingChanged = false;
     if (rotation != null) {
-      headingChanged = lastRotation == null
-          ? true
-          : _angleDelta(rotation, lastRotation) >=
-              _followCameraHeadingThresholdDegrees;
+      headingChanged =
+          lastRotation == null
+              ? true
+              : _angleDelta(rotation, lastRotation) >=
+                  _followCameraHeadingThresholdDegrees;
     }
     if (!movedEnough && !headingChanged) {
       return false;
@@ -1193,10 +1178,15 @@ class MapViewState extends State<MapView>
       return;
     }
     final previous = _userLocationNotifier.value;
-    final bool positionChanged = previous == null
-        ? true
-        : _distance.as(LengthUnit.Meter, previous.position, nextVisual.position) >=
-            _userNotifierDistanceThresholdMeters;
+    final bool positionChanged =
+        previous == null
+            ? true
+            : _distance.as(
+                  LengthUnit.Meter,
+                  previous.position,
+                  nextVisual.position,
+                ) >=
+                _userNotifierDistanceThresholdMeters;
     final bool headingChanged = () {
       if (previous == null) return true;
       final prevHeading = previous.headingDegrees;
@@ -1219,8 +1209,13 @@ class MapViewState extends State<MapView>
       return (prevAcc - currentAcc).abs() >= 0.5;
     }();
     final bool followChanged =
-        previous == null ? true : previous.isFollowing != nextVisual.isFollowing;
-    if (!positionChanged && !headingChanged && !accuracyChanged && !followChanged) {
+        previous == null
+            ? true
+            : previous.isFollowing != nextVisual.isFollowing;
+    if (!positionChanged &&
+        !headingChanged &&
+        !accuracyChanged &&
+        !followChanged) {
       return;
     }
     _userLocationNotifier.value = nextVisual;
@@ -1245,7 +1240,7 @@ class MapViewState extends State<MapView>
       }
     }
 
-    if (!mounted || target == null) return;
+    if (!mounted) return;
 
     _myPos = target;
     _accuracyMeters = accuracy;
@@ -1261,7 +1256,7 @@ class MapViewState extends State<MapView>
     await _applyCameraUpdate(
       center: target,
       zoom: zoom,
-      rotation: rotateNow ? heading! : null,
+      rotation: rotateNow ? heading : null,
     );
     if (!rotateNow && heading != null) {
       _rotateMapToHeading(force: true, fallbackHeading: heading);
@@ -1286,11 +1281,7 @@ class MapViewState extends State<MapView>
           _headingDegrees != null && (_navigationModeActive || _following);
       final rotation = rotate ? _headingDegrees! : null;
       unawaited(
-        _applyCameraUpdate(
-          center: _myPos!,
-          zoom: zoom,
-          rotation: rotation,
-        ),
+        _applyCameraUpdate(center: _myPos!, zoom: zoom, rotation: rotation),
       );
     }
   }
@@ -1339,13 +1330,15 @@ class MapViewState extends State<MapView>
         } else if (!goToArrival && departLat != null && departLng != null) {
           point = LatLng(departLat, departLng);
           isArrivalPoint = false;
-          markerLabel = commande.localisationDepart ??
+          markerLabel =
+              commande.localisationDepart ??
               source.localisationDepart ??
               'Point de depart';
         } else if (departLat != null && departLng != null) {
           point = LatLng(departLat, departLng);
           isArrivalPoint = false;
-          markerLabel = commande.localisationDepart ??
+          markerLabel =
+              commande.localisationDepart ??
               source.localisationDepart ??
               'Point de depart';
         } else if (destLat != null && destLng != null) {
@@ -1361,9 +1354,10 @@ class MapViewState extends State<MapView>
 
       if (point == null) continue;
 
-      final Color? markerColor = (isArrivalPoint == null)
-          ? null
-          : (isArrivalPoint ? _markerArrivalColor : _markerDepartColor);
+      final Color? markerColor =
+          (isArrivalPoint == null)
+              ? null
+              : (isArrivalPoint ? _markerArrivalColor : _markerDepartColor);
 
       markers.add(
         Marker(
@@ -1404,8 +1398,7 @@ class MapViewState extends State<MapView>
       return;
     }
 
-    final bool isMine =
-        homeCtrl.mesCommandes.any((c) => c.id == commande.id);
+    final bool isMine = homeCtrl.mesCommandes.any((c) => c.id == commande.id);
     final request = _deriveRouteRequest(
       commande,
       isMine: isMine,
@@ -1495,7 +1488,8 @@ class MapViewState extends State<MapView>
     final deltaLng = _degToRad(to.longitude - from.longitude);
 
     final y = math.sin(deltaLng) * math.cos(lat2);
-    final x = math.cos(lat1) * math.sin(lat2) -
+    final x =
+        math.cos(lat1) * math.sin(lat2) -
         math.sin(lat1) * math.cos(lat2) * math.cos(deltaLng);
     final bearingRad = math.atan2(y, x);
     final bearingDeg = (bearingRad * 180 / math.pi + 360) % 360;
@@ -1526,8 +1520,10 @@ class MapViewState extends State<MapView>
       nextHeading = _bearingBetween(previous, current);
     }
     if (nextHeading == null) {
-      final bool headingStale = _lastHeadingUpdateAt == null ||
-          DateTime.now().difference(_lastHeadingUpdateAt!) >= _headingStaleTimeout;
+      final bool headingStale =
+          _lastHeadingUpdateAt == null ||
+          DateTime.now().difference(_lastHeadingUpdateAt!) >=
+              _headingStaleTimeout;
       if (headingStale && normalizedCompass != null) {
         nextHeading = normalizedCompass;
       } else {
@@ -1543,8 +1539,14 @@ class MapViewState extends State<MapView>
         resolvedHeading = nextHeading;
       } else {
         final double smoothing =
-            fastEnough ? _headingFastSmoothingFactor : _headingSlowSmoothingFactor;
-        resolvedHeading = _lerpHeading(_headingDegrees!, nextHeading, smoothing);
+            fastEnough
+                ? _headingFastSmoothingFactor
+                : _headingSlowSmoothingFactor;
+        resolvedHeading = _lerpHeading(
+          _headingDegrees!,
+          nextHeading,
+          smoothing,
+        );
       }
     }
     _headingDegrees = resolvedHeading;
@@ -1576,8 +1578,7 @@ class MapViewState extends State<MapView>
   Future<void> startNavigationFor(Commande commande) async {
     if (!mounted) return;
     final homeCtrl = context.read<HomeController>();
-    final bool isMine =
-        homeCtrl.mesCommandes.any((c) => c.id == commande.id);
+    final bool isMine = homeCtrl.mesCommandes.any((c) => c.id == commande.id);
     if (!isMine) {
       _showSnack('Commande non assignÃ©e.');
       return;
@@ -1587,7 +1588,8 @@ class MapViewState extends State<MapView>
       homeCtrl.selectCommande(commande);
     }
 
-    final needsRoute = homeCtrl.currentPolyline == null ||
+    final needsRoute =
+        homeCtrl.currentPolyline == null ||
         homeCtrl.currentPolyline!.length < 2;
 
     if (needsRoute) {
@@ -1617,10 +1619,7 @@ class MapViewState extends State<MapView>
       if (!mounted || !_following) return;
       final pos = _displayedMyPos ?? _myPos ?? routePoints.first;
       unawaited(
-        _applyCameraUpdate(
-          center: pos,
-          zoom: _mapController.camera.zoom,
-        ),
+        _applyCameraUpdate(center: pos, zoom: _mapController.camera.zoom),
       );
     });
 
@@ -1630,9 +1629,9 @@ class MapViewState extends State<MapView>
 
   void _showSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   _RouteRequest? _deriveRouteRequest(
@@ -1668,13 +1667,16 @@ class MapViewState extends State<MapView>
         end = LatLng(targetLat, targetLng);
         startOrigin = RoutePointOrigin.courier;
         endOrigin =
-            goToArrival ? RoutePointOrigin.destination : RoutePointOrigin.depart;
+            goToArrival
+                ? RoutePointOrigin.destination
+                : RoutePointOrigin.depart;
       }
     }
 
-    final bool hasDepart = commande.latitudeDepart != null &&
-        commande.longitudeDepart != null;
-    final bool hasDestination = commande.latitudeDestination != null &&
+    final bool hasDepart =
+        commande.latitudeDepart != null && commande.longitudeDepart != null;
+    final bool hasDestination =
+        commande.latitudeDestination != null &&
         commande.longitudeDestination != null;
 
     if (start == null && hasDepart && hasDestination) {
@@ -1704,25 +1706,20 @@ class MapViewState extends State<MapView>
     _updateFollowing(false, notify: false);
     _notifyUserLocationVisual();
     _mapController.fitCamera(
-      CameraFit.bounds(
-        bounds: bounds,
-        padding: const EdgeInsets.all(48),
-      ),
+      CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(48)),
     );
   }
 
   Future<void> _showCommandeDetails(Commande commande) async {
     if (!mounted) return;
     final homeCtrl = context.read<HomeController>();
-    final bool isMine =
-        homeCtrl.mesCommandes.any((element) => element.id == commande.id);
+    final bool isMine = homeCtrl.mesCommandes.any(
+      (element) => element.id == commande.id,
+    );
     await showModalBottomSheet(
       context: context,
       showDragHandle: true,
-      builder: (_) => CommandeDetailsSheet(
-        commande: commande,
-        isMine: isMine,
-      ),
+      builder: (_) => CommandeDetailsSheet(commande: commande, isMine: isMine),
     );
   }
 
@@ -1743,48 +1740,48 @@ class MapViewState extends State<MapView>
         mapController: _mapController,
         options: _mapOptions,
         children: [
-        TileLayer(
-          urlTemplate:
-              'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-          subdomains: const ['a', 'b', 'c', 'd'],
-          userAgentPackageName: 'com.yemchiwyji.app',
-          tileProvider: _networkTileProvider,
-          maxNativeZoom: 18,
-          maxZoom: 20,
-          keepBuffer: 5,
-          panBuffer: 2,
-          tileDisplay: const TileDisplay.fadeIn(
-            duration: Duration(milliseconds: 220),
+          TileLayer(
+            urlTemplate:
+                'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+            subdomains: const ['a', 'b', 'c', 'd'],
+            userAgentPackageName: 'com.yemchiwyji.app',
+            tileProvider: _networkTileProvider,
+            maxNativeZoom: 18,
+            maxZoom: 20,
+            keepBuffer: 5,
+            panBuffer: 2,
+            tileDisplay: const TileDisplay.fadeIn(
+              duration: Duration(milliseconds: 220),
+            ),
+            // attributionBuilder: (_) => const Text('Â© OSM, Â© CARTO'),
           ),
-          // attributionBuilder: (_) => const Text('Â© OSM, Â© CARTO'),
-        ),
-        _buildRoutePolylineLayer(),
-        _buildCommandeMarkersLayer(),
-        _buildRouteArrivalMarkerLayer(),
-        // Cercle d'accuracy (optionnel)
-        // Cercle d'accuracy supprimé pour ne pas bloquer les interactions
-        // Marqueur position utilisateur
-        ValueListenableBuilder<_UserLocationVisual?>(
-          valueListenable: _userLocationNotifier,
-          builder: (_, visual, __) {
-            if (visual == null) {
-              return const SizedBox.shrink();
-            }
-            return MarkerLayer(
-              markers: [
-                Marker(
-                  point: visual.position,
-                  width: 52,
-                  height: 52,
-                  child: _MyLocationPin(
-                    isMoving: visual.isFollowing,
-                    headingDegrees: visual.headingDegrees,
+          _buildRoutePolylineLayer(),
+          _buildCommandeMarkersLayer(),
+          _buildRouteArrivalMarkerLayer(),
+          // Cercle d'accuracy (optionnel)
+          // Cercle d'accuracy supprimé pour ne pas bloquer les interactions
+          // Marqueur position utilisateur
+          ValueListenableBuilder<_UserLocationVisual?>(
+            valueListenable: _userLocationNotifier,
+            builder: (_, visual, __) {
+              if (visual == null) {
+                return const SizedBox.shrink();
+              }
+              return MarkerLayer(
+                markers: [
+                  Marker(
+                    point: visual.position,
+                    width: 52,
+                    height: 52,
+                    child: _MyLocationPin(
+                      isMoving: visual.isFollowing,
+                      headingDegrees: visual.headingDegrees,
+                    ),
                   ),
-                ),
-              ],
-            );
-          },
-        ),
+                ],
+              );
+            },
+          ),
         ],
       ),
     );
@@ -1804,11 +1801,7 @@ class MapViewState extends State<MapView>
           borderColor: Colors.white.withOpacity(0.9),
           borderStrokeWidth: 3,
         );
-        return RepaintBoundary(
-          child: PolylineLayer(
-            polylines: [scooterRoute],
-          ),
-        );
+        return RepaintBoundary(child: PolylineLayer(polylines: [scooterRoute]));
       },
     );
   }
@@ -1821,10 +1814,7 @@ class MapViewState extends State<MapView>
           return const SizedBox.shrink();
         }
         return RepaintBoundary(
-          child: MarkerLayer(
-            rotate: false,
-            markers: markers,
-          ),
+          child: MarkerLayer(rotate: false, markers: markers),
         );
       },
     );
@@ -1843,11 +1833,7 @@ class MapViewState extends State<MapView>
           height: 54,
           child: const _RouteEndpointMarker(isStart: false),
         );
-        return RepaintBoundary(
-          child: MarkerLayer(
-            markers: [arrivalMarker],
-          ),
-        );
+        return RepaintBoundary(child: MarkerLayer(markers: [arrivalMarker]));
       },
     );
   }
@@ -1860,7 +1846,8 @@ class MapViewState extends State<MapView>
   }) {
     if (!mounted) return;
     final String? selectedId = selectedCommande?.id;
-    final bool shouldRequestRoute = selectedId != null &&
+    final bool shouldRequestRoute =
+        selectedId != null &&
         isPanelOpen &&
         currentPolyline == null &&
         requestPreview != null &&
@@ -1880,10 +1867,7 @@ class MapViewState extends State<MapView>
       if (!mounted) return;
       final bounds = LatLngBounds.fromPoints(routePoints);
       _mapController.fitCamera(
-        CameraFit.bounds(
-          bounds: bounds,
-          padding: const EdgeInsets.all(48),
-        ),
+        CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(48)),
       );
     });
   }
@@ -1948,7 +1932,11 @@ class _MyLocationPin extends StatelessWidget {
                       border: Border.all(color: Colors.white, width: 2.5),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.navigation, size: 18, color: Colors.white),
+                    child: const Icon(
+                      Icons.navigation,
+                      size: 18,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ],
@@ -1959,7 +1947,6 @@ class _MyLocationPin extends StatelessWidget {
     );
   }
 }
-
 
 class _RouteEndpointMarker extends StatelessWidget {
   final bool isStart;
@@ -1990,10 +1977,7 @@ class _RouteEndpointMarker extends StatelessWidget {
         Container(
           width: 44,
           height: 44,
-          decoration: BoxDecoration(
-            color: fillColor,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: fillColor, shape: BoxShape.circle),
           child: Center(
             child: Icon(
               isStart ? Icons.flag : Icons.location_on,
@@ -2109,13 +2093,14 @@ class _CommandeMarker extends StatelessWidget {
                 width: 26,
                 height: 26,
                 decoration: BoxDecoration(
-                  gradient: pointColor == null
-                      ? const LinearGradient(
-                          colors: [Color(0xFF6A11CB), Color(0xFF2575FC)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        )
-                      : null,
+                  gradient:
+                      pointColor == null
+                          ? const LinearGradient(
+                            colors: [Color(0xFF6A11CB), Color(0xFF2575FC)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                          : null,
                   color: pointColor,
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 2.5),
@@ -2136,17 +2121,19 @@ class _DirectionConePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = baseColor.withOpacity(0.25)
-      ..style = PaintingStyle.fill;
+    final paint =
+        Paint()
+          ..color = baseColor.withOpacity(0.25)
+          ..style = PaintingStyle.fill;
     final center = Offset(size.width / 2, size.height / 2);
     final double coneLength = size.height * 0.65;
     final double coneWidth = size.width * 0.28;
-    final path = ui.Path()
-      ..moveTo(center.dx, center.dy)
-      ..lineTo(center.dx - coneWidth, center.dy - coneLength)
-      ..lineTo(center.dx + coneWidth, center.dy - coneLength)
-      ..close();
+    final path =
+        ui.Path()
+          ..moveTo(center.dx, center.dy)
+          ..lineTo(center.dx - coneWidth, center.dy - coneLength)
+          ..lineTo(center.dx + coneWidth, center.dy - coneLength)
+          ..close();
     canvas.drawPath(path, paint);
   }
 
@@ -2172,7 +2159,7 @@ class _UserLocationVisual {
 
 class _LatLngTween extends Tween<LatLng> {
   _LatLngTween({required LatLng begin, required LatLng end})
-      : super(begin: begin, end: end);
+    : super(begin: begin, end: end);
 
   @override
   LatLng lerp(double t) {

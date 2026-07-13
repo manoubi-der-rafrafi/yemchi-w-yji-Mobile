@@ -18,7 +18,8 @@ class Commande {
 
   // Relations (IDs simples)
   final String? clientId;
-  final String? transporteurId; // backend: transporteurId (alias id_transporteur / transporteur_id)
+  final String?
+  transporteurId; // backend: transporteurId (alias id_transporteur / transporteur_id)
   final String? idAmie;
 
   // Localisation & géo
@@ -31,18 +32,18 @@ class Commande {
   final double? distanceKm;
 
   // Métier
-  final String? statut;            // enum côté Java -> String ici
-  final double? prix;              // BigDecimal Java -> double
-  final String? modePaiement;      // enum Java (EN_LIGNE, DEPART, ARRIVEE) -> String
+  final String? statut; // enum côté Java -> String ici
+  final double? prix; // BigDecimal Java -> double
+  final String? modePaiement; // enum Java (EN_LIGNE, DEPART, ARRIVEE) -> String
   final String? instructions;
   final String? telDepart;
   final String? telArrivee;
 
   // Dates métier (LocalDateTime côté Java)
-  final DateTime? dateDemande;     // @CreatedDate
+  final DateTime? dateDemande; // @CreatedDate
   final DateTime? dateDebut;
   final DateTime? dateFin;
-  final DateTime? majLe;           // @LastModifiedDate
+  final DateTime? majLe; // @LastModifiedDate
 
   // Zones (enums Java -> String ici)
   final String? sousZoneDepart;
@@ -108,10 +109,10 @@ class Commande {
 
   // -------- Parsing tolérant (alias snake/camel) --------
   factory Commande.fromJson(Map<String, dynamic> raw) {
-    String _pickId(Map<String, dynamic> m) =>
+    String pickId(Map<String, dynamic> m) =>
         (m['id'] ?? m['_id'] ?? '').toString();
 
-    T? _pick<T>(Map<String, dynamic> m, List<String> keys) {
+    T? pick<T>(Map<String, dynamic> m, List<String> keys) {
       for (final k in keys) {
         if (m.containsKey(k) && m[k] != null) return m[k] as T?;
       }
@@ -119,103 +120,119 @@ class Commande {
     }
 
     return Commande(
-      id: _pickId(raw),
+      id: pickId(raw),
 
       // Relations
-      clientId: _toStringOrNull(_pick(raw, ['clientId', 'client_id'])),
+      clientId: _toStringOrNull(pick(raw, ['clientId', 'client_id'])),
       transporteurId: _toStringOrNull(
-        _pick(raw, ['transporteurId', 'transporteur_id', 'id_transporteur']),
+        pick(raw, ['transporteurId', 'transporteur_id', 'id_transporteur']),
       ),
-      idAmie: _toStringOrNull(_pick(raw, ['idAmie', 'id_amie'])),
+      idAmie: _toStringOrNull(pick(raw, ['idAmie', 'id_amie'])),
 
       // Localisation & géo
       localisationDepart: _toStringOrNull(
-        _pick(raw, ['localisationDepart', 'localisation_depart']),
+        pick(raw, ['localisationDepart', 'localisation_depart']),
       ),
-      destination: _toStringOrNull(_pick(raw, ['destination'])),
-      latitudeDepart: _toDouble(_pick(raw, ['latitudeDepart', 'latitude_depart'])),
-      longitudeDepart: _toDouble(_pick(raw, ['longitudeDepart', 'longitude_depart'])),
-      latitudeDestination:
-          _toDouble(_pick(raw, ['latitudeDestination', 'latitude_destination'])),
-      longitudeDestination:
-          _toDouble(_pick(raw, ['longitudeDestination', 'longitude_destination'])),
-      distanceKm: _toDouble(_pick(raw, ['distanceKm', 'distance_km'])),
+      destination: _toStringOrNull(pick(raw, ['destination'])),
+      latitudeDepart: _toDouble(
+        pick(raw, ['latitudeDepart', 'latitude_depart']),
+      ),
+      longitudeDepart: _toDouble(
+        pick(raw, ['longitudeDepart', 'longitude_depart']),
+      ),
+      latitudeDestination: _toDouble(
+        pick(raw, ['latitudeDestination', 'latitude_destination']),
+      ),
+      longitudeDestination: _toDouble(
+        pick(raw, ['longitudeDestination', 'longitude_destination']),
+      ),
+      distanceKm: _toDouble(pick(raw, ['distanceKm', 'distance_km'])),
 
       // Métier
-      statut: _toStringOrNull(_pick(raw, ['statut'])),
-      prix: _toDouble(_pick(raw, ['prix'])),
-      modePaiement:
-          _toStringOrNull(_pick(raw, ['modePaiement', 'mode_paiement'])),
-      instructions: _toStringOrNull(_pick(raw, ['instructions'])),
-      telDepart: _toStringOrNull(_pick(raw, ['telDepart', 'tel_depart'])),
-      telArrivee: _toStringOrNull(_pick(raw, ['telArrivee', 'tel_arrivee'])),
+      statut: _toStringOrNull(pick(raw, ['statut'])),
+      prix: _toDouble(pick(raw, ['prix'])),
+      modePaiement: _toStringOrNull(
+        pick(raw, ['modePaiement', 'mode_paiement']),
+      ),
+      instructions: _toStringOrNull(pick(raw, ['instructions'])),
+      telDepart: _toStringOrNull(pick(raw, ['telDepart', 'tel_depart'])),
+      telArrivee: _toStringOrNull(pick(raw, ['telArrivee', 'tel_arrivee'])),
 
       // Dates
-      dateDemande: _toDate(_pick(raw, ['dateDemande', 'date_demande'])),
-      dateDebut: _toDate(_pick(raw, ['dateDebut', 'date_debut'])),
-      dateFin: _toDate(_pick(raw, ['dateFin', 'date_fin'])),
-      majLe: _toDate(_pick(raw, ['majLe'])),
+      dateDemande: _toDate(pick(raw, ['dateDemande', 'date_demande'])),
+      dateDebut: _toDate(pick(raw, ['dateDebut', 'date_debut'])),
+      dateFin: _toDate(pick(raw, ['dateFin', 'date_fin'])),
+      majLe: _toDate(pick(raw, ['majLe'])),
 
       // Zones
-      sousZoneDepart:
-          _toStringOrNull(_pick(raw, ['sousZoneDepart', 'sous_zone_depart'])),
-      sousZoneArrivee:
-          _toStringOrNull(_pick(raw, ['sousZoneArrivee', 'sous_zone_arrivee'])),
+      sousZoneDepart: _toStringOrNull(
+        pick(raw, ['sousZoneDepart', 'sous_zone_depart']),
+      ),
+      sousZoneArrivee: _toStringOrNull(
+        pick(raw, ['sousZoneArrivee', 'sous_zone_arrivee']),
+      ),
       zonePrincipaleDepart: _toStringOrNull(
-        _pick(raw, ['zonePrincipaleDepart', 'zone_principale_depart']),
+        pick(raw, ['zonePrincipaleDepart', 'zone_principale_depart']),
       ),
       zonePrincipaleArrivee: _toStringOrNull(
-        _pick(raw, ['zonePrincipaleArrivee', 'zone_principale_arrivee']),
+        pick(raw, ['zonePrincipaleArrivee', 'zone_principale_arrivee']),
       ),
-      qrCodeDepartScanne: _pick(raw, ['qrCodeDepartScanne', 'qr_code_depart_scanne']) as bool?,
-      dateScanDepart: _toDate(_pick(raw, ['dateScanDepart', 'date_scan_depart'])),
-      qrCodeReceptionScanne: _pick(raw, ['qrCodeReceptionScanne', 'qr_code_reception_scanne']) as bool?,
-      dateScanReception: _toDate(_pick(raw, ['dateScanReception', 'date_scan_reception'])),
+      qrCodeDepartScanne:
+          pick(raw, ['qrCodeDepartScanne', 'qr_code_depart_scanne']) as bool?,
+      dateScanDepart: _toDate(
+        pick(raw, ['dateScanDepart', 'date_scan_depart']),
+      ),
+      qrCodeReceptionScanne:
+          pick(raw, ['qrCodeReceptionScanne', 'qr_code_reception_scanne'])
+              as bool?,
+      dateScanReception: _toDate(
+        pick(raw, ['dateScanReception', 'date_scan_reception']),
+      ),
     );
   }
 
   Map<String, dynamic> toJson() => {
-        // On renvoie en camelCase (adaptable si ton API préfère snake_case).
-        'id': id,
+    // On renvoie en camelCase (adaptable si ton API préfère snake_case).
+    'id': id,
 
-        // Relations
-        'clientId': clientId,
-        'transporteurId': transporteurId,
-        'idAmie': idAmie,
+    // Relations
+    'clientId': clientId,
+    'transporteurId': transporteurId,
+    'idAmie': idAmie,
 
-        // Localisation & géo
-        'localisationDepart': localisationDepart,
-        'destination': destination,
-        'latitudeDepart': latitudeDepart,
-        'longitudeDepart': longitudeDepart,
-        'latitudeDestination': latitudeDestination,
-        'longitudeDestination': longitudeDestination,
-        'distanceKm': distanceKm,
+    // Localisation & géo
+    'localisationDepart': localisationDepart,
+    'destination': destination,
+    'latitudeDepart': latitudeDepart,
+    'longitudeDepart': longitudeDepart,
+    'latitudeDestination': latitudeDestination,
+    'longitudeDestination': longitudeDestination,
+    'distanceKm': distanceKm,
 
-        // Métier
-        'statut': statut,
-        'prix': prix,
-        'modePaiement': modePaiement,
-        'instructions': instructions,
-        'telDepart': telDepart,
-        'telArrivee': telArrivee,
+    // Métier
+    'statut': statut,
+    'prix': prix,
+    'modePaiement': modePaiement,
+    'instructions': instructions,
+    'telDepart': telDepart,
+    'telArrivee': telArrivee,
 
-        // Dates
-        'dateDemande': dateDemande?.toIso8601String(),
-        'dateDebut': dateDebut?.toIso8601String(),
-        'dateFin': dateFin?.toIso8601String(),
-        'majLe': majLe?.toIso8601String(),
+    // Dates
+    'dateDemande': dateDemande?.toIso8601String(),
+    'dateDebut': dateDebut?.toIso8601String(),
+    'dateFin': dateFin?.toIso8601String(),
+    'majLe': majLe?.toIso8601String(),
 
-        // Zones
-        'sousZoneDepart': sousZoneDepart,
-        'sousZoneArrivee': sousZoneArrivee,
-        'zonePrincipaleDepart': zonePrincipaleDepart,
-        'zonePrincipaleArrivee': zonePrincipaleArrivee,
-        'qrCodeDepartScanne': qrCodeDepartScanne,
-        'dateScanDepart': dateScanDepart?.toIso8601String(),
-        'qrCodeReceptionScanne': qrCodeReceptionScanne,
-        'dateScanReception': dateScanReception?.toIso8601String(),
-      };
+    // Zones
+    'sousZoneDepart': sousZoneDepart,
+    'sousZoneArrivee': sousZoneArrivee,
+    'zonePrincipaleDepart': zonePrincipaleDepart,
+    'zonePrincipaleArrivee': zonePrincipaleArrivee,
+    'qrCodeDepartScanne': qrCodeDepartScanne,
+    'dateScanDepart': dateScanDepart?.toIso8601String(),
+    'qrCodeReceptionScanne': qrCodeReceptionScanne,
+    'dateScanReception': dateScanReception?.toIso8601String(),
+  };
 
   static Commande fromJsonString(String jsonStr) =>
       Commande.fromJson(json.decode(jsonStr) as Map<String, dynamic>);
@@ -275,15 +292,14 @@ class Commande {
       majLe: majLe ?? this.majLe,
       sousZoneDepart: sousZoneDepart ?? this.sousZoneDepart,
       sousZoneArrivee: sousZoneArrivee ?? this.sousZoneArrivee,
-      zonePrincipaleDepart:
-          zonePrincipaleDepart ?? this.zonePrincipaleDepart,
+      zonePrincipaleDepart: zonePrincipaleDepart ?? this.zonePrincipaleDepart,
       zonePrincipaleArrivee:
           zonePrincipaleArrivee ?? this.zonePrincipaleArrivee,
       qrCodeDepartScanne: qrCodeDepartScanne ?? this.qrCodeDepartScanne,
       dateScanDepart: dateScanDepart ?? this.dateScanDepart,
-      qrCodeReceptionScanne: qrCodeReceptionScanne ?? this.qrCodeReceptionScanne,
+      qrCodeReceptionScanne:
+          qrCodeReceptionScanne ?? this.qrCodeReceptionScanne,
       dateScanReception: dateScanReception ?? this.dateScanReception,
-
     );
   }
 }

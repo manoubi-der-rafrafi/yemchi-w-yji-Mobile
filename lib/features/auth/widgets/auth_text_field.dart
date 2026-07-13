@@ -69,7 +69,7 @@ class AuthTextField extends StatelessWidget {
         suffixIcon: suffixIcon,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         filled: true,
-        fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.35),
+        fillColor: theme.colorScheme.surfaceContainerHighest.withOpacity(0.35),
       ),
     );
   }
@@ -127,18 +127,18 @@ class _AuthPasswordFieldState extends State<AuthPasswordField> {
         suffixIcon: IconButton(
           tooltip: _obscure ? 'Afficher' : 'Masquer',
           onPressed: () => setState(() => _obscure = !_obscure),
-          icon: Icon(_obscure
-              ? Icons.visibility_outlined
-              : Icons.visibility_off_outlined),
+          icon: Icon(
+            _obscure
+                ? Icons.visibility_outlined
+                : Icons.visibility_off_outlined,
+          ),
         ),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         filled: true,
-        fillColor: Theme.of(context)
-            .colorScheme
-            .surfaceVariant
-            .withOpacity(0.35),
+        fillColor: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withOpacity(0.35),
       ),
     );
   }
 }
-

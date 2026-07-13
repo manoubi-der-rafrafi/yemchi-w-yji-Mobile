@@ -11,10 +11,7 @@ class ProfilPage extends StatelessWidget {
     final auth = context.read<AuthController>();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Gérer mon compte'),
-        centerTitle: false,
-      ),
+      appBar: AppBar(title: const Text('Gérer mon compte'), centerTitle: false),
       body: SafeArea(
         child: ValueListenableBuilder<Utilisateur?>(
           valueListenable: auth.currentUser,
@@ -49,12 +46,14 @@ class _IdentityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String _safe(String? value) => value?.trim() ?? '';
+    String safe(String? value) => value?.trim() ?? '';
 
-    final prenom = _safe(user.prenom);
-    final nom = _safe(user.nom);
-    final displayName = [prenom, nom].where((text) => text.isNotEmpty).join(' ').trim();
-    final initialsSource = displayName.isNotEmpty ? displayName : _safe(user.email);
+    final prenom = safe(user.prenom);
+    final nom = safe(user.nom);
+    final displayName =
+        [prenom, nom].where((text) => text.isNotEmpty).join(' ').trim();
+    final initialsSource =
+        displayName.isNotEmpty ? displayName : safe(user.email);
     final initials = () {
       final source = initialsSource.trimLeft();
       if (source.isEmpty) return '?';
@@ -83,7 +82,10 @@ class _IdentityCard extends StatelessWidget {
               radius: 36,
               backgroundImage: avatarImage,
               backgroundColor: Colors.black12,
-              child: avatarImage == null ? Text(initials, style: const TextStyle(fontSize: 24)) : null,
+              child:
+                  avatarImage == null
+                      ? Text(initials, style: const TextStyle(fontSize: 24))
+                      : null,
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -92,12 +94,16 @@ class _IdentityCard extends StatelessWidget {
                 children: [
                   Text(
                     displayName.isNotEmpty ? displayName : 'Nom non renseigné',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     roleLabel,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.black54),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
                   ),
                 ],
               ),
@@ -116,7 +122,8 @@ class _ContactCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String _label(String? value) => (value?.trim().isNotEmpty ?? false) ? value!.trim() : 'Non renseigné';
+    String label(String? value) =>
+        (value?.trim().isNotEmpty ?? false) ? value!.trim() : 'Non renseigné';
 
     return Card(
       elevation: 0,
@@ -128,25 +135,27 @@ class _ContactCard extends StatelessWidget {
           children: [
             Text(
               'Coordonnées',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
             _InfoTile(
               icon: Icons.phone_outlined,
               label: 'Téléphone',
-              value: _label(user.telephone),
+              value: label(user.telephone),
             ),
             const Divider(height: 24),
             _InfoTile(
               icon: Icons.mail_outline,
               label: 'E-mail',
-              value: _label(user.email),
+              value: label(user.email),
             ),
             const Divider(height: 24),
             _InfoTile(
               icon: Icons.location_on_outlined,
               label: 'Adresse',
-              value: _label(user.adresse),
+              value: label(user.adresse),
             ),
           ],
         ),
@@ -162,13 +171,15 @@ class _DocumentsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String _vehicleLabel(TypeVehicule? value) {
+    String vehicleLabel(TypeVehicule? value) {
       if (value == null) return 'Non renseignǸ';
       final formatted = value.name
           .toLowerCase()
           .split('_')
-          .map((part) =>
-              part.isEmpty ? part : part[0].toUpperCase() + part.substring(1))
+          .map(
+            (part) =>
+                part.isEmpty ? part : part[0].toUpperCase() + part.substring(1),
+          )
           .join(' ');
       return formatted;
     }
@@ -183,16 +194,18 @@ class _DocumentsCard extends StatelessWidget {
           children: [
             Text(
               'Documents & vǸhicule',
-              style:
-                  Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
             LayoutBuilder(
               builder: (context, constraints) {
                 final isWide = constraints.maxWidth >= 500;
-                final itemWidth = isWide
-                    ? (constraints.maxWidth - 12) / 2
-                    : constraints.maxWidth;
+                final itemWidth =
+                    isWide
+                        ? (constraints.maxWidth - 12) / 2
+                        : constraints.maxWidth;
                 return Wrap(
                   spacing: 12,
                   runSpacing: 12,
@@ -230,7 +243,7 @@ class _DocumentsCard extends StatelessWidget {
             _InfoTile(
               icon: Icons.local_shipping_outlined,
               label: 'Type de vǸhicule',
-              value: _vehicleLabel(user.typeVehicule),
+              value: vehicleLabel(user.typeVehicule),
             ),
           ],
         ),
@@ -262,29 +275,30 @@ class _DocumentPreview extends StatelessWidget {
         children: [
           Text(
             label,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: Colors.black54),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: Colors.black54),
           ),
           const SizedBox(height: 8),
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: AspectRatio(
               aspectRatio: 4 / 3,
-              child: hasImage
-                  ? Image.network(
-                      trimmed!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _DocumentPlaceholder(
-                        icon: Icons.broken_image_outlined,
-                        label: 'Impossible de charger',
+              child:
+                  hasImage
+                      ? Image.network(
+                        trimmed,
+                        fit: BoxFit.cover,
+                        errorBuilder:
+                            (_, __, ___) => _DocumentPlaceholder(
+                              icon: Icons.broken_image_outlined,
+                              label: 'Impossible de charger',
+                            ),
+                      )
+                      : const _DocumentPlaceholder(
+                        icon: Icons.image_not_supported_outlined,
+                        label: 'Document indisponible',
                       ),
-                    )
-                  : const _DocumentPlaceholder(
-                      icon: Icons.image_not_supported_outlined,
-                      label: 'Document indisponible',
-                    ),
             ),
           ),
         ],
@@ -311,10 +325,9 @@ class _DocumentPlaceholder extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               label,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: Colors.black45),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Colors.black45),
               textAlign: TextAlign.center,
             ),
           ],
@@ -346,11 +359,18 @@ class _InfoTile extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54)),
+              Text(
+                label,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+              ),
               const SizedBox(height: 4),
               Text(
                 value,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
               ),
             ],
           ),
@@ -378,7 +398,9 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             'Connectez-vous pour consulter et gérer votre profil.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.black54),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
             textAlign: TextAlign.center,
           ),
         ],

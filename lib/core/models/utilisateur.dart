@@ -34,10 +34,10 @@ class Utilisateur {
   final bool? online;
 
   // ✅ Nouveaux attributs alignés backend
-  final double? latitude;     // Java: Double
-  final double? longitude;    // Java: Double
-  final SousZone? sousZone;   // Java: enum SousZone
-  final Zone? zone;           // Java: enum Zone
+  final double? latitude; // Java: Double
+  final double? longitude; // Java: Double
+  final SousZone? sousZone; // Java: enum SousZone
+  final Zone? zone; // Java: enum Zone
 
   const Utilisateur({
     required this.id,
@@ -123,13 +123,13 @@ class Utilisateur {
   // ---------------- JSON MAPPING ----------------
 
   factory Utilisateur.fromJson(Map<String, dynamic> json) {
-    DateTime? _parseDate(dynamic v) {
+    DateTime? parseDate(dynamic v) {
       if (v == null) return null;
       if (v is String && v.isNotEmpty) return DateTime.tryParse(v);
       return null;
     }
 
-    double? _toDouble(dynamic v) {
+    double? toDouble(dynamic v) {
       if (v == null) return null;
       if (v is num) return v.toDouble();
       if (v is String && v.trim().isNotEmpty) return double.tryParse(v.trim());
@@ -140,7 +140,7 @@ class Utilisateur {
       id: (json['id'] ?? json['_id'] ?? '').toString(),
       nom: json['nom'] as String?,
       prenom: json['prenom'] as String?,
-      dateNaissance: _parseDate(json['dateNaissance']),
+      dateNaissance: parseDate(json['dateNaissance']),
       email: json['email'] as String?,
       telephone: json['telephone'] as String?,
       role: _roleFromString(json['role']),
@@ -153,29 +153,29 @@ class Utilisateur {
       imageCarteGrise: json['imageCarteGrise'] as String?,
       imageAssurance: json['imageAssurance'] as String?,
       typeVehicule: _typeVehiculeFromString(json['typeVehicule']),
-      dateCreation: _parseDate(json['dateCreation']),
-      lastSeen: _parseDate(json['lastSeen']),
+      dateCreation: parseDate(json['dateCreation']),
+      lastSeen: parseDate(json['lastSeen']),
       online: json['online'] as bool?,
       // ✅ nouveaux champs
-      latitude: _toDouble(json['latitude']),
-      longitude: _toDouble(json['longitude']),
+      latitude: toDouble(json['latitude']),
+      longitude: toDouble(json['longitude']),
       sousZone: _sousZoneFromString(json['sousZone']),
       zone: _zoneFromString(json['zone']),
     );
   }
 
   Map<String, dynamic> toJson({bool includeId = true}) {
-    String? _dateToIso(DateTime? d) => d?.toIso8601String();
+    String? dateToIso(DateTime? d) => d?.toIso8601String();
 
     final map = <String, dynamic>{
       if (includeId) 'id': id,
       'nom': nom,
       'prenom': prenom,
-      'dateNaissance': _dateToIso(dateNaissance),
+      'dateNaissance': dateToIso(dateNaissance),
       'email': email,
       'telephone': telephone,
-      'role': role.name,       // "client" | "transporteur" | "admin"
-      'statut': statut.name,   // "actif"  | "inactif"      | "banni"
+      'role': role.name, // "client" | "transporteur" | "admin"
+      'statut': statut.name, // "actif"  | "inactif"      | "banni"
       'adresse': adresse,
       'image': image,
       'imageCarteIdentiteFace': imageCarteIdentiteFace,
@@ -184,8 +184,8 @@ class Utilisateur {
       'imageCarteGrise': imageCarteGrise,
       'imageAssurance': imageAssurance,
       'typeVehicule': typeVehicule?.name,
-      'dateCreation': _dateToIso(dateCreation),
-      'lastSeen': _dateToIso(lastSeen),
+      'dateCreation': dateToIso(dateCreation),
+      'lastSeen': dateToIso(lastSeen),
       'online': online,
       // ✅ nouveaux champs
       'latitude': latitude,
@@ -271,17 +271,11 @@ class Utilisateur {
 // ---------------- ENUMS ----------------
 
 enum Role { client, transporteur, admin }
+
 enum Statut { actif, inactif, banni }
 
 // --- Enum pour les grandes zones (régions principales) ---
-enum Zone {
-  GRAND_TUNIS,
-  COTIER_NORD,
-  CENTRE_EST,
-  SFAX,
-  SUD_EST,
-  INTERIEUR,
-}
+enum Zone { GRAND_TUNIS, COTIER_NORD, CENTRE_EST, SFAX, SUD_EST, INTERIEUR }
 
 // --- Enum pour les sous-zones (zones détaillées pour scooters) ---
 enum SousZone {

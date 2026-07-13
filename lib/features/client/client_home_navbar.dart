@@ -4,7 +4,6 @@ import 'pages/livrer_page.dart';
 import 'pages/commandes_page.dart';
 import 'pages/amis_page.dart';
 import 'pages/profil_page.dart';
-import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
 
 class ClientHome extends StatefulWidget {
   const ClientHome({super.key});
@@ -17,10 +16,10 @@ class _ClientHomeState extends State<ClientHome> {
   int _currentIndex = 0;
 
   final List<Widget> _pages = [
-    LivrerPage(),        // Page for "Livrer"
-    CommandesPage(),     // Page for "Commandes"
-    AmisPage(),          // Page for "Amis"
-    ProfilPage(),        // Page for "Profil" 
+    LivrerPage(), // Page for "Livrer"
+    CommandesPage(), // Page for "Commandes"
+    AmisPage(), // Page for "Amis"
+    ProfilPage(), // Page for "Profil"
   ];
 
   @override
@@ -46,14 +45,8 @@ class _ClientHomeState extends State<ClientHome> {
             icon: Icon(Icons.list_alt),
             label: 'Commandes',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.people),
-            label: 'Amis',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profil',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Amis'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
         ],
       ),
     );

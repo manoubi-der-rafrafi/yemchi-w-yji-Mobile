@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:yemchi_wyji/core/models/utilisateur.dart';
+import 'package:yemchi_wyji/core/network/api.dart';
 import 'package:yemchi_wyji/core/storage/token_storage.dart';
 import 'package:yemchi_wyji/features/auth/data/auth_user_service.dart';
 
@@ -12,6 +13,50 @@ class AuthController {
   final ValueNotifier<Utilisateur?> currentUser = ValueNotifier(null);
   final ValueNotifier<bool> loading = ValueNotifier(false);
   final ValueNotifier<String?> error = ValueNotifier(null);
+
+  /// Register: crée le compte puis connecte automatiquement.
+  Future<bool> register({
+    required String email,
+    required String password,
+    required String nom,
+    required String prenom,
+    required String telephone,
+    required String adresse,
+    required String dateNaissance,
+  }) async {
+    loading.value = true;
+    error.value = null;
+    try {
+      final res = await _svc.register(
+        email: email,
+        password: password,
+        nom: nom,
+        prenom: prenom,
+        telephone: telephone,
+        adresse: adresse,
+        dateNaissance: dateNaissance,
+      );
+      await TokenStorage.save(access: res.token, userId: res.user.id);
+      currentUser.value = res.user;
+      return true;
+    } on ApiException catch (e) {
+      error.value = e.message;
+      return false;
+    } catch (e) {
+      // TimeoutException, SocketException, etc.
+      final msg = e.toString();
+      if (msg.contains('TimeoutException') || msg.contains('timeout')) {
+        error.value = 'Serveur injoignable. Vérifiez votre connexion.';
+      } else if (msg.contains('SocketException') || msg.contains('Connection refused')) {
+        error.value = 'Impossible de contacter le serveur. Est-il démarré ?';
+      } else {
+        error.value = msg;
+      }
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  }
 
   /// Login: récupère {token, user}, sauvegarde le token, met à jour l'état.
   Future<bool> login(String email, String password) async {

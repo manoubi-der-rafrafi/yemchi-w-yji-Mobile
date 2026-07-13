@@ -12,6 +12,49 @@ class AuthUserService {
   static String _byId(String id) => '/utilisateur/id/$id';
   static String _updateById(String id) => '/utilisateur/$id';
 
+  // ---- Register endpoints ----
+  static const _register = '/utilisateur/register';
+
+  // ---------- REGISTER ----------
+  /// Crée un compte complet en une seule requête (POST /api/utilisateur/register).
+  /// Retourne un [LoginResult] (token + user) directement utilisable pour connecter l'utilisateur.
+  Future<LoginResult> register({
+    required String email,
+    required String password,
+    required String nom,
+    required String prenom,
+    required String telephone,
+    required String adresse,
+    required String dateNaissance, // format "YYYY-MM-DD"
+  }) async {
+    final r = await api.post(
+      _register,
+      body: json.encode({
+        'email': email,
+        'motDePasse': password,
+        'nom': nom,
+        'prenom': prenom,
+        'telephone': telephone,
+        'adresse': adresse,
+        'dateNaissance': dateNaissance,
+      }),
+    );
+
+    final m = json.decode(r.body) as Map<String, dynamic>;
+
+    final token = m['token']?.toString();
+    if (token == null || token.isEmpty) {
+      throw ApiException(500, 'Token manquant dans la réponse');
+    }
+
+    final userMap = (m['user'] is Map<String, dynamic>)
+        ? m['user'] as Map<String, dynamic>
+        : m;
+    final user = Utilisateur.fromJson(userMap);
+
+    return LoginResult(token: token, user: user);
+  }
+
   // ---------- LOGIN ----------
   Future<LoginResult> login({
     required String email,

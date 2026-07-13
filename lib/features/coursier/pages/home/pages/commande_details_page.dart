@@ -44,9 +44,7 @@ class _CommandeDetailsPageState extends State<CommandeDetailsPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Details de la commande'),
-      ),
+      appBar: AppBar(title: const Text('Details de la commande')),
       body: FutureBuilder<_CommandeDetailsData>(
         future: _future,
         builder: (context, snapshot) {
@@ -113,12 +111,14 @@ class _ClientCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final email = client?.email?.trim().isNotEmpty == true
-        ? client!.email!
-        : (fallbackEmail ?? 'Email non disponible');
-    final phone = client?.telephone?.trim().isNotEmpty == true
-        ? client!.telephone!
-        : (fallbackPhone ?? 'Numero non disponible');
+    final email =
+        client?.email?.trim().isNotEmpty == true
+            ? client!.email!
+            : (fallbackEmail ?? 'Email non disponible');
+    final phone =
+        client?.telephone?.trim().isNotEmpty == true
+            ? client!.telephone!
+            : (fallbackPhone ?? 'Numero non disponible');
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -145,10 +145,7 @@ class _ClientCard extends StatelessWidget {
                       const Icon(Icons.email_outlined, size: 16),
                       const SizedBox(width: 6),
                       Expanded(
-                        child: Text(
-                          email,
-                          style: theme.textTheme.bodySmall,
-                        ),
+                        child: Text(email, style: theme.textTheme.bodySmall),
                       ),
                     ],
                   ),
@@ -157,10 +154,7 @@ class _ClientCard extends StatelessWidget {
                     children: [
                       const Icon(Icons.phone_outlined, size: 16),
                       const SizedBox(width: 6),
-                      Text(
-                        phone,
-                        style: theme.textTheme.bodySmall,
-                      ),
+                      Text(phone, style: theme.textTheme.bodySmall),
                     ],
                   ),
                 ],
@@ -212,25 +206,28 @@ class _CommandeInfoCard extends StatelessWidget {
             _InfoRow(
               icon: Icons.route,
               label: 'Trajet',
-              value: commande.distanceKm != null
-                  ? '${commande.distanceKm!.toStringAsFixed(1)} km'
-                  : 'Non precise',
+              value:
+                  commande.distanceKm != null
+                      ? '${commande.distanceKm!.toStringAsFixed(1)} km'
+                      : 'Non precise',
             ),
             const SizedBox(height: 8),
             _InfoRow(
               icon: Icons.payments_outlined,
               label: 'Prix',
-              value: commande.prix != null
-                  ? '${commande.prix!.toStringAsFixed(2)} DT'
-                  : 'Non precise',
+              value:
+                  commande.prix != null
+                      ? '${commande.prix!.toStringAsFixed(2)} DT'
+                      : 'Non precise',
             ),
             const SizedBox(height: 8),
             _InfoRow(
               icon: Icons.qr_code_2,
               label: 'QR Reception',
-              value: commande.qrCodeReceptionScanne == true
-                  ? 'Scannee'
-                  : 'Non scannee',
+              value:
+                  commande.qrCodeReceptionScanne == true
+                      ? 'Scannee'
+                      : 'Non scannee',
             ),
           ],
         ),
@@ -456,10 +453,8 @@ class _PlaceholderProduitImage extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
-        color: theme.colorScheme.surfaceVariant,
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant,
-        ),
+        color: theme.colorScheme.surfaceContainerHighest,
+        border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       alignment: Alignment.center,
       child: Icon(

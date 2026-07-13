@@ -10,7 +10,8 @@ class HistoriqueCommandesPage extends StatefulWidget {
   const HistoriqueCommandesPage({super.key});
 
   @override
-  State<HistoriqueCommandesPage> createState() => _HistoriqueCommandesPageState();
+  State<HistoriqueCommandesPage> createState() =>
+      _HistoriqueCommandesPageState();
 }
 
 class _HistoriqueCommandesPageState extends State<HistoriqueCommandesPage> {
@@ -62,7 +63,8 @@ class _HistoriqueCommandesPageState extends State<HistoriqueCommandesPage> {
   }
 
   void _applyFilters() {
-    final list = _commandes.where((commande) => _matchesFilters(commande)).toList();
+    final list =
+        _commandes.where((commande) => _matchesFilters(commande)).toList();
     _filteredCommandes = list;
   }
 
@@ -76,7 +78,8 @@ class _HistoriqueCommandesPageState extends State<HistoriqueCommandesPage> {
     }
 
     if (_dateRange != null) {
-      final date = commande.dateDemande ?? commande.dateDebut ?? commande.dateFin;
+      final date =
+          commande.dateDemande ?? commande.dateDebut ?? commande.dateFin;
       if (date == null) return false;
       final start = DateUtils.dateOnly(_dateRange!.start);
       final end = DateUtils.dateOnly(_dateRange!.end);
@@ -102,13 +105,14 @@ class _HistoriqueCommandesPageState extends State<HistoriqueCommandesPage> {
     final filters = await showModalBottomSheet<_HistoriqueFilters>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _FilterSheet(
-        initialMinPrice: _minPrice,
-        initialMaxPrice: _maxPrice,
-        initialDateRange: _dateRange,
-        initialZone: _selectedZone,
-        zones: _availableZones,
-      ),
+      builder:
+          (_) => _FilterSheet(
+            initialMinPrice: _minPrice,
+            initialMaxPrice: _maxPrice,
+            initialDateRange: _dateRange,
+            initialZone: _selectedZone,
+            zones: _availableZones,
+          ),
     );
     if (filters == null) return;
     setState(() {
@@ -123,10 +127,12 @@ class _HistoriqueCommandesPageState extends State<HistoriqueCommandesPage> {
   List<String> get _availableZones {
     final set = <String>{};
     for (final c in _commandes) {
-      if (c.zonePrincipaleDepart != null && c.zonePrincipaleDepart!.isNotEmpty) {
+      if (c.zonePrincipaleDepart != null &&
+          c.zonePrincipaleDepart!.isNotEmpty) {
         set.add(c.zonePrincipaleDepart!);
       }
-      if (c.zonePrincipaleArrivee != null && c.zonePrincipaleArrivee!.isNotEmpty) {
+      if (c.zonePrincipaleArrivee != null &&
+          c.zonePrincipaleArrivee!.isNotEmpty) {
         set.add(c.zonePrincipaleArrivee!);
       }
     }
@@ -149,10 +155,7 @@ class _HistoriqueCommandesPageState extends State<HistoriqueCommandesPage> {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: _buildBody(),
-      ),
+      body: Padding(padding: const EdgeInsets.all(16), child: _buildBody()),
     );
   }
 
@@ -161,21 +164,19 @@ class _HistoriqueCommandesPageState extends State<HistoriqueCommandesPage> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_error != null) {
-      return _HistoriqueError(
-        error: _error!,
-        onRetry: _fetchHistorique,
-      );
+      return _HistoriqueError(error: _error!, onRetry: _fetchHistorique);
     }
     if (_filteredCommandes.isEmpty) {
       return const _HistoriqueEmpty();
     }
     return _HistoriqueTable(
       commandes: _filteredCommandes,
-      onDetails: (commande) => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => CommandeDetailsPage(commande: commande),
-        ),
-      ),
+      onDetails:
+          (commande) => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => CommandeDetailsPage(commande: commande),
+            ),
+          ),
     );
   }
 }
@@ -184,10 +185,7 @@ class _HistoriqueTable extends StatelessWidget {
   final List<Commande> commandes;
   final ValueChanged<Commande> onDetails;
 
-  const _HistoriqueTable({
-    required this.commandes,
-    required this.onDetails,
-  });
+  const _HistoriqueTable({required this.commandes, required this.onDetails});
 
   @override
   Widget build(BuildContext context) {
@@ -229,50 +227,91 @@ class _HistoriqueTable extends StatelessWidget {
                     child: DataTable(
                       columnSpacing: 28,
                       columns: const [
-                        DataColumn(label: _ColumnHeader(icon: Icons.flight_takeoff, label: 'Depart')),
-                        DataColumn(label: _ColumnHeader(icon: Icons.flag, label: 'Arrivee')),
-                        DataColumn(label: _ColumnHeader(icon: Icons.route, label: 'Trajet')),
-                        DataColumn(label: _ColumnHeader(icon: Icons.qr_code_2, label: 'Reception')),
-                        DataColumn(label: _ColumnHeader(icon: Icons.payments, label: 'Prix')),
-                        DataColumn(label: _ColumnHeader(icon: Icons.open_in_new, label: 'Actions')),
+                        DataColumn(
+                          label: _ColumnHeader(
+                            icon: Icons.flight_takeoff,
+                            label: 'Depart',
+                          ),
+                        ),
+                        DataColumn(
+                          label: _ColumnHeader(
+                            icon: Icons.flag,
+                            label: 'Arrivee',
+                          ),
+                        ),
+                        DataColumn(
+                          label: _ColumnHeader(
+                            icon: Icons.route,
+                            label: 'Trajet',
+                          ),
+                        ),
+                        DataColumn(
+                          label: _ColumnHeader(
+                            icon: Icons.qr_code_2,
+                            label: 'Reception',
+                          ),
+                        ),
+                        DataColumn(
+                          label: _ColumnHeader(
+                            icon: Icons.payments,
+                            label: 'Prix',
+                          ),
+                        ),
+                        DataColumn(
+                          label: _ColumnHeader(
+                            icon: Icons.open_in_new,
+                            label: 'Actions',
+                          ),
+                        ),
                       ],
                       rows: List<DataRow>.generate(commandes.length, (index) {
                         final commande = commandes[index];
                         final bool isEven = index.isEven;
                         return DataRow(
-                          color: MaterialStateProperty.resolveWith(
-                            (states) => isEven
-                                ? theme.colorScheme.surfaceVariant.withOpacity(0.35)
-                                : null,
+                          color: WidgetStateProperty.resolveWith(
+                            (states) =>
+                                isEven
+                                    ? theme.colorScheme.surfaceContainerHighest
+                                        .withOpacity(0.35)
+                                    : null,
                           ),
                           cells: [
-                            DataCell(_ZoneCell(
-                              title: commande.zonePrincipaleDepart,
-                              subtitle: commande.sousZoneDepart,
-                            )),
-                            DataCell(_ZoneCell(
-                              title: commande.zonePrincipaleArrivee,
-                              subtitle: commande.sousZoneArrivee,
-                            )),
-                            DataCell(Text(
-                              commande.distanceKm != null
-                                  ? '${commande.distanceKm!.toStringAsFixed(1)} km'
-                                  : '-',
-                              style: theme.textTheme.bodyMedium,
-                            )),
                             DataCell(
-                              _QrStatusBadge(
-                                scanned: commande.qrCodeReceptionScanne ?? false,
+                              _ZoneCell(
+                                title: commande.zonePrincipaleDepart,
+                                subtitle: commande.sousZoneDepart,
                               ),
                             ),
-                            DataCell(Text(
-                              commande.prix != null
-                                  ? '${commande.prix!.toStringAsFixed(2)} DT'
-                                  : '-',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
+                            DataCell(
+                              _ZoneCell(
+                                title: commande.zonePrincipaleArrivee,
+                                subtitle: commande.sousZoneArrivee,
                               ),
-                            )),
+                            ),
+                            DataCell(
+                              Text(
+                                commande.distanceKm != null
+                                    ? '${commande.distanceKm!.toStringAsFixed(1)} km'
+                                    : '-',
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                            ),
+                            DataCell(
+                              _QrStatusBadge(
+                                scanned:
+                                    commande.qrCodeReceptionScanne ?? false,
+                              ),
+                            ),
+                            DataCell(
+                              Text(
+                                commande.prix != null
+                                    ? '${commande.prix!.toStringAsFixed(2)} DT'
+                                    : '-',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
                             DataCell(
                               FilledButton.tonalIcon(
                                 onPressed: () => onDetails(commande),
@@ -441,10 +480,7 @@ class _HistoriqueCardList extends StatelessWidget {
   final List<Commande> commandes;
   final ValueChanged<Commande> onDetails;
 
-  const _HistoriqueCardList({
-    required this.commandes,
-    required this.onDetails,
-  });
+  const _HistoriqueCardList({required this.commandes, required this.onDetails});
 
   @override
   Widget build(BuildContext context) {
@@ -466,10 +502,7 @@ class _CommandeCardTile extends StatelessWidget {
   final Commande commande;
   final VoidCallback onDetails;
 
-  const _CommandeCardTile({
-    required this.commande,
-    required this.onDetails,
-  });
+  const _CommandeCardTile({required this.commande, required this.onDetails});
 
   @override
   Widget build(BuildContext context) {
@@ -516,21 +549,26 @@ class _CommandeCardTile extends StatelessWidget {
                 _InfoChip(
                   icon: Icons.route_outlined,
                   label: 'Trajet',
-                  value: commande.distanceKm != null
-                      ? '${commande.distanceKm!.toStringAsFixed(1)} km'
-                      : 'N/A',
+                  value:
+                      commande.distanceKm != null
+                          ? '${commande.distanceKm!.toStringAsFixed(1)} km'
+                          : 'N/A',
                 ),
                 _InfoChip(
                   icon: Icons.monetization_on_outlined,
                   label: 'Prix',
-                  value: commande.prix != null
-                      ? '${commande.prix!.toStringAsFixed(2)} DT'
-                      : 'N/A',
+                  value:
+                      commande.prix != null
+                          ? '${commande.prix!.toStringAsFixed(2)} DT'
+                          : 'N/A',
                 ),
                 _InfoChip(
                   icon: Icons.qr_code_2,
                   label: 'Reception',
-                  value: commande.qrCodeReceptionScanne == true ? 'Scannee' : 'Non scannee',
+                  value:
+                      commande.qrCodeReceptionScanne == true
+                          ? 'Scannee'
+                          : 'Non scannee',
                 ),
                 if (commande.statut != null)
                   _InfoChip(
@@ -574,7 +612,7 @@ class _InfoChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.6),
+        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.6),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -587,10 +625,7 @@ class _InfoChip extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-          Text(
-            value,
-            style: theme.textTheme.labelSmall,
-          ),
+          Text(value, style: theme.textTheme.labelSmall),
         ],
       ),
     );
@@ -727,7 +762,10 @@ class _FilterSheetState extends State<_FilterSheet> {
                   const Expanded(
                     child: Text(
                       'Filtrer les commandes',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                   IconButton(
@@ -790,25 +828,22 @@ class _FilterSheetState extends State<_FilterSheet> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: _selectedZone?.isEmpty ?? true ? null : _selectedZone,
-                decoration: const InputDecoration(
-                  labelText: 'Zone principale',
-                ),
+                initialValue:
+                    _selectedZone?.isEmpty ?? true ? null : _selectedZone,
+                decoration: const InputDecoration(labelText: 'Zone principale'),
                 items: [
                   const DropdownMenuItem(
                     value: '',
                     child: Text('Toutes les zones'),
                   ),
                   ...widget.zones.map(
-                    (zone) => DropdownMenuItem(
-                      value: zone,
-                      child: Text(zone),
-                    ),
+                    (zone) => DropdownMenuItem(value: zone, child: Text(zone)),
                   ),
                 ],
                 onChanged: (value) {
                   setState(() {
-                    _selectedZone = (value == null || value.isEmpty) ? null : value;
+                    _selectedZone =
+                        (value == null || value.isEmpty) ? null : value;
                   });
                 },
               ),
@@ -910,10 +945,7 @@ class _HistoriqueError extends StatelessWidget {
   final String error;
   final VoidCallback onRetry;
 
-  const _HistoriqueError({
-    required this.error,
-    required this.onRetry,
-  });
+  const _HistoriqueError({required this.error, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {

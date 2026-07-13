@@ -25,16 +25,13 @@ class _DemandesAAccepterPageState extends State<DemandesAAccepterPage> {
 
   Future<Utilisateur?>? _futureForClient(String? clientId) {
     if (clientId == null || clientId.trim().isEmpty) return null;
-    return _clientFutures.putIfAbsent(
-      clientId,
-      () async {
-        try {
-          return await context.read<AuthUserService>().getById(clientId);
-        } catch (_) {
-          return null;
-        }
-      },
-    );
+    return _clientFutures.putIfAbsent(clientId, () async {
+      try {
+        return await context.read<AuthUserService>().getById(clientId);
+      } catch (_) {
+        return null;
+      }
+    });
   }
 
   Future<void> _refresh(HomeController home) async {
@@ -69,7 +66,9 @@ class _DemandesAAccepterPageState extends State<DemandesAAccepterPage> {
 
   Future<void> _applySousZoneFilter() async {
     final bool departSpecific = _hasSpecificSelection(_selectedDepartSousZones);
-    final bool arriveeSpecific = _hasSpecificSelection(_selectedArriveeSousZones);
+    final bool arriveeSpecific = _hasSpecificSelection(
+      _selectedArriveeSousZones,
+    );
 
     final departPayload = _serializeSousZones(
       _selectedDepartSousZones,
@@ -102,9 +101,9 @@ class _DemandesAAccepterPageState extends State<DemandesAAccepterPage> {
       setState(() => _filteredCommandes = commandes);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur filtre sous-zone: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erreur filtre sous-zone: $e')));
     } finally {
       if (mounted) {
         setState(() => _isFilterLoading = false);
@@ -145,10 +144,7 @@ class _DemandesAAccepterPageState extends State<DemandesAAccepterPage> {
     await showModalBottomSheet(
       context: context,
       showDragHandle: true,
-      builder: (_) => CommandeDetailsSheet(
-        commande: commande,
-        isMine: false,
-      ),
+      builder: (_) => CommandeDetailsSheet(commande: commande, isMine: false),
     );
     if (!mounted) return;
     await _refresh(context.read<HomeController>());
@@ -166,9 +162,7 @@ class _DemandesAAccepterPageState extends State<DemandesAAccepterPage> {
     final commandes = _filteredCommandes ?? home.commandes;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Demandes a accepter'),
-      ),
+      appBar: AppBar(title: const Text('Demandes a accepter')),
       body: RefreshIndicator(
         onRefresh: () => _refresh(home),
         child: ListView.builder(
@@ -301,10 +295,7 @@ class _DemandeCommandeCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _ClientHeader(
-              commande: commande,
-              future: clientFuture,
-            ),
+            _ClientHeader(commande: commande, future: clientFuture),
             const SizedBox(height: 8),
             _ModePaiementBadge(
               label: _modePaiementLabel(commande.modePaiement),
@@ -313,7 +304,9 @@ class _DemandeCommandeCard extends StatelessWidget {
             const SizedBox(height: 12),
             DecoratedBox(
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                color: theme.colorScheme.surfaceContainerHighest.withOpacity(
+                  0.5,
+                ),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Padding(
@@ -399,19 +392,12 @@ class _ClientHeader extends StatelessWidget {
   final Commande commande;
   final Future<Utilisateur?>? future;
 
-  const _ClientHeader({
-    required this.commande,
-    required this.future,
-  });
+  const _ClientHeader({required this.commande, required this.future});
 
   @override
   Widget build(BuildContext context) {
     if (future == null) {
-      return _ClientRow(
-        user: null,
-        isLoading: false,
-        commande: commande,
-      );
+      return _ClientRow(user: null, isLoading: false, commande: commande);
     }
     return FutureBuilder<Utilisateur?>(
       future: future,
@@ -450,16 +436,19 @@ class _ClientRow extends StatelessWidget {
         CircleAvatar(
           radius: 26,
           backgroundImage:
-              (avatarImage != null && avatarImage.isNotEmpty) ? NetworkImage(avatarImage) : null,
-          child: (avatarImage == null || avatarImage.isEmpty)
-              ? (isLoading
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.person))
-              : null,
+              (avatarImage != null && avatarImage.isNotEmpty)
+                  ? NetworkImage(avatarImage)
+                  : null,
+          child:
+              (avatarImage == null || avatarImage.isEmpty)
+                  ? (isLoading
+                      ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.person))
+                  : null,
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -468,10 +457,14 @@ class _ClientRow extends StatelessWidget {
             children: [
               Text(
                 _fallback(
-                  user != null ? '${user!.prenom ?? ''} ${user!.nom ?? ''}'.trim() : '',
+                  user != null
+                      ? '${user!.prenom ?? ''} ${user!.nom ?? ''}'.trim()
+                      : '',
                   'Client inconnu',
                 ),
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 4),
@@ -496,10 +489,7 @@ class _ModePaiementBadge extends StatelessWidget {
   final String label;
   final Color color;
 
-  const _ModePaiementBadge({
-    required this.label,
-    required this.color,
-  });
+  const _ModePaiementBadge({required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -557,15 +547,12 @@ class _RouteRow extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 2),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
+              Text(value, style: Theme.of(context).textTheme.bodyMedium),
             ],
           ),
         ),
@@ -602,17 +589,14 @@ class _InfoChip extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
             ],
           ),
           const SizedBox(height: 4),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          Text(value, style: Theme.of(context).textTheme.titleMedium),
         ],
       ),
     );
@@ -623,10 +607,7 @@ class _PhoneRow extends StatelessWidget {
   final String label;
   final String value;
 
-  const _PhoneRow({
-    required this.label,
-    required this.value,
-  });
+  const _PhoneRow({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -640,15 +621,12 @@ class _PhoneRow extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 2),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
+              Text(value, style: Theme.of(context).textTheme.bodyMedium),
             ],
           ),
         ),
@@ -684,21 +662,10 @@ class _SousZoneFilters extends StatelessWidget {
       SousZone.NABEUL_HAMMAMET,
       SousZone.KELIBIA_MENZEL_TEMIME,
     ],
-    'CENTRE EST': [
-      SousZone.SOUSSE,
-      SousZone.MONASTIR,
-      SousZone.MAHDIA,
-    ],
-    'SFAX': [
-      SousZone.SFAX,
-    ],
-    'SUD EST': [
-      SousZone.GABES,
-      SousZone.DJERBA_ZARZIS,
-    ],
-    'INTERIEUR': [
-      SousZone.KAIROUAN,
-    ],
+    'CENTRE EST': [SousZone.SOUSSE, SousZone.MONASTIR, SousZone.MAHDIA],
+    'SFAX': [SousZone.SFAX],
+    'SUD EST': [SousZone.GABES, SousZone.DJERBA_ZARZIS],
+    'INTERIEUR': [SousZone.KAIROUAN],
   };
 
   @override
@@ -708,9 +675,9 @@ class _SousZoneFilters extends StatelessWidget {
       children: [
         Text(
           'Filtrer par sous-zone',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         Row(
@@ -775,15 +742,15 @@ class _MultiSelectSousZoneField extends StatelessWidget {
           context: context,
           showDragHandle: true,
           isScrollControlled: true,
-          builder: (_) => _SousZoneSelectionSheet(
-            title: label,
-            initialSelection: selected,
-          ),
+          builder:
+              (_) => _SousZoneSelectionSheet(
+                title: label,
+                initialSelection: selected,
+              ),
         );
         if (result != null) {
-          final normalized = result.length >= SousZone.values.length
-              ? <SousZone>{}
-              : result;
+          final normalized =
+              result.length >= SousZone.values.length ? <SousZone>{} : result;
           onChanged(normalized);
         }
       },
@@ -848,9 +815,9 @@ class _SousZoneSelectionSheetState extends State<_SousZoneSelectionSheet> {
             children: [
               Text(
                 'Choisir les sous-zones ${widget.title.toLowerCase()}',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               Expanded(
@@ -868,9 +835,7 @@ class _SousZoneSelectionSheetState extends State<_SousZoneSelectionSheet> {
                           ),
                           child: Text(
                             entry.key,
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelLarge
+                            style: Theme.of(context).textTheme.labelLarge
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                         ),
@@ -899,8 +864,7 @@ class _SousZoneSelectionSheetState extends State<_SousZoneSelectionSheet> {
                   const Spacer(),
                   FilledButton(
                     onPressed: () {
-                      Navigator.of(context)
-                          .pop(Set<SousZone>.from(_selection));
+                      Navigator.of(context).pop(Set<SousZone>.from(_selection));
                     },
                     child: const Text('Valider'),
                   ),
