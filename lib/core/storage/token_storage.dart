@@ -1,59 +1,70 @@
 ﻿import 'dart:convert';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-/// Stockage sécurisé des JWT (access + refresh) dans le coffre système.
-/// - iOS: Keychain
-/// - Android: Keystore + EncryptedSharedPreferences
+/// Token storage using SharedPreferences.
+/// Fast and reliable on both emulator and real devices.
 class TokenStorage {
   static const _kAccess = 'access_token';
   static const _kRefresh = 'refresh_token';
   static const _kUserId = 'user_id';
-  static const FlutterSecureStorage _s = FlutterSecureStorage();
 
-  /// Sauvegarde (rotation possible)
+  // ── Write ──────────────────────────────────────────────────────────
   static Future<void> save({
     required String access,
     String? refresh,
     String? userId,
   }) async {
-    await _s.write(key: _kAccess, value: access);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kAccess, access);
     if (refresh != null && refresh.isNotEmpty) {
-      await _s.write(key: _kRefresh, value: refresh);
+      await prefs.setString(_kRefresh, refresh);
     }
     if (userId != null && userId.isNotEmpty) {
-      await _s.write(key: _kUserId, value: userId);
+      await prefs.setString(_kUserId, userId);
     }
   }
 
-  static Future<String?> access()  => _s.read(key: _kAccess);
-  static Future<String?> refresh() => _s.read(key: _kRefresh);
-  static Future<String?> userId()  => _s.read(key: _kUserId);
-
-  static Future<bool> hasAccess() async => (await access())?.isNotEmpty == true;
-  static Future<bool> hasRefresh() async => (await refresh())?.isNotEmpty == true;
-  static Future<bool> hasUserId() async => (await userId())?.isNotEmpty == true;
-
-  /// Efface tout (logout)
-  static Future<void> clear() async {
-    await _s.delete(key: _kAccess);
-    await _s.delete(key: _kRefresh);
-    await _s.delete(key: _kUserId);
+  // ── Read ───────────────────────────────────────────────────────────
+  static Future<String?> access() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_kAccess);
   }
 
-  /// --------- Aides JWT (facultatif mais utile) ---------
+  static Future<String?> refresh() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_kRefresh);
+  }
 
-  /// True si l'access token est expiré (ou invalide).
-  /// Ajoute une marge (skew) pour anticiper les décalages d’horloge.
+  static Future<String?> userId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_kUserId);
+  }
+
+  static Future<bool> hasAccess() async =>
+      ((await access())?.isNotEmpty) == true;
+  static Future<bool> hasRefresh() async =>
+      ((await refresh())?.isNotEmpty) == true;
+  static Future<bool> hasUserId() async =>
+      ((await userId())?.isNotEmpty) == true;
+
+  // ── Clear (logout) ─────────────────────────────────────────────────
+  static Future<void> clear() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kAccess);
+    await prefs.remove(_kRefresh);
+    await prefs.remove(_kUserId);
+  }
+
+  // ── JWT helpers ────────────────────────────────────────────────────
   static Future<bool> isAccessExpired({int skewSeconds = 30}) async {
     final t = await access();
     if (t == null || t.isEmpty) return true;
     final exp = _jwtExp(t);
-    if (exp == null) return false; // token opaque => on ne sait pas
+    if (exp == null) return false;
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     return (exp - skewSeconds) <= now;
   }
 
-  /// Secondes restantes avant expiration (null si inconnu).
   static Future<int?> accessRemainingSeconds() async {
     final t = await access();
     final exp = t == null ? null : _jwtExp(t);
@@ -62,21 +73,17 @@ class TokenStorage {
     return exp - now;
   }
 
-  /// Décode le payload du JWT (non vérifié cryptographiquement).
   static Future<Map<String, dynamic>?> accessPayload() async {
     final t = await access();
     if (t == null) return null;
     return _jwtPayload(t);
   }
 
-  /// --- helpers internes ---
-
   static Map<String, dynamic>? _jwtPayload(String token) {
     final parts = token.split('.');
     if (parts.length != 3) return null;
     try {
-      final payload = _base64UrlDecode(parts[1]);
-      return json.decode(payload) as Map<String, dynamic>;
+      return json.decode(_base64UrlDecode(parts[1])) as Map<String, dynamic>;
     } catch (_) {
       return null;
     }
@@ -91,13 +98,11 @@ class TokenStorage {
   }
 
   static String _base64UrlDecode(String input) {
-    String normalized = input.replaceAll('-', '+').replaceAll('_', '/');
-    switch (normalized.length % 4) {
-      case 2: normalized += '=='; break;
-      case 3: normalized += '='; break;
-      case 0: break;
-      default: throw const FormatException('Invalid Base64URL');
+    String s = input.replaceAll('-', '+').replaceAll('_', '/');
+    switch (s.length % 4) {
+      case 2: s += '=='; break;
+      case 3: s += '=';  break;
     }
-    return utf8.decode(base64.decode(normalized));
+    return utf8.decode(base64.decode(s));
   }
 }

@@ -1,113 +1,105 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
 
 class ProfilPage extends StatelessWidget {
   const ProfilPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Example static user data
-    const avatar = "assets/avatar.png"; // Put your image in assets!
-    const cameraIcon = "assets/profil/camera.png"; // Same here
-    const defaultUser = {
-      'nom': 'Dupont',
-      'prenom': 'Marie',
-      'email': 'marie.dupont@example.com',
-      'telephone': '+33 6 12 34 56 78',
-      'adresse': '12 Rue des Fleurs, Paris',
-      'dateNaissance': '15/04/1990',
-    };
+    final auth = context.watch<AuthController>();
+    final user = auth.currentUser.value;
+
+    final fullName = [user?.prenom, user?.nom]
+        .where((s) => s != null && s.isNotEmpty)
+        .join(' ');
 
     return Scaffold(
       appBar: AppBar(
         title: const Text("Profil"),
         centerTitle: true,
         backgroundColor: Colors.green,
+        foregroundColor: Colors.white,
       ),
+      backgroundColor: Colors.grey.shade100,
       body: Column(
         children: [
-          // Profile block
+          // ── Profile card ──────────────────────────────────────────
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(24),
-              boxShadow: [BoxShadow(
-                color: Colors.black12, blurRadius: 16, offset: Offset(0, 8)
-              )],
+              boxShadow: const [
+                BoxShadow(color: Colors.black12, blurRadius: 16, offset: Offset(0, 8))
+              ],
             ),
             child: Column(
               children: [
-                Stack(
-                  alignment: Alignment.bottomRight,
-                  children: [
-                    CircleAvatar(
-                      radius: 48,
-                      backgroundImage: AssetImage(avatar),
-                    ),
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(21),
-                        onTap: () {}, // Can add change photo action
-                        child: CircleAvatar(
-                          radius: 21,
-                          backgroundColor: Colors.grey.shade200,
-                          child: Image.asset(cameraIcon, width: 28, height: 28),
-                        ),
-                      ),
-                    ),
-                  ],
+                // Avatar
+                CircleAvatar(
+                  radius: 48,
+                  backgroundColor: Colors.green.shade100,
+                  backgroundImage: (user?.image != null && user!.image!.isNotEmpty)
+                      ? NetworkImage(user.image!)
+                      : null,
+                  child: (user?.image == null || user!.image!.isEmpty)
+                      ? Text(
+                          fullName.isNotEmpty ? fullName[0].toUpperCase() : '?',
+                          style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.green),
+                        )
+                      : null,
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  "${defaultUser['nom']} ${defaultUser['prenom']}",
+                  fullName.isNotEmpty ? fullName : 'Utilisateur',
                   style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.email, color: Colors.green, size: 18),
-                    const SizedBox(width: 6),
-                    Text(defaultUser['email']!, style: TextStyle(fontSize: 16, color: Colors.black54)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.phone, color: Colors.green, size: 18),
-                    const SizedBox(width: 6),
-                    Text(defaultUser['telephone']!, style: TextStyle(fontSize: 16, color: Colors.black54)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.location_on, color: Colors.green, size: 18),
-                    const SizedBox(width: 6),
-                    Text(defaultUser['adresse']!, style: TextStyle(fontSize: 16, color: Colors.black54)),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Divider(height: 32),
-                Row(
-                  children: [
-                    const Icon(Icons.cake, color: Colors.green, size: 18),
-                    const SizedBox(width: 6),
-                    const Text("Date de naissance :", style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(width: 6),
-                    Text(defaultUser['dateNaissance']!, style: TextStyle(color: Colors.black87)),
-                  ],
-                ),
+                if (user?.email != null) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.email, color: Colors.green, size: 18),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(user!.email!, style: const TextStyle(fontSize: 15, color: Colors.black54)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                ],
+                if (user?.telephone != null) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.phone, color: Colors.green, size: 18),
+                      const SizedBox(width: 6),
+                      Text(user!.telephone!, style: const TextStyle(fontSize: 15, color: Colors.black54)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                ],
+                if (user?.adresse != null) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.location_on, color: Colors.green, size: 18),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(user!.adresse!, style: const TextStyle(fontSize: 15, color: Colors.black54)),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
-          // Actions block
+
+          // ── Action buttons ────────────────────────────────────────
           Expanded(
-            child: Container(
+            child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 30),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -137,7 +129,7 @@ class ProfilPage extends StatelessWidget {
                     icon: Icons.logout,
                     label: 'Se déconnecter',
                     color: Colors.red,
-                    onPressed: () {},
+                    onPressed: () => _confirmLogout(context, auth),
                   ),
                 ],
               ),
@@ -145,12 +137,37 @@ class ProfilPage extends StatelessWidget {
           ),
         ],
       ),
-      backgroundColor: Colors.grey.shade100,
+    );
+  }
+
+  void _confirmLogout(BuildContext context, AuthController auth) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Se déconnecter ?'),
+        content: const Text('Voulez-vous vraiment vous déconnecter ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop(); // close dialog first
+              await auth.logout();
+              // AuthGate's ValueListenableBuilder will automatically
+              // rebuild and show LoginPage when currentUser becomes null
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            child: const Text('Déconnecter'),
+          ),
+        ],
+      ),
     );
   }
 }
 
-// Custom button widget for profile actions
 class _ProfileButton extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -161,7 +178,7 @@ class _ProfileButton extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.color,
-    required this.onPressed
+    required this.onPressed,
   });
 
   @override

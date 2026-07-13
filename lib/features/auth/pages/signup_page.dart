@@ -1,85 +1,98 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+
 import '../../../core/models/utilisateur.dart';
 import '../controllers/auth_controller.dart';
+import '../widgets/auth_hero.dart';
 import '../widgets/auth_text_field.dart';
 
-/// Inscription en 3 étapes
-/// 1) Téléphone, Date de naissance, Adresse
-/// 2) Nom, Prénom, Email
-/// 3) Mot de passe & Confirmation
+// ─────────────────────────────────────────────────────────────────────────────
+// Signup Page — 3 steps with animated stepper + slide transitions
+// ─────────────────────────────────────────────────────────────────────────────
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
-
   @override
   State<SignUpPage> createState() => _SignUpPageState();
 }
 
-class _SignUpPageState extends State<SignUpPage> {
+class _SignUpPageState extends State<SignUpPage>
+    with TickerProviderStateMixin {
   final _formKeys = [
-    GlobalKey<FormState>(), // step 0
-    GlobalKey<FormState>(), // step 1
-    GlobalKey<FormState>(), // step 2
+    GlobalKey<FormState>(),
+    GlobalKey<FormState>(),
+    GlobalKey<FormState>(),
   ];
 
-  int _currentStep = 0;
+  int _step = 0;
   bool _isLoading = false;
 
-  // STEP 1
+  // Step 0
   final _phone = TextEditingController();
-  final _dob = TextEditingController(); // rempli via datePicker
+  final _dob = TextEditingController();
   final _address = TextEditingController();
 
-  // STEP 2
+  // Step 1
   final _firstName = TextEditingController();
   final _lastName = TextEditingController();
   final _email = TextEditingController();
 
-  // STEP 3
+  // Step 2
   final _password = TextEditingController();
   final _confirmPassword = TextEditingController();
 
+  // Slide animation between steps
+  late final AnimationController _slideCtrl;
+  late Animation<Offset> _slideIn;
+  late Animation<Offset> _slideOut;
+  bool _goingForward = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _slideCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    )..value = 1.0;
+    _updateSlideAnims();
+  }
+
+  void _updateSlideAnims() {
+    final dir = _goingForward ? 1.0 : -1.0;
+    _slideIn = Tween<Offset>(
+      begin: Offset(dir, 0),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _slideCtrl, curve: Curves.easeOut));
+    _slideOut = Tween<Offset>(
+      begin: Offset.zero,
+      end: Offset(-dir, 0),
+    ).animate(CurvedAnimation(parent: _slideCtrl, curve: Curves.easeIn));
+  }
+
+  Future<void> _goTo(int next) async {
+    _goingForward = next > _step;
+    _updateSlideAnims();
+    _slideCtrl.value = 0;
+    setState(() => _step = next);
+    await _slideCtrl.forward();
+  }
+
   @override
   void dispose() {
-    _phone.dispose();
-    _dob.dispose();
-    _address.dispose();
-    _firstName.dispose();
-    _lastName.dispose();
-    _email.dispose();
-    _password.dispose();
-    _confirmPassword.dispose();
+    _slideCtrl.dispose();
+    for (final c in [_phone, _dob, _address, _firstName, _lastName, _email, _password, _confirmPassword]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
-  Future<void> _pickDob() async {
-    final now = DateTime.now();
-    final eighteenYearsAgo = DateTime(now.year - 18, now.month, now.day);
-    final firstDate = DateTime(now.year - 100); // limite basse 100 ans
-
-    final date = await showDatePicker(
-      context: context,
-      initialDate: eighteenYearsAgo,
-      firstDate: firstDate,
-      lastDate: now,
-    );
-    if (date != null) {
-      _dob.text = _formatDate(date);
-      setState(() {});
-    }
-  }
-
-  String _formatDate(DateTime d) {
-    // JJ/MM/AAAA
-    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
-  }
-
   void _onContinue() {
-    final key = _formKeys[_currentStep];
-    if (key.currentState?.validate() != true) return;
-
-    if (_currentStep < 2) {
-      setState(() => _currentStep++);
+    if (_formKeys[_step].currentState?.validate() != true) {
+      HapticFeedback.mediumImpact();
+      return;
+    }
+    if (_step < 2) {
+      _goTo(_step + 1);
     } else {
       _onSubmit();
     }
@@ -87,22 +100,20 @@ class _SignUpPageState extends State<SignUpPage> {
 
   void _onBack() {
     if (_isLoading) return;
-    if (_currentStep > 0) {
-      setState(() => _currentStep--);
+    if (_step > 0) {
+      _goTo(_step - 1);
     } else {
       Navigator.pop(context);
     }
   }
 
   Future<void> _onSubmit() async {
-    // Only validate the current step (step 2) — previous steps were
-    // already validated before advancing, so their form keys are no
-    // longer in the tree and currentState is null.
-    if (_formKeys[2].currentState?.validate() != true) return;
-
+    if (_formKeys[2].currentState?.validate() != true) {
+      HapticFeedback.mediumImpact();
+      return;
+    }
     setState(() => _isLoading = true);
 
-    // Convert "DD/MM/YYYY" → "YYYY-MM-DD" for the backend
     final dobParts = _dob.text.split('/');
     final dateNaissance = dobParts.length == 3
         ? '${dobParts[2]}-${dobParts[1]}-${dobParts[0]}'
@@ -123,130 +134,102 @@ class _SignUpPageState extends State<SignUpPage> {
     setState(() => _isLoading = false);
 
     if (success) {
-      final role = auth.currentUser.value?.role;
-      final destination = role == Role.transporteur ? '/home_coursier' : '/home_client';
-
+      HapticFeedback.lightImpact();
       await showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF0F6DDA), Color(0xFF18C0F9)],
-                  ),
-                ),
-                child: const Icon(Icons.check, color: Colors.white, size: 36),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Compte créé !',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Bienvenue sur Yemchi w Yji.\nVotre compte a été créé avec succès.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0F6DDA),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: const Text(
-                    'Commencer',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-            ],
-          ),
+        builder: (ctx) => _SuccessDialog(
+          name: _firstName.text.trim(),
         ),
       );
-
       if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed(destination);
+      final role = auth.currentUser.value?.role;
+      Navigator.of(context).pushReplacementNamed(
+        role == Role.transporteur ? '/home_coursier' : '/home_client',
+      );
     } else {
+      HapticFeedback.heavyImpact();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(auth.error.value ?? 'Erreur lors de l\'inscription'),
-          backgroundColor: Colors.red,
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Expanded(child: Text(auth.error.value ?? "Erreur lors de l'inscription")),
+            ],
+          ),
+          backgroundColor: const Color(0xFFE53935),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
+    }
+  }
+
+  Future<void> _pickDob() async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: DateTime(now.year - 18, now.month, now.day),
+      firstDate: DateTime(now.year - 100),
+      lastDate: now,
+    );
+    if (date != null) {
+      _dob.text =
+          '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+      setState(() {});
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FB),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isWide = constraints.maxWidth >= 900;
-          final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+      backgroundColor: const Color(0xFFF0F4FA),
+      body: Stack(
+        children: [
+          const AuthHeroHeader(heightFactor: 0.28),
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (ctx, constraints) {
+                final isWide = constraints.maxWidth >= 900;
+                return isWide ? _wideLayout() : _narrowLayout();
+              },
+            ),
+          ),
 
-          return Stack(
-            children: [
-              const _HeroHeader(),
-              SafeArea(
-                child: Align(
-                  alignment: Alignment.topLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 8, top: 4),
-                    child: IconButton(
-                      icon: const Icon(Icons.arrow_back),
-                      color: Colors.white,
-                      tooltip: 'Retour',
-                      onPressed: _onBack,
-                    ),
-                  ),
-                ),
+          // Back button floating over hero
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.only(left: 4, top: 4),
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                color: Colors.white,
+                tooltip: 'Retour',
+                onPressed: _onBack,
               ),
-              SafeArea(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1080),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-                      child: isWide ? _wideLayout() : _narrowLayout(bottomInset),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _narrowLayout(double bottomInset) {
+  Widget _narrowLayout() {
     return SingleChildScrollView(
-      padding: EdgeInsets.only(bottom: bottomInset),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        left: 20,
+        right: 20,
+      ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          const SizedBox(height: 170),
-          const _BrandLockup(centered: true, subtitle: 'Rejoignez Yemchi w Yji'),
-          const SizedBox(height: 18),
+          const SizedBox(height: 32),
+          const AuthBrandLockup(
+            centered: true,
+            subtitle: 'Créez votre compte livreur',
+          ),
+          const SizedBox(height: 20),
           _buildCard(),
-          const SizedBox(height: 24),
         ],
       ),
     );
@@ -257,24 +240,25 @@ class _SignUpPageState extends State<SignUpPage> {
       children: [
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.only(left: 8, right: 24),
+            padding: const EdgeInsets.all(40),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: const [
-                _BrandLockup(subtitle: 'Créez votre accès coursier'),
-                SizedBox(height: 16),
-                _SignupHighlights(),
+                AuthBrandLockup(subtitle: 'Rejoignez notre réseau de livreurs'),
+                SizedBox(height: 20),
               ],
             ),
           ),
         ),
         Expanded(
-          child: Align(
-            alignment: Alignment.center,
+          child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 540),
-              child: _buildCard(),
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: _buildCard(),
+              ),
             ),
           ),
         ),
@@ -284,51 +268,69 @@ class _SignUpPageState extends State<SignUpPage> {
 
   Widget _buildCard() {
     return Card(
-      elevation: 10,
-      shadowColor: const Color(0x1A000000),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      elevation: 16,
+      shadowColor: const Color(0x1A0F6DDA),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _StepIndicator(currentStep: _currentStep),
-            const SizedBox(height: 20),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
-              transitionBuilder: (child, animation) =>
-                  FadeTransition(opacity: animation, child: child),
-              child: KeyedSubtree(
-                key: ValueKey(_currentStep),
-                child: _buildStepContent(_currentStep),
+            // Animated stepper
+            _AnimatedStepper(currentStep: _step),
+            const SizedBox(height: 24),
+
+            // Step content with slide transition
+            ClipRect(
+              child: SlideTransition(
+                position: _slideIn,
+                child: KeyedSubtree(
+                  key: ValueKey(_step),
+                  child: _buildStepContent(_step),
+                ),
               ),
             ),
             const SizedBox(height: 24),
+
+            // Navigation buttons
             Row(
               children: [
-                OutlinedButton(
-                  onPressed: _onBack,
-                  child: Text(_currentStep == 0 ? 'Annuler' : 'Retour'),
+                _SecondaryButton(
+                  label: _step == 0 ? 'Annuler' : 'Retour',
+                  onPressed: _isLoading ? null : _onBack,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _PrimaryCTA(
-                    onPressed: _isLoading ? null : _onContinue,
+                  child: GradientButton(
+                    label: _step == 2 ? 'Terminer' : 'Continuer',
                     loading: _isLoading,
-                    label: _currentStep == 2 ? 'Terminer' : 'Continuer',
+                    onPressed: _isLoading ? null : _onContinue,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
+
+            // Login link
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text('Déjà un compte ?'),
+                Text(
+                  'Déjà un compte ?',
+                  style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                ),
                 TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Se connecter'),
+                  onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+                  child: const Text(
+                    'Se connecter',
+                    style: TextStyle(
+                      color: Color(0xFF0F6DDA),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -344,57 +346,65 @@ class _SignUpPageState extends State<SignUpPage> {
         return Form(
           key: _formKeys[0],
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               AuthTextField(
                 controller: _phone,
                 label: 'Numéro de téléphone',
                 keyboardType: TextInputType.phone,
                 prefixIcon: Icons.phone_outlined,
-                hintText: 'Ex: +216 12 345 678',
+                hintText: '+216 12 345 678',
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'Numéro obligatoire';
                   if (v.replaceAll(' ', '').length < 8) return 'Numéro invalide';
                   return null;
                 },
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _dob,
                 readOnly: true,
-                decoration: InputDecoration(
-                  labelText: 'Date de naissance',
-                  prefixIcon: const Icon(Icons.cake_outlined),
-                  suffixIcon: IconButton(
-                    onPressed: _pickDob,
-                    icon: const Icon(Icons.calendar_today_outlined),
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
+                onTap: _pickDob,
                 validator: (v) =>
                     (v == null || v.isEmpty) ? 'Date de naissance obligatoire' : null,
-                onTap: _pickDob,
+                decoration: InputDecoration(
+                  labelText: 'Date de naissance',
+                  prefixIcon: const Icon(Icons.cake_outlined, color: Color(0xFFAAB4C8)),
+                  suffixIcon: IconButton(
+                    onPressed: _pickDob,
+                    icon: const Icon(Icons.calendar_today_outlined, size: 20),
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFFF3F6FB),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFFDDE3EE), width: 1.2),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: Color(0xFF0F6DDA), width: 1.8),
+                  ),
+                  labelStyle: const TextStyle(color: Color(0xFF8896AB), fontSize: 14),
+                ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               AuthTextField(
                 controller: _address,
                 label: 'Adresse',
                 prefixIcon: Icons.home_outlined,
                 hintText: 'Rue, ville, code postal',
+                maxLines: 2,
                 validator: (v) =>
                     (v == null || v.length < 5) ? 'Adresse trop courte' : null,
-                maxLines: 2,
               ),
             ],
           ),
         );
+
       case 1:
         return Form(
           key: _formKeys[1],
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
                 children: [
@@ -419,45 +429,42 @@ class _SignUpPageState extends State<SignUpPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               AuthTextField(
                 controller: _email,
                 label: 'Email',
                 keyboardType: TextInputType.emailAddress,
                 prefixIcon: Icons.email_outlined,
+                hintText: 'votre@email.com',
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'Email obligatoire';
                   if (!v.contains('@')) return 'Email invalide';
                   return null;
                 },
               ),
-              const SizedBox(height: 14),
-              OutlinedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Google Sign-In (UI only)')),
-                  );
-                },
-                icon: const Icon(Icons.g_mobiledata),
-                label: const Text('Continuer avec Google'),
+              const SizedBox(height: 16),
+              GoogleSignInButton(
+                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Google Sign-In — bientôt disponible')),
+                ),
               ),
             ],
           ),
         );
+
       case 2:
       default:
         return Form(
           key: _formKeys[2],
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               AuthPasswordField(
                 controller: _password,
+                showStrength: true,
                 validator: (v) =>
-                    (v == null || v.length < 6) ? 'Min 6 caractères' : null,
-                helperText: 'Utilisez au moins 6 caractères',
+                    (v == null || v.length < 6) ? 'Minimum 6 caractères' : null,
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               AuthPasswordField(
                 controller: _confirmPassword,
                 label: 'Confirmer le mot de passe',
@@ -474,38 +481,76 @@ class _SignUpPageState extends State<SignUpPage> {
   }
 }
 
-class _HeroHeader extends StatelessWidget {
-  const _HeroHeader();
+// ─────────────────────────────────────────────────────────────────────────────
+// Animated Stepper
+// ─────────────────────────────────────────────────────────────────────────────
+class _AnimatedStepper extends StatelessWidget {
+  const _AnimatedStepper({required this.currentStep});
+  final int currentStep;
+
+  static const _steps = [
+    (Icons.phone_outlined, 'Infos'),
+    (Icons.person_outline, 'Profil'),
+    (Icons.lock_outline, 'Sécurité'),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 260,
-      width: double.infinity,
-      child: ClipPath(
-        clipper: _DiagonalClipper(),
-        child: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFFFFB92C), Color(0xFFFF3D2E)],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Step name with animated text switch
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          transitionBuilder: (child, anim) => FadeTransition(
+            opacity: anim,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.3),
+                end: Offset.zero,
+              ).animate(anim),
+              child: child,
             ),
           ),
-          child: Stack(
+          child: Text(
+            _steps[currentStep].$2,
+            key: ValueKey(currentStep),
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1A2033),
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Étape ${currentStep + 1} sur ${_steps.length}',
+          style: const TextStyle(fontSize: 12, color: Color(0xFF8896AB)),
+        ),
+        const SizedBox(height: 14),
+
+        // Animated progress bar
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: (currentStep + 1) / _steps.length),
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut,
+          builder: (_, v, __) => Stack(
             children: [
-              Positioned(
-                bottom: -80,
-                left: -40,
+              Container(
+                height: 5,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              FractionallySizedBox(
+                widthFactor: v,
                 child: Container(
-                  width: 220,
-                  height: 220,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFF0057D6), Color(0xFF18C0F9)],
+                  height: 5,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(99),
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF0F6DDA), Color(0xFF18C0F9)],
                     ),
                   ),
                 ),
@@ -513,174 +558,94 @@ class _HeroHeader extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _DiagonalClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final p = Path();
-    p.lineTo(0, size.height - 60);
-    p.quadraticBezierTo(
-        size.width * .25, size.height, size.width * .5, size.height - 40);
-    p.quadraticBezierTo(
-        size.width * .8, size.height - 90, size.width, size.height - 20);
-    p.lineTo(size.width, 0);
-    p.close();
-    return p;
-  }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
-}
-
-class _BrandLockup extends StatelessWidget {
-  const _BrandLockup({this.centered = false, required this.subtitle});
-
-  final bool centered;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    final align = centered ? MainAxisAlignment.center : MainAxisAlignment.start;
-    final cross =
-        centered ? CrossAxisAlignment.center : CrossAxisAlignment.start;
-    return Column(
-      crossAxisAlignment: cross,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: align,
-          children: [
-            Image.asset(
-              'assets/images/LOGO_YEMCHI W YJI.jpg',
-              height: 90,
-              errorBuilder: (_, __, ___) =>
-                  const Icon(Icons.local_shipping, size: 90, color: Colors.white),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Yemchi w Yji',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.92),
-                fontWeight: FontWeight.w700,
-                fontSize: 22,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Text(
-          subtitle,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.85),
-            fontWeight: FontWeight.w600,
-          ),
-          textAlign: centered ? TextAlign.center : TextAlign.left,
-        ),
-      ],
-    );
-  }
-}
-
-class _SignupHighlights extends StatelessWidget {
-  const _SignupHighlights();
-
-  @override
-  Widget build(BuildContext context) {
-    const style = TextStyle(
-      color: Colors.white,
-      fontWeight: FontWeight.w600,
-      fontSize: 16,
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: const [
-        Text('Gérez vos courses en temps réel', style: style),
-        SizedBox(height: 8),
-        Text('Recevez plus de missions selon votre zone', style: style),
-        SizedBox(height: 8),
-        Text('Paiements rapides et sécurisés', style: style),
-      ],
-    );
-  }
-}
-
-class _StepIndicator extends StatelessWidget {
-  const _StepIndicator({required this.currentStep});
-
-  final int currentStep;
-
-  @override
-  Widget build(BuildContext context) {
-    const titles = ['Informations', 'Profil', 'Sécurité'];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Étape ${currentStep + 1} sur ${titles.length}',
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF0F172A),
-          ),
-        ),
-        const SizedBox(height: 10),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(
-            value: (currentStep + 1) / titles.length,
-            minHeight: 6,
-            backgroundColor: const Color(0xFFE2E8F0),
-            valueColor:
-                const AlwaysStoppedAnimation<Color>(Color(0xFF18C0F9)),
-          ),
-        ),
         const SizedBox(height: 16),
+
+        // Step icons
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: List.generate(titles.length, (index) {
-            final isActive = index == currentStep;
-            final isDone = index < currentStep;
-            final bgColor = isDone
-                ? const Color(0xFF0F6DDA)
-                : isActive
-                    ? const Color(0xFF18C0F9)
-                    : const Color(0xFFE2E8F0);
-            final iconColor =
-                isDone || isActive ? Colors.white : const Color(0xFF94A3B8);
-
-            final icon = [
-              Icons.phone_outlined,
-              Icons.person_outline,
-              Icons.lock_outline
-            ][index];
-
+          children: List.generate(_steps.length, (i) {
+            final isDone = i < currentStep;
+            final isActive = i == currentStep;
             return Expanded(
-              child: Column(
+              child: Row(
                 children: [
-                  Container(
-                    height: 44,
-                    width: 44,
-                    decoration: BoxDecoration(
-                      color: bgColor,
-                      shape: BoxShape.circle,
+                  Expanded(
+                    child: Column(
+                      children: [
+                        TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0.8, end: isActive ? 1.1 : 1.0),
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.elasticOut,
+                          builder: (_, scale, child) =>
+                              Transform.scale(scale: scale, child: child),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: (isDone || isActive)
+                                  ? const LinearGradient(
+                                      colors: [Color(0xFF0F6DDA), Color(0xFF18C0F9)],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    )
+                                  : null,
+                              color: (isDone || isActive)
+                                  ? null
+                                  : const Color(0xFFEDF1F7),
+                              boxShadow: isActive
+                                  ? [
+                                      BoxShadow(
+                                        color: const Color(0xFF0F6DDA).withValues(alpha: 0.3),
+                                        blurRadius: 10,
+                                        spreadRadius: 1,
+                                      )
+                                    ]
+                                  : [],
+                            ),
+                            child: Icon(
+                              isDone ? Icons.check_rounded : _steps[i].$1,
+                              color: (isDone || isActive)
+                                  ? Colors.white
+                                  : const Color(0xFFAAB4C8),
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _steps[i].$2,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                            color: isActive
+                                ? const Color(0xFF0F6DDA)
+                                : isDone
+                                    ? const Color(0xFF1A2033)
+                                    : const Color(0xFFAAB4C8),
+                          ),
+                        ),
+                      ],
                     ),
-                    child: Icon(icon, color: iconColor),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    titles[index],
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                      color: isDone || isActive
-                          ? const Color(0xFF0F172A)
-                          : const Color(0xFF94A3B8),
+                  // Connector line between steps
+                  if (i < _steps.length - 1)
+                    Expanded(
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 400),
+                        height: 2,
+                        margin: const EdgeInsets.only(bottom: 20),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(99),
+                          gradient: isDone
+                              ? const LinearGradient(
+                                  colors: [Color(0xFF0F6DDA), Color(0xFF18C0F9)],
+                                )
+                              : null,
+                          color: isDone ? null : const Color(0xFFE2E8F0),
+                        ),
+                      ),
                     ),
-                  ),
                 ],
               ),
             );
@@ -691,59 +656,77 @@ class _StepIndicator extends StatelessWidget {
   }
 }
 
-class _PrimaryCTA extends StatelessWidget {
-  const _PrimaryCTA({
-    required this.onPressed,
-    required this.loading,
-    required this.label,
-  });
-
-  final VoidCallback? onPressed;
-  final bool loading;
+// ─────────────────────────────────────────────────────────────────────────────
+// Secondary (outline) button
+// ─────────────────────────────────────────────────────────────────────────────
+class _SecondaryButton extends StatelessWidget {
+  const _SecondaryButton({required this.label, this.onPressed});
   final String label;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 50,
-      child: ElevatedButton(
-        onPressed: loading ? null : onPressed,
-        style: ButtonStyle(
-          elevation: WidgetStateProperty.all(0),
-          shape: WidgetStateProperty.all(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          ),
-          backgroundColor:
-              WidgetStateProperty.resolveWith((states) => Colors.transparent),
-          padding: WidgetStateProperty.all(EdgeInsets.zero),
+      height: 52,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: Color(0xFFDDE3EE), width: 1.4),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          foregroundColor: const Color(0xFF4A5568),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
         ),
-        child: Ink(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF0F6DDA), Color(0xFF18C0F9)],
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
+        child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Success dialog
+// ─────────────────────────────────────────────────────────────────────────────
+class _SuccessDialog extends StatelessWidget {
+  const _SuccessDialog({required this.name});
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [Color(0xFF0F6DDA), Color(0xFF18C0F9)],
+                ),
+              ),
+              child: const Icon(Icons.check_rounded, color: Colors.white, size: 40),
             ),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Center(
-            child: loading
-                ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : Text(
-                    label,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-          ),
+            const SizedBox(height: 18),
+            Text(
+              'Bienvenue${name.isNotEmpty ? ', $name' : ''} 🎉',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF1A2033)),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Votre compte livreur a été créé avec succès.\nPrêt à démarrer vos courses ?',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Color(0xFF8896AB), fontSize: 13, height: 1.5),
+            ),
+            const SizedBox(height: 24),
+            GradientButton(
+              label: 'Commencer',
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
         ),
       ),
     );
