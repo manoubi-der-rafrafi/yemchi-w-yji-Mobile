@@ -26,6 +26,7 @@ class _SignUpPageState extends State<SignUpPage>
 
   int _step = 0;
   bool _isLoading = false;
+  bool _termsAccepted = false;
 
   // Step 0
   final _phone = TextEditingController();
@@ -168,17 +169,25 @@ class _SignUpPageState extends State<SignUpPage>
 
   Future<void> _pickDob() async {
     final now = DateTime.now();
-    final date = await showDatePicker(
+    final defaultYear = now.year - 18;
+
+    // Start controllers at 18 years ago
+    DateTime _selected = DateTime(defaultYear, now.month, now.day);
+
+    await showModalBottomSheet(
       context: context,
-      initialDate: DateTime(now.year - 18, now.month, now.day),
-      firstDate: DateTime(now.year - 100),
-      lastDate: now,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.6),
+      builder: (ctx) => _DobPickerSheet(
+        initialDate: _selected,
+        onConfirm: (date) {
+          _dob.text =
+              '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+          setState(() {});
+        },
+      ),
     );
-    if (date != null) {
-      _dob.text =
-          '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
-      setState(() {});
-    }
   }
 
   @override
@@ -360,31 +369,55 @@ class _SignUpPageState extends State<SignUpPage>
                 },
               ),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _dob,
-                readOnly: true,
+              // Date de naissance — taps into custom drum picker
+              GestureDetector(
                 onTap: _pickDob,
-                validator: (v) =>
-                    (v == null || v.isEmpty) ? 'Date de naissance obligatoire' : null,
-                decoration: InputDecoration(
-                  labelText: 'Date de naissance',
-                  prefixIcon: const Icon(Icons.cake_outlined, color: Color(0xFFAAB4C8)),
-                  suffixIcon: IconButton(
-                    onPressed: _pickDob,
-                    icon: const Icon(Icons.calendar_today_outlined, size: 20),
+                child: AbsorbPointer(
+                  child: TextFormField(
+                    controller: _dob,
+                    readOnly: true,
+                    validator: (v) =>
+                        (v == null || v.isEmpty) ? 'Date de naissance obligatoire' : null,
+                    decoration: InputDecoration(
+                      labelText: 'Date de naissance',
+                      hintText: 'JJ/MM/AAAA',
+                      prefixIcon: const Icon(
+                        Icons.cake_outlined,
+                        color: Color(0xFF9AA0A6),
+                        size: 20,
+                      ),
+                      suffixIcon: const Icon(
+                        Icons.expand_more_rounded,
+                        color: Color(0xFF9AA0A6),
+                        size: 22,
+                      ),
+                      filled: true,
+                      fillColor: const Color(0xFFF7F8FA),
+                      constraints: const BoxConstraints(minHeight: 52),
+                      labelStyle: const TextStyle(
+                          color: Color(0xFF9AA0A6), fontSize: 14),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                            color: Color(0xFFE2E5EA), width: 1.0),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                            color: Color(0xFF1565C0), width: 1.5),
+                      ),
+                      errorBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                            color: Color(0xFFE53935), width: 1.5),
+                      ),
+                      focusedErrorBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                            color: Color(0xFFE53935), width: 1.5),
+                      ),
+                    ),
                   ),
-                  filled: true,
-                  fillColor: const Color(0xFFF3F6FB),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: Color(0xFFDDE3EE), width: 1.2),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: Color(0xFF0F6DDA), width: 1.8),
-                  ),
-                  labelStyle: const TextStyle(color: Color(0xFF8896AB), fontSize: 14),
                 ),
               ),
               const SizedBox(height: 16),
@@ -681,6 +714,308 @@ class _SecondaryButton extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Success dialog
+// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Custom DOB Drum Picker — 3 scroll columns: Jour / Mois / Année
+// Opens directly at initialDate, no scrolling through years required.
+// ─────────────────────────────────────────────────────────────────────────────
+class _DobPickerSheet extends StatefulWidget {
+  const _DobPickerSheet({
+    required this.initialDate,
+    required this.onConfirm,
+  });
+
+  final DateTime initialDate;
+  final ValueChanged<DateTime> onConfirm;
+
+  @override
+  State<_DobPickerSheet> createState() => _DobPickerSheetState();
+}
+
+class _DobPickerSheetState extends State<_DobPickerSheet> {
+  static const _months = [
+    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+  ];
+
+  late int _day;
+  late int _month;
+  late int _year;
+
+  late FixedExtentScrollController _dayCtrl;
+  late FixedExtentScrollController _monthCtrl;
+  late FixedExtentScrollController _yearCtrl;
+
+  final int _minYear = DateTime.now().year - 100;
+  final int _maxYear = DateTime.now().year - 16;
+
+  int get _daysInMonth => DateTime(_year, _month + 1, 0).day;
+
+  @override
+  void initState() {
+    super.initState();
+    _day   = widget.initialDate.day;
+    _month = widget.initialDate.month;
+    _year  = widget.initialDate.year.clamp(_minYear, _maxYear);
+
+    _dayCtrl   = FixedExtentScrollController(initialItem: _day - 1);
+    _monthCtrl = FixedExtentScrollController(initialItem: _month - 1);
+    _yearCtrl  = FixedExtentScrollController(initialItem: _year - _minYear);
+  }
+
+  @override
+  void dispose() {
+    _dayCtrl.dispose();
+    _monthCtrl.dispose();
+    _yearCtrl.dispose();
+    super.dispose();
+  }
+
+  void _clampDay() {
+    final max = _daysInMonth;
+    if (_day > max) {
+      _day = max;
+      _dayCtrl.jumpToItem(_day - 1);
+    }
+  }
+
+  DateTime get _current =>
+      DateTime(_year, _month, _day.clamp(1, _daysInMonth));
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+    const itemH = 44.0;
+    const visibleItems = 5;
+    const pickerH = itemH * visibleItems;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF1C1C1E), // dark sheet — iOS-style
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.only(bottom: bottomPad + 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Handle ──────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.only(top: 10, bottom: 2),
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+          ),
+
+          // ── Title row ────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+            child: Row(
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white60,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                  child: const Text('Annuler',
+                      style: TextStyle(fontSize: 15)),
+                ),
+                const Expanded(
+                  child: Text(
+                    'Date de naissance',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    widget.onConfirm(_current);
+                    Navigator.of(context).pop();
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF4FC3F7),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                  child: const Text('Confirmer',
+                      style: TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          // ── Drums ────────────────────────────────────────────
+          SizedBox(
+            height: pickerH,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Selection band
+                Positioned(
+                  top: itemH * 2,
+                  left: 12,
+                  right: 12,
+                  child: Container(
+                    height: itemH,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.12)),
+                    ),
+                  ),
+                ),
+
+                // Top gradient fade
+                Positioned(
+                  top: 0, left: 0, right: 0,
+                  child: IgnorePointer(
+                    child: Container(
+                      height: itemH * 2,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            const Color(0xFF1C1C1E),
+                            const Color(0xFF1C1C1E).withValues(alpha: 0),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                // Bottom gradient fade
+                Positioned(
+                  bottom: 0, left: 0, right: 0,
+                  child: IgnorePointer(
+                    child: Container(
+                      height: itemH * 2,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [
+                            const Color(0xFF1C1C1E),
+                            const Color(0xFF1C1C1E).withValues(alpha: 0),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Three columns
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    children: [
+                      // DAY
+                      Expanded(
+                        flex: 2,
+                        child: _buildWheel(
+                          controller: _dayCtrl,
+                          itemCount: 31,
+                          itemH: itemH,
+                          selectedIndex: _day - 1,
+                          labelBuilder: (i) =>
+                              (i + 1).toString().padLeft(2, '0'),
+                          onChanged: (i) =>
+                              setState(() { _day = i + 1; _clampDay(); }),
+                        ),
+                      ),
+                      // MONTH
+                      Expanded(
+                        flex: 4,
+                        child: _buildWheel(
+                          controller: _monthCtrl,
+                          itemCount: 12,
+                          itemH: itemH,
+                          selectedIndex: _month - 1,
+                          labelBuilder: (i) => _months[i],
+                          onChanged: (i) =>
+                              setState(() { _month = i + 1; _clampDay(); }),
+                        ),
+                      ),
+                      // YEAR
+                      Expanded(
+                        flex: 3,
+                        child: _buildWheel(
+                          controller: _yearCtrl,
+                          itemCount: _maxYear - _minYear + 1,
+                          itemH: itemH,
+                          selectedIndex: _year - _minYear,
+                          labelBuilder: (i) => (_minYear + i).toString(),
+                          onChanged: (i) =>
+                              setState(() { _year = _minYear + i; _clampDay(); }),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWheel({
+    required FixedExtentScrollController controller,
+    required int itemCount,
+    required double itemH,
+    required int selectedIndex,
+    required String Function(int) labelBuilder,
+    required ValueChanged<int> onChanged,
+  }) {
+    return ListWheelScrollView.useDelegate(
+      controller: controller,
+      itemExtent: itemH,
+      perspective: 0.002,
+      diameterRatio: 3.0,
+      physics: const FixedExtentScrollPhysics(),
+      onSelectedItemChanged: onChanged,
+      childDelegate: ListWheelChildBuilderDelegate(
+        childCount: itemCount,
+        builder: (_, i) {
+          final selected = i == selectedIndex;
+          return Center(
+            child: Text(
+              labelBuilder(i),
+              style: TextStyle(
+                fontSize: selected ? 18 : 15,
+                fontWeight:
+                    selected ? FontWeight.w700 : FontWeight.w400,
+                color: selected
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.35),
+                height: 1,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// _DrumItem replaced by inline builder in _buildWheel
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Success dialog

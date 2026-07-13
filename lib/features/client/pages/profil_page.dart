@@ -154,12 +154,17 @@ class ProfilPage extends StatelessWidget {
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.of(ctx).pop(); // close dialog first
+              Navigator.of(ctx).pop();
               await auth.logout();
-              // AuthGate's ValueListenableBuilder will automatically
-              // rebuild and show LoginPage when currentUser becomes null
+              if (context.mounted) {
+                Navigator.of(context).pushNamedAndRemoveUntil(
+                  '/login',
+                  (_) => false,
+                );
+              }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red, foregroundColor: Colors.white),
             child: const Text('Déconnecter'),
           ),
         ],

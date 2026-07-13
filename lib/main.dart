@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-// 🔌 Services & contrôleurs
 import 'package:yemchi_wyji/core/network/api.dart';
 import 'package:yemchi_wyji/features/auth/data/auth_user_service.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
 
-// 🧭 Pages
-import 'package:yemchi_wyji/features/auth/pages/auth_gate.dart';
+import 'package:yemchi_wyji/features/auth/pages/splash_screen.dart';
 import 'package:yemchi_wyji/features/auth/pages/login_page.dart';
 import 'package:yemchi_wyji/features/auth/pages/signup_page.dart';
 import 'package:yemchi_wyji/features/client/client_home_navbar.dart';
@@ -25,7 +23,6 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        // Instance unique et partagée dans toute l'app
         Provider<Api>(create: (_) => Api()),
         Provider<AuthUserService>(
           create: (ctx) => AuthUserService(ctx.read<Api>()),
@@ -38,19 +35,18 @@ class MyApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         title: 'Yemchi w Yji',
         theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF34D058)),
+          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1565C0)),
           useMaterial3: true,
         ),
 
-        // ✅ Laisse AuthGate décider : LoginPage ou HomeCoursierPage
-        home: const AuthGate(),
+        // SplashScreen handles auth check and routing
+        home: const SplashScreen(),
 
-        // ✅ Routes nommées (si tu utilises Navigator.pushNamed)
         routes: {
-          '/login': (_) => LoginPage(),
-          '/signup': (_) => SignUpPage(),
+          '/login':        (_) => const LoginPage(),
+          '/signup':       (_) => const SignUpPage(),
           '/home_coursier': (_) => HomeCoursierPage(),
-          '/home_client': (_) => ClientHome(),
+          '/home_client':  (_) => ClientHome(),
         },
       ),
     );

@@ -118,8 +118,42 @@ class CourierDrawer extends StatelessWidget {
               icon: Icons.logout,
               label: "Se déconnecter",
               onTap: () async {
+                // Close drawer first
                 Navigator.of(context).pop();
+                // Show confirmation dialog
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
+                    title: const Text('Se déconnecter ?'),
+                    content:
+                        const Text('Voulez-vous vraiment vous déconnecter ?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(false),
+                        child: const Text('Annuler'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () => Navigator.of(ctx).pop(true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Déconnecter'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed != true) return;
                 await auth.logout();
+                if (context.mounted) {
+                  // Replace entire stack with login screen
+                  Navigator.of(context).pushNamedAndRemoveUntil(
+                    '/login',
+                    (_) => false,
+                  );
+                }
               },
             ),
 
