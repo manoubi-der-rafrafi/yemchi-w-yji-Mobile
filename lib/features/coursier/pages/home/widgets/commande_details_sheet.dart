@@ -6,6 +6,8 @@ import 'package:yemchi_wyji/core/network/api.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
 import 'package:yemchi_wyji/features/commande/data/commande_service.dart';
 import 'package:yemchi_wyji/features/produit/data/produit_service.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/controllers/home_controller.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class CommandeDetailsSheet extends StatefulWidget {
   final Commande commande;
@@ -25,13 +27,28 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
   final ProduitService _produitService = ProduitService();
 
   bool _isLoading = true;
+  bool _accepted = false;
+  bool _departCalled = false;
+  bool _arriveeCalled = false;
   List<Produit> _produits = const <Produit>[];
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
+    _accepted = widget.isMine;
     _fetchProduits();
+    _hydrateCallStateFromStatus();
+  }
+
+  void _hydrateCallStateFromStatus() {
+    final statut = widget.commande.statut?.trim().toLowerCase();
+    if (statut == 'appelle_client_1') {
+      _departCalled = true;
+    } else if (statut == 'appelle_client_2') {
+      _departCalled = true;
+      _arriveeCalled = true;
+    }
   }
 
   Future<void> _fetchProduits() async {
@@ -63,32 +80,204 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
   }
 
   void _onAccepter() async {
-  final auth = context.read<AuthController>();
-  final currentUserId = auth.currentUser.value?.id;
+    final auth = context.read<AuthController>();
+    final currentUserId = auth.currentUser.value?.id;
 
-  if (currentUserId == null) {
-    debugPrint('Aucun utilisateur courant -> assignation impossible.');
-    return;
+    if (currentUserId == null) {
+      debugPrint('Aucun utilisateur courant -> assignation impossible.');
+      return;
+    }
+
+    try {
+      final api = context.read<Api>();
+      final service = CommandeService(api);
+      final homeCtrl = context.read<HomeController>();
+      final transporteurPanneId = homeCtrl.getTransporteurPanneIdForCommande(
+        widget.commande.id,
+      );
+
+      final updated = transporteurPanneId != null
+          ? await service.assignerTransporteurSecours(
+              widget.commande.id,
+              currentUserId,
+            )
+          : await service.assignerTransporteur(
+              widget.commande.id,
+              currentUserId,
+            );
+
+      if (!mounted) return;
+      homeCtrl.moveToMesCommandes(updated);
+      homeCtrl.setNavigationMode(false);
+      if (transporteurPanneId != null) {
+        homeCtrl.clearSelection();
+        Navigator.of(context).maybePop(true);
+        return;
+      }
+      setState(() {
+        _accepted = true;
+      });
+    } on StateError catch (e) {
+      if (!mounted) return;
+      _showSnack(e.message);
+    } on ArgumentError catch (e) {
+      if (!mounted) return;
+      _showSnack(e.message?.toString() ?? 'Erreur de donnees.');
+    } on ApiException catch (e) {
+      debugPrint('Erreur assignation transporteur (${e.statusCode}): ${e.message}');
+      if (!mounted) return;
+      _showSnack(
+        e.message.trim().isEmpty
+            ? 'Erreur assignation transporteur.'
+            : e.message,
+      );
+    } catch (e) {
+      debugPrint('Erreur assignation transporteur: $e');
+      if (!mounted) return;
+      _showSnack('Erreur assignation transporteur.');
+    }
   }
-
-  try {
-    final api = context.read<Api>();
-    final service = CommandeService(api);
-
-    await service.assignerTransporteur(
-      widget.commande.id,
-      currentUserId,
-    );
-
-    if (!mounted) return;
-    Navigator.of(context).maybePop(true);
-  } catch (e) {
-    debugPrint('Erreur assignation transporteur: $e');
-  }
-}
 
   void _onRefuser() {
     Navigator.of(context).maybePop(false);
+  }
+
+  Future<void> _callNumber(String? raw) async {
+    final number = raw?.trim();
+    if (number == null || number.isEmpty) {
+      _showSnack('Numero introuvable.');
+      return;
+    }
+    try {
+      final uri = Uri.parse('tel:$number');
+      if (!await launchUrl(uri)) {
+        _showSnack('Impossible de lancer l\'appel');
+      }
+    } catch (_) {
+      _showSnack('Impossible de lancer l\'appel');
+    }
+  }
+
+  void _showSnack(String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _callDepart() async {
+    await _callNumber(widget.commande.telDepart);
+    if (!mounted) return;
+    try {
+      final api = context.read<Api>();
+      final service = CommandeService(api);
+      final updated =
+          await service.demarrerAppelClient1(widget.commande.id);
+      if (mounted) {
+        context.read<HomeController>().updateCommande(updated);
+      }
+    } catch (e) {
+      debugPrint('Erreur debut appel client 1: $e');
+      _showSnack('Erreur debut appel client 1.');
+    }
+    setState(() {
+      _departCalled = true;
+    });
+  }
+
+  Future<void> _callArrivee() async {
+    await _callNumber(widget.commande.telArrivee);
+    if (!mounted) return;
+    try {
+      final api = context.read<Api>();
+      final service = CommandeService(api);
+      final updated = await service.marquerAppelClient1(widget.commande.id);
+      if (mounted) {
+        context.read<HomeController>().updateCommande(updated);
+      }
+      setState(() {
+        _arriveeCalled = true;
+      });
+    } catch (e) {
+      debugPrint('Erreur marquer appel client 1: $e');
+      _showSnack('Erreur appel client 1.');
+    }
+  }
+
+  Future<void> _markNonReponse({
+    required bool sameNumber,
+  }) async {
+    if (!_departCalled) return;
+    try {
+      final api = context.read<Api>();
+      final service = CommandeService(api);
+      Commande updated;
+      if (sameNumber) {
+        updated = await service.marquerNonReponseClient1(widget.commande.id);
+      } else if (_arriveeCalled) {
+        updated = await service.marquerNonReponseClient2(widget.commande.id);
+      } else {
+        updated = await service.marquerNonReponseClient1(widget.commande.id);
+      }
+      if (mounted) {
+        context.read<HomeController>().updateCommande(updated);
+      }
+    } catch (e) {
+      debugPrint('Erreur marquer non reponse: $e');
+      _showSnack('Erreur non reponse.');
+    }
+  }
+
+  Future<void> _confirmNonReponse({
+    required bool sameNumber,
+  }) async {
+    if (!_departCalled) return;
+    final shouldContinue = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Verification requise'),
+          content: const Text(
+            'Cette commande sera verifiee avec l\'administration avant toute suite.'
+            ' Merci de confirmer la non-reponse du client.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Continuer'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldContinue == true) {
+      await _markNonReponse(sameNumber: sameNumber);
+    }
+  }
+
+  Future<void> _markReponseArrivee() async {
+    if (!_arriveeCalled) return;
+    try {
+      final api = context.read<Api>();
+      final service = CommandeService(api);
+      final updated = await service.marquerAppelClient2(widget.commande.id);
+      if (mounted) {
+        context.read<HomeController>().updateCommande(updated);
+      }
+      if (!mounted) return;
+      final homeCtrl = context.read<HomeController>();
+      homeCtrl.setNavigationMode(false);
+      homeCtrl.clearSelection();
+      Navigator.of(context).maybePop(true);
+    } catch (e) {
+      debugPrint('Erreur marquer appel client 2: $e');
+      _showSnack('Erreur appel client 2.');
+    }
   }
 
   @override
@@ -97,46 +286,126 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
     final textTheme = theme.textTheme;
 
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _ModePaiementBadge(
-              label: _modePaiementLabel(widget.commande.modePaiement),
-              color: _modePaiementColor(widget.commande.modePaiement),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Liste des produits',
-              style: textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.85,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ModePaiementBadge(
+                label: _modePaiementLabel(widget.commande.modePaiement),
+                color: _modePaiementColor(widget.commande.modePaiement),
               ),
-            ),
-            const SizedBox(height: 16),
-            ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.45,
+              const SizedBox(height: 16),
+              Text(
+                'Liste des produits',
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              child: _buildProduitsSection(theme),
-            ),
-            const SizedBox(height: 20),
-            _buildActionButtons(context),
-          ],
+              const SizedBox(height: 16),
+              Expanded(
+                child: _buildProduitsSection(theme),
+              ),
+              const SizedBox(height: 20),
+              _buildActionButtons(context),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildActionButtons(BuildContext context) {
-    if (widget.isMine) {
-      return SizedBox(
-        width: double.infinity,
-        child: FilledButton(
-          onPressed: () => Navigator.of(context).maybePop(),
-          child: const Text('Fermer'),
-        ),
+    final statut = widget.commande.statut?.trim().toLowerCase();
+    final isNonRepond = statut == 'non_repondre_client_1' ||
+        statut == 'non_repondre_client_2';
+    final isCallFlow = statut == 'en_appelle' ||
+        statut == 'appelle_client_1' ||
+        statut == 'appelle_client_2';
+
+    if (isNonRepond) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Cette commande est en attente de verification. Merci de patienter.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () => Navigator.of(context).maybePop(),
+              child: const Text('Continuer'),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (isCallFlow || widget.isMine || _accepted) {
+      final telDepart = widget.commande.telDepart?.trim();
+      final telArrivee = widget.commande.telArrivee?.trim();
+      final bool sameNumber =
+          telDepart != null && telDepart.isNotEmpty && telDepart == telArrivee;
+      final bool canCallDepart = true;
+      final bool canCallArrivee = _departCalled ||
+          statut == 'appelle_client_1' ||
+          statut == 'appelle_client_2';
+      final bool canMarkNonReponse = _departCalled ||
+          statut == 'appelle_client_1' ||
+          statut == 'appelle_client_2';
+      final bool canMarkReponse = _arriveeCalled || statut == 'appelle_client_2';
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton(
+                  onPressed: canCallDepart ? _callDepart : null,
+                  child: Text(
+                    sameNumber
+                        ? 'Appeler depart et arrivee'
+                        : 'Appeler depart',
+                  ),
+                ),
+              ),
+              if (!sameNumber) ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                  onPressed: canCallArrivee ? _callArrivee : null,
+                  child: const Text('Appeler arrivee'),
+                ),
+              ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: canMarkReponse ? _markReponseArrivee : null,
+                  child: const Text('Numero repondu'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: canMarkNonReponse
+                      ? () => _confirmNonReponse(sameNumber: sameNumber)
+                      : null,
+                  child: const Text('Numero non repondu'),
+                ),
+              ),
+            ],
+          ),
+        ],
       );
     }
 
@@ -212,7 +481,6 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
     }
 
     return ListView.separated(
-      shrinkWrap: true,
       padding: EdgeInsets.zero,
       physics: const BouncingScrollPhysics(),
       itemCount: _produits.length,

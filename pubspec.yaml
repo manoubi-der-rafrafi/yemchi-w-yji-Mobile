@@ -10,6 +10,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  jwt_decoder: ^2.0.1
+
 
   # Reseau / Modeles (a utiliser dans ton app)
   dio: ^5.7.0
@@ -18,10 +20,12 @@ dependencies:
 
   # Icones iOS
   cupertino_icons: ^1.0.8
+  mapbox_maps_flutter: ^2.20.0
   provider: ^6.1.2
   flutter_map: ^8.2.2
   latlong2: ^0.9.1
   geolocator: ^14.0.2
+  geocoding: ^3.0.0
   flutter_compass: ^0.8.0
   flutter_secure_storage: ^9.2.4
   shared_preferences: ^2.3.2
@@ -44,6 +48,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/
 
   # Docommente si tu ajoutes des fonts custom
   # fonts:

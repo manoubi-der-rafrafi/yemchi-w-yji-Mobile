@@ -22,6 +22,9 @@ class Utilisateur {
   final String? email;
   final String? motDePasse;
   final String? telephone;
+  final String? identifiant;
+  final Map<String, List<String>>? zoneDepart;
+  final Map<String, List<String>>? zoneArriver;
 
   final Role role;
 
@@ -47,6 +50,9 @@ class Utilisateur {
     this.email,
     this.motDePasse,
     this.telephone,
+    this.identifiant,
+    this.zoneDepart,
+    this.zoneArriver,
     this.role = Role.client,
     this.adresse,
     this.image,
@@ -117,6 +123,10 @@ class Utilisateur {
       email: json['email'] as String?,
       motDePasse: json['motDePasse'] as String?,
       telephone: json['telephone'] as String?,
+      identifiant: json['identifiant'] as String?,
+      zoneDepart: _parseZoneMap(json['zoneDepart']),
+      zoneArriver:
+          _parseZoneMap(json['zoneArriver'] ?? json['zoneAriver']),
 
       role: parseRole(json['role'] as String?),
 
@@ -144,6 +154,9 @@ class Utilisateur {
       'email': email,
       'motDePasse': motDePasse,
       'telephone': telephone,
+      'identifiant': identifiant,
+      'zoneDepart': zoneDepart,
+      'zoneAriver': zoneArriver,
       'role': role.toString().split('.').last, // 'client', 'transporteur', etc.
       'adresse': adresse,
       'image': image,
@@ -154,5 +167,18 @@ class Utilisateur {
       'latitude': latitude,
       'longitude': longitude,
     };
+  }
+
+  static Map<String, List<String>>? _parseZoneMap(dynamic raw) {
+    if (raw is! Map) return null;
+    final result = <String, List<String>>{};
+    raw.forEach((key, value) {
+      final zoneKey = key?.toString();
+      if (zoneKey == null || zoneKey.isEmpty) return;
+      if (value is List) {
+        result[zoneKey] = value.map((e) => e.toString()).toList();
+      }
+    });
+    return result.isEmpty ? null : result;
   }
 }

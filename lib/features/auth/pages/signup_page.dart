@@ -462,7 +462,7 @@ class _BrandLockup extends StatelessWidget {
           mainAxisAlignment: align,
           children: [
             Image.asset(
-              'assets/images/LOGO_YEMCHI W YJI.jpg',
+              'assets/images/LOGO_YEMCHI W YJI.png',
               height: 90,
               errorBuilder: (_, __, ___) =>
                   const Icon(Icons.local_shipping, size: 90, color: Colors.white),

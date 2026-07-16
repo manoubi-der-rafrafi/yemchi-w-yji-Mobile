@@ -18,6 +18,7 @@ class AuthController {
     loading.value = true; error.value = null;
     try {
       final res = await _svc.login(email: email, password: password);
+      debugPrint('Auth token: ${res.token}');
       await TokenStorage.save(access: res.token, userId: res.user.id);
       currentUser.value = res.user;
       return true;
@@ -40,7 +41,7 @@ class AuthController {
     }
 
     try {
-      currentUser.value = await _svc.me();
+      currentUser.value = await _svc.me(storedUserId!);
     } catch (_) {}
   }
 
@@ -59,6 +60,7 @@ class AuthController {
     loading.value = true; error.value = null;
     try {
       final u = await _svc.updateMe(
+        id: currentUser.value!.id, // <--- Passer l'ID ici
         nom: nom,
         prenom: prenom,
         adresse: adresse,
@@ -147,6 +149,84 @@ class AuthController {
         longitude: longitude,
       );
       // currentUser.value = u;
+      return true;
+    } catch (e) {
+      error.value = e.toString();
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  Future<bool> marquerTransporteurEnPanne() async {
+    if (currentUser.value == null) return false;
+    loading.value = true;
+    error.value = null;
+    try {
+      final u = await _svc.marquerTransporteurEnPanne(currentUser.value!.id);
+      currentUser.value = u;
+      return true;
+    } catch (e) {
+      error.value = e.toString();
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  Future<bool> marquerTransporteurEnAccident() async {
+    if (currentUser.value == null) return false;
+    loading.value = true;
+    error.value = null;
+    try {
+      final u = await _svc.marquerTransporteurEnAccident(currentUser.value!.id);
+      currentUser.value = u;
+      return true;
+    } catch (e) {
+      error.value = e.toString();
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  Future<bool> declarerAccidentAvecProduits({
+    required Map<String, int> produitsAffectes,
+    required List<String> produitsNonAffectes,
+  }) async {
+    if (currentUser.value == null) return false;
+    loading.value = true;
+    error.value = null;
+    try {
+      final u = await _svc.declarerAccidentAvecProduits(
+        userId: currentUser.value!.id,
+        produitsAffectes: produitsAffectes,
+        produitsNonAffectes: produitsNonAffectes,
+      );
+      currentUser.value = u;
+      return true;
+    } catch (e) {
+      error.value = e.toString();
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  Future<bool> updateZonesDepartArriver({
+    required Map<String, List<String>> zoneDepart,
+    required Map<String, List<String>> zoneArriver,
+  }) async {
+    if (currentUser.value == null) return false;
+    loading.value = true;
+    error.value = null;
+    try {
+      final u = await _svc.updateZonesDepartArriver(
+        userId: currentUser.value!.id,
+        zoneDepart: zoneDepart,
+        zoneArriver: zoneArriver,
+      );
+      currentUser.value = u;
       return true;
     } catch (e) {
       error.value = e.toString();

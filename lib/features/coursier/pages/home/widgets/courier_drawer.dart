@@ -2,10 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:yemchi_wyji/core/models/utilisateur.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
-import 'package:yemchi_wyji/features/coursier/pages/home/pages/profil_page.dart';
-import 'package:yemchi_wyji/features/coursier/pages/home/pages/historique_commandes_page.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/controllers/home_controller.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/pages/centre_aide_page.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/pages/demandes_a_accepter_page.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/pages/historique_commandes_page.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/pages/mes_factures_page.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/pages/mes_gains_page.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/pages/profil_page.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/pages/zones_service_page.dart';
+
 class CourierDrawer extends StatelessWidget {
   final VoidCallback? onOpenMesCourses;
 
@@ -23,27 +28,34 @@ class CourierDrawer extends StatelessWidget {
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            // ====== En-tête "compte" façon Google ======
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: ValueListenableBuilder<Utilisateur?>(
                 valueListenable: auth.currentUser,
                 builder: (context, user, _) {
-                  String _safe(String? input) => input?.trim() ?? '';
+                  String safe(String? input) => input?.trim() ?? '';
 
-                  final prenom = _safe(user?.prenom);
-                  final nom = _safe(user?.nom);
-                  final email = _safe(user?.email);
-                  final fullName = [prenom, nom].where((s) => s.isNotEmpty).join(' ').trim();
-                  final displayName = fullName.isNotEmpty ? fullName : 'Nom du coursier';
-                  final displayEmail = email.isNotEmpty ? email : 'courier@yemchi.app';
-                  final initialsSource = (fullName.isNotEmpty ? fullName : displayEmail).trim();
-                  final initial = initialsSource.isNotEmpty ? initialsSource[0].toUpperCase() : 'A';
+                  final prenom = safe(user?.prenom);
+                  final nom = safe(user?.nom);
+                  final email = safe(user?.email);
+                  final fullName = [prenom, nom]
+                      .where((s) => s.isNotEmpty)
+                      .join(' ')
+                      .trim();
+                  final displayName =
+                      fullName.isNotEmpty ? fullName : 'Nom du coursier';
+                  final displayEmail =
+                      email.isNotEmpty ? email : 'courier@yemchi.app';
+                  final initialsSource =
+                      (fullName.isNotEmpty ? fullName : displayEmail).trim();
+                  final initial = initialsSource.isNotEmpty
+                      ? initialsSource[0].toUpperCase()
+                      : 'A';
 
                   ImageProvider<Object>? avatarImage;
                   Widget? avatarChild;
 
-                  final imageUrl = _safe(user?.image);
+                  final imageUrl = safe(user?.image);
                   if (imageUrl.isNotEmpty) {
                     avatarImage = NetworkImage(imageUrl);
                   } else {
@@ -65,12 +77,18 @@ class CourierDrawer extends StatelessWidget {
                           children: [
                             Text(
                               displayName,
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               displayEmail,
-                              style: const TextStyle(color: Colors.black54, fontSize: 13),
+                              style: const TextStyle(
+                                color: Colors.black54,
+                                fontSize: 13,
+                              ),
                             ),
                           ],
                         ),
@@ -84,18 +102,15 @@ class CourierDrawer extends StatelessWidget {
                 },
               ),
             ),
-
             const Divider(height: 16),
-
-            // ====== Bloc actions "compte" (optionnel) ======
             _Item(
               icon: Icons.person_outline,
-              label: "Mon profil",
+              label: 'Mon profil',
               onTap: () {},
             ),
             _Item(
               icon: Icons.account_circle_outlined,
-              label: "Gérer le compte",
+              label: 'Gerer le compte',
               onTap: () {
                 Navigator.of(context).pop();
                 Navigator.of(context).push(
@@ -107,20 +122,17 @@ class CourierDrawer extends StatelessWidget {
             ),
             _Item(
               icon: Icons.logout,
-              label: "Se déconnecter",
+              label: 'Se deconnecter',
               onTap: () async {
                 Navigator.of(context).pop();
                 await auth.logout();
               },
             ),
-
             const Divider(height: 16),
-
-            // ====== Actions principales coursier ======
-            _SectionHeader("COURSES"),
+            _SectionHeader('COURSES'),
             _Item(
               icon: Icons.route_outlined,
-              label: "Courses en cours",
+              label: 'Courses en cours',
               onTap: () {
                 Navigator.of(context).pop();
                 if (onOpenMesCourses != null) {
@@ -130,7 +142,7 @@ class CourierDrawer extends StatelessWidget {
             ),
             _Item(
               icon: Icons.history,
-              label: "Historique des courses",
+              label: 'Historique des courses',
               onTap: () {
                 Navigator.of(context).pop();
                 Navigator.of(context).push(
@@ -142,7 +154,7 @@ class CourierDrawer extends StatelessWidget {
             ),
             _Item(
               icon: Icons.assignment_outlined,
-              label: "Demandes a accepter",
+              label: 'Demandes a accepter',
               trailing: demandesCount > 0 ? _Pill('$demandesCount') : null,
               onTap: () {
                 Navigator.of(context).pop();
@@ -156,66 +168,75 @@ class CourierDrawer extends StatelessWidget {
                 );
               },
             ),
-
             const Divider(height: 16),
-
-            _SectionHeader("CARTE & LOCALISATION"),
+            _SectionHeader('CARTE & LOCALISATION'),
             _Item(
-              icon: Icons.my_location_outlined,
-              label: "Ma position",
+              icon: Icons.map_outlined,
+              label: 'Zones de service',
               onTap: () {
-                // ex: remonter un event pour centrer la carte
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Centrer sur ma position")),
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ZonesServicePage(),
+                  ),
+                );
+              },
+            ),
+            const Divider(height: 16),
+            _SectionHeader('PORTEFEUILLE'),
+            _Item(
+              icon: Icons.account_balance_wallet_outlined,
+              label: 'Mes gains',
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const MesGainsPage(),
+                  ),
                 );
               },
             ),
             _Item(
-              icon: Icons.map_outlined,
-              label: "Zones de service",
-              onTap: () {},
-            ),
-
-            const Divider(height: 16),
-
-            _SectionHeader("PORTEFEUILLE"),
-            _Item(
-              icon: Icons.account_balance_wallet_outlined,
-              label: "Mes gains",
-              onTap: () {},
-            ),
-            _Item(
               icon: Icons.receipt_long_outlined,
-              label: "Paiements & factures",
-              onTap: () {},
+              label: 'Paiements & factures',
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const MesFacturesPage(),
+                  ),
+                );
+              },
             ),
-
             const Divider(height: 16),
-
-            _SectionHeader("AIDE"),
+            _SectionHeader('AIDE'),
             _Item(
               icon: Icons.help_outline,
-              label: "Centre d’aide",
-              onTap: () {},
+              label: "Centre d'aide",
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const CentreAidePage(),
+                  ),
+                );
+              },
             ),
             _Item(
               icon: Icons.settings_outlined,
-              label: "Paramètres",
+              label: 'Parametres',
               onTap: () {},
             ),
-
             const SizedBox(height: 12),
-            // Pied de page type "Règles de confidentialité • Conditions"
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Wrap(
                 spacing: 8,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: const [
-                  _FooterLink("Règles de confidentialité"),
-                  Text("•", style: TextStyle(color: Colors.black38)),
-                  _FooterLink("Conditions d’utilisation"),
+                  _FooterLink('Regles de confidentialite'),
+                  Text('•', style: TextStyle(color: Colors.black38)),
+                  _FooterLink("Conditions d'utilisation"),
                 ],
               ),
             ),
@@ -226,8 +247,6 @@ class CourierDrawer extends StatelessWidget {
     );
   }
 }
-
-// ==== Petits widgets de style pour coller au design Google ====
 
 class _Item extends StatelessWidget {
   final IconData icon;
@@ -247,7 +266,10 @@ class _Item extends StatelessWidget {
     return ListTile(
       dense: false,
       leading: Icon(icon, color: Colors.black87),
-      title: Text(label, style: const TextStyle(fontSize: 15, color: Colors.black87)),
+      title: Text(
+        label,
+        style: const TextStyle(fontSize: 15, color: Colors.black87),
+      ),
       trailing: trailing,
       onTap: onTap,
       shape: const RoundedRectangleBorder(

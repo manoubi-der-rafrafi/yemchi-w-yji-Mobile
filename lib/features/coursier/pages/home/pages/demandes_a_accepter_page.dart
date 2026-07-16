@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:yemchi_wyji/core/models/commande.dart';
@@ -7,6 +9,7 @@ import 'package:yemchi_wyji/features/auth/data/auth_user_service.dart';
 import 'package:yemchi_wyji/features/commande/data/commande_service.dart';
 
 import 'package:yemchi_wyji/features/coursier/pages/home/controllers/home_controller.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/services/client_cache_service.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/widgets/commande_details_sheet.dart';
 
 class DemandesAAccepterPage extends StatefulWidget {
@@ -17,25 +20,10 @@ class DemandesAAccepterPage extends StatefulWidget {
 }
 
 class _DemandesAAccepterPageState extends State<DemandesAAccepterPage> {
-  final Map<String, Future<Utilisateur?>> _clientFutures = {};
   final Set<SousZone> _selectedDepartSousZones = <SousZone>{};
   final Set<SousZone> _selectedArriveeSousZones = <SousZone>{};
   List<Commande>? _filteredCommandes;
   bool _isFilterLoading = false;
-
-  Future<Utilisateur?>? _futureForClient(String? clientId) {
-    if (clientId == null || clientId.trim().isEmpty) return null;
-    return _clientFutures.putIfAbsent(
-      clientId,
-      () async {
-        try {
-          return await context.read<AuthUserService>().getById(clientId);
-        } catch (_) {
-          return null;
-        }
-      },
-    );
-  }
 
   Future<void> _refresh(HomeController home) async {
     final zone = home.currentZone;
@@ -69,7 +57,9 @@ class _DemandesAAccepterPageState extends State<DemandesAAccepterPage> {
 
   Future<void> _applySousZoneFilter() async {
     final bool departSpecific = _hasSpecificSelection(_selectedDepartSousZones);
-    final bool arriveeSpecific = _hasSpecificSelection(_selectedArriveeSousZones);
+    final bool arriveeSpecific = _hasSpecificSelection(
+      _selectedArriveeSousZones,
+    );
 
     final departPayload = _serializeSousZones(
       _selectedDepartSousZones,
@@ -93,18 +83,26 @@ class _DemandesAAccepterPageState extends State<DemandesAAccepterPage> {
     setState(() => _isFilterLoading = true);
     try {
       final api = context.read<Api>();
+      final currentUser = context.read<AuthUserService>().currentUser.value;
+      final vehicule = currentUser?.typeVehicule?.name;
+      if (vehicule == null || vehicule.isEmpty) {
+        throw Exception(
+          'Type vehicule introuvable pour l\'utilisateur courant',
+        );
+      }
       final service = CommandeService(api);
-      final commandes = await service.getBySousZones(
+      final commandes = await service.getBySousZonesAndVehicule(
         sousZonesDepart: departPayload,
         sousZonesArrivee: arriveePayload,
+        vehicule: vehicule,
       );
       if (!mounted) return;
       setState(() => _filteredCommandes = commandes);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur filtre sous-zone: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erreur filtre sous-zone: $e')));
     } finally {
       if (mounted) {
         setState(() => _isFilterLoading = false);
@@ -142,13 +140,15 @@ class _DemandesAAccepterPageState extends State<DemandesAAccepterPage> {
   }
 
   Future<void> _showCommandeDetails(Commande commande) async {
+    final homeCtrl = context.read<HomeController>();
     await showModalBottomSheet(
       context: context,
       showDragHandle: true,
-      builder: (_) => CommandeDetailsSheet(
-        commande: commande,
-        isMine: false,
-      ),
+      builder:
+          (_) => ChangeNotifierProvider<HomeController>.value(
+            value: homeCtrl,
+            child: CommandeDetailsSheet(commande: commande, isMine: false),
+          ),
     );
     if (!mounted) return;
     await _refresh(context.read<HomeController>());
@@ -166,9 +166,7 @@ class _DemandesAAccepterPageState extends State<DemandesAAccepterPage> {
     final commandes = _filteredCommandes ?? home.commandes;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Demandes a accepter'),
-      ),
+      appBar: AppBar(title: const Text('Demandes a accepter')),
       body: RefreshIndicator(
         onRefresh: () => _refresh(home),
         child: ListView.builder(
@@ -210,7 +208,6 @@ class _DemandesAAccepterPageState extends State<DemandesAAccepterPage> {
               padding: const EdgeInsets.only(bottom: 12),
               child: _DemandeCommandeCard(
                 commande: commande,
-                clientFuture: _futureForClient(commande.clientId),
                 onDetails: () => _showCommandeDetails(commande),
                 onVoirTrajet: () => _viewTrajet(commande),
               ),
@@ -222,18 +219,87 @@ class _DemandesAAccepterPageState extends State<DemandesAAccepterPage> {
   }
 }
 
-class _DemandeCommandeCard extends StatelessWidget {
+class _DemandeCommandeCard extends StatefulWidget {
   final Commande commande;
-  final Future<Utilisateur?>? clientFuture;
   final VoidCallback onDetails;
   final VoidCallback onVoirTrajet;
 
   const _DemandeCommandeCard({
     required this.commande,
-    required this.clientFuture,
     required this.onDetails,
     required this.onVoirTrajet,
   });
+
+  @override
+  State<_DemandeCommandeCard> createState() => _DemandeCommandeCardState();
+}
+
+class _DemandeCommandeCardState extends State<_DemandeCommandeCard> {
+  final ClientCacheService _clientCacheService = ClientCacheService();
+  Utilisateur? _client;
+  bool _isClientLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadClient();
+  }
+
+  @override
+  void didUpdateWidget(covariant _DemandeCommandeCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.commande.id != widget.commande.id) {
+      _loadClient();
+    }
+  }
+
+  Future<void> _loadClient() async {
+    final clientId = widget.commande.clientId;
+    if (clientId == null || clientId.trim().isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _client = null;
+        _isClientLoading = false;
+      });
+      return;
+    }
+
+    final cached = await _clientCacheService.read(clientId);
+    if (!mounted || widget.commande.clientId != clientId) return;
+
+    if (cached != null) {
+      setState(() {
+        _client = cached;
+        _isClientLoading = false;
+      });
+      unawaited(_refreshClient(clientId));
+      return;
+    }
+
+    setState(() {
+      _client = null;
+      _isClientLoading = true;
+    });
+    await _refreshClient(clientId);
+  }
+
+  Future<void> _refreshClient(String clientId) async {
+    final service = context.read<AuthUserService>();
+    try {
+      final user = await service.getById(clientId);
+      await _clientCacheService.write(user);
+      if (!mounted || widget.commande.clientId != clientId) return;
+      setState(() {
+        _client = user;
+        _isClientLoading = false;
+      });
+    } catch (_) {
+      if (!mounted || widget.commande.clientId != clientId) return;
+      setState(() {
+        _isClientLoading = false;
+      });
+    }
+  }
 
   Color _cardBackground() => const Color(0xFFE6F4EA);
 
@@ -302,13 +368,14 @@ class _DemandeCommandeCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _ClientHeader(
-              commande: commande,
-              future: clientFuture,
+              commande: widget.commande,
+              user: _client,
+              isLoading: _isClientLoading,
             ),
             const SizedBox(height: 8),
             _ModePaiementBadge(
-              label: _modePaiementLabel(commande.modePaiement),
-              color: _modePaiementColor(commande.modePaiement),
+              label: _modePaiementLabel(widget.commande.modePaiement),
+              color: _modePaiementColor(widget.commande.modePaiement),
             ),
             const SizedBox(height: 12),
             DecoratedBox(
@@ -324,8 +391,8 @@ class _DemandeCommandeCard extends StatelessWidget {
                     _RouteRow(
                       label: 'Depart',
                       value: _formatZone(
-                        commande.zonePrincipaleDepart,
-                        commande.sousZoneDepart,
+                        widget.commande.zonePrincipaleDepart,
+                        widget.commande.sousZoneDepart,
                       ),
                       icon: Icons.flag_circle_outlined,
                     ),
@@ -333,8 +400,8 @@ class _DemandeCommandeCard extends StatelessWidget {
                     _RouteRow(
                       label: 'Arrivee',
                       value: _formatZone(
-                        commande.zonePrincipaleArrivee,
-                        commande.sousZoneArrivee,
+                        widget.commande.zonePrincipaleArrivee,
+                        widget.commande.sousZoneArrivee,
                       ),
                       icon: Icons.location_on_outlined,
                     ),
@@ -344,7 +411,7 @@ class _DemandeCommandeCard extends StatelessWidget {
                         Expanded(
                           child: _InfoChip(
                             label: 'Prix',
-                            value: _formatPrice(commande.prix),
+                            value: _formatPrice(widget.commande.prix),
                             icon: Icons.payments_outlined,
                           ),
                         ),
@@ -352,7 +419,7 @@ class _DemandeCommandeCard extends StatelessWidget {
                         Expanded(
                           child: _InfoChip(
                             label: 'Distance',
-                            value: _formatDistance(commande.distanceKm),
+                            value: _formatDistance(widget.commande.distanceKm),
                             icon: Icons.social_distance,
                           ),
                         ),
@@ -361,12 +428,12 @@ class _DemandeCommandeCard extends StatelessWidget {
                     const SizedBox(height: 12),
                     _PhoneRow(
                       label: 'Tel depart',
-                      value: _phoneLabel(commande.telDepart),
+                      value: _phoneLabel(widget.commande.telDepart),
                     ),
                     const SizedBox(height: 6),
                     _PhoneRow(
                       label: 'Tel arrivee',
-                      value: _phoneLabel(commande.telArrivee),
+                      value: _phoneLabel(widget.commande.telArrivee),
                     ),
                   ],
                 ),
@@ -376,13 +443,13 @@ class _DemandeCommandeCard extends StatelessWidget {
             Row(
               children: [
                 OutlinedButton(
-                  onPressed: onDetails,
+                  onPressed: widget.onDetails,
                   child: const Text('Details'),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton(
-                    onPressed: onVoirTrajet,
+                    onPressed: widget.onVoirTrajet,
                     child: const Text('Voir le trajet'),
                   ),
                 ),
@@ -397,32 +464,18 @@ class _DemandeCommandeCard extends StatelessWidget {
 
 class _ClientHeader extends StatelessWidget {
   final Commande commande;
-  final Future<Utilisateur?>? future;
+  final Utilisateur? user;
+  final bool isLoading;
 
   const _ClientHeader({
     required this.commande,
-    required this.future,
+    required this.user,
+    required this.isLoading,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (future == null) {
-      return _ClientRow(
-        user: null,
-        isLoading: false,
-        commande: commande,
-      );
-    }
-    return FutureBuilder<Utilisateur?>(
-      future: future,
-      builder: (context, snapshot) {
-        return _ClientRow(
-          user: snapshot.data,
-          isLoading: snapshot.connectionState == ConnectionState.waiting,
-          commande: commande,
-        );
-      },
-    );
+    return _ClientRow(user: user, isLoading: isLoading, commande: commande);
   }
 }
 
@@ -450,16 +503,19 @@ class _ClientRow extends StatelessWidget {
         CircleAvatar(
           radius: 26,
           backgroundImage:
-              (avatarImage != null && avatarImage.isNotEmpty) ? NetworkImage(avatarImage) : null,
-          child: (avatarImage == null || avatarImage.isEmpty)
-              ? (isLoading
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.person))
-              : null,
+              (avatarImage != null && avatarImage.isNotEmpty)
+                  ? NetworkImage(avatarImage)
+                  : null,
+          child:
+              (avatarImage == null || avatarImage.isEmpty)
+                  ? (isLoading
+                      ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.person))
+                  : null,
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -468,10 +524,14 @@ class _ClientRow extends StatelessWidget {
             children: [
               Text(
                 _fallback(
-                  user != null ? '${user!.prenom ?? ''} ${user!.nom ?? ''}'.trim() : '',
+                  user != null
+                      ? '${user!.prenom ?? ''} ${user!.nom ?? ''}'.trim()
+                      : '',
                   'Client inconnu',
                 ),
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 4),
@@ -496,10 +556,7 @@ class _ModePaiementBadge extends StatelessWidget {
   final String label;
   final Color color;
 
-  const _ModePaiementBadge({
-    required this.label,
-    required this.color,
-  });
+  const _ModePaiementBadge({required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -557,15 +614,12 @@ class _RouteRow extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 2),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
+              Text(value, style: Theme.of(context).textTheme.bodyMedium),
             ],
           ),
         ),
@@ -602,17 +656,14 @@ class _InfoChip extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
             ],
           ),
           const SizedBox(height: 4),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          Text(value, style: Theme.of(context).textTheme.titleMedium),
         ],
       ),
     );
@@ -623,10 +674,7 @@ class _PhoneRow extends StatelessWidget {
   final String label;
   final String value;
 
-  const _PhoneRow({
-    required this.label,
-    required this.value,
-  });
+  const _PhoneRow({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -640,15 +688,12 @@ class _PhoneRow extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 2),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
+              Text(value, style: Theme.of(context).textTheme.bodyMedium),
             ],
           ),
         ),
@@ -674,31 +719,24 @@ class _SousZoneFilters extends StatelessWidget {
 
   static const Map<String, List<SousZone>> _zonesToSousZones = {
     'GRAND TUNIS': [
-      SousZone.TUNIS_CENTRE,
-      SousZone.ARIANA_NORD,
-      SousZone.BEN_AROUS_SUD,
-      SousZone.MANOUBA_OUEST,
+      SousZone.TUNIS,
+      SousZone.ARIANA,
+      SousZone.BEN_AROUS,
+      SousZone.MANOUBA,
     ],
-    'COTIER NORD': [
-      SousZone.BIZERTE_METRO,
-      SousZone.NABEUL_HAMMAMET,
-      SousZone.KELIBIA_MENZEL_TEMIME,
+    'NORD EST': [SousZone.BIZERTE, SousZone.NABEUL],
+    'NORD OUEST': [
+      SousZone.BEJA,
+      SousZone.JENDOUBA,
+      SousZone.KEF,
+      SousZone.SILIANA,
     ],
-    'CENTRE EST': [
-      SousZone.SOUSSE,
-      SousZone.MONASTIR,
-      SousZone.MAHDIA,
-    ],
-    'SFAX': [
-      SousZone.SFAX,
-    ],
-    'SUD EST': [
-      SousZone.GABES,
-      SousZone.DJERBA_ZARZIS,
-    ],
-    'INTERIEUR': [
-      SousZone.KAIROUAN,
-    ],
+    'CENTRE': [SousZone.ZAGHOUAN, SousZone.KAIROUAN],
+    'CENTRE OUEST': [SousZone.KASSERINE, SousZone.SIDI_BOUZID],
+    'SAHEL': [SousZone.SOUSSE, SousZone.MONASTIR, SousZone.MAHDIA],
+    'SFAX': [SousZone.SFAX],
+    'SUD EST': [SousZone.GABES, SousZone.MEDENINE, SousZone.TATAOUINE],
+    'SUD OUEST': [SousZone.GAFSA, SousZone.TOZEUR, SousZone.KEBILI],
   };
 
   @override
@@ -708,9 +746,9 @@ class _SousZoneFilters extends StatelessWidget {
       children: [
         Text(
           'Filtrer par sous-zone',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         Row(
@@ -775,15 +813,15 @@ class _MultiSelectSousZoneField extends StatelessWidget {
           context: context,
           showDragHandle: true,
           isScrollControlled: true,
-          builder: (_) => _SousZoneSelectionSheet(
-            title: label,
-            initialSelection: selected,
-          ),
+          builder:
+              (_) => _SousZoneSelectionSheet(
+                title: label,
+                initialSelection: selected,
+              ),
         );
         if (result != null) {
-          final normalized = result.length >= SousZone.values.length
-              ? <SousZone>{}
-              : result;
+          final normalized =
+              result.length >= SousZone.values.length ? <SousZone>{} : result;
           onChanged(normalized);
         }
       },
@@ -848,9 +886,9 @@ class _SousZoneSelectionSheetState extends State<_SousZoneSelectionSheet> {
             children: [
               Text(
                 'Choisir les sous-zones ${widget.title.toLowerCase()}',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               Expanded(
@@ -868,9 +906,7 @@ class _SousZoneSelectionSheetState extends State<_SousZoneSelectionSheet> {
                           ),
                           child: Text(
                             entry.key,
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelLarge
+                            style: Theme.of(context).textTheme.labelLarge
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                         ),
@@ -899,8 +935,7 @@ class _SousZoneSelectionSheetState extends State<_SousZoneSelectionSheet> {
                   const Spacer(),
                   FilledButton(
                     onPressed: () {
-                      Navigator.of(context)
-                          .pop(Set<SousZone>.from(_selection));
+                      Navigator.of(context).pop(Set<SousZone>.from(_selection));
                     },
                     child: const Text('Valider'),
                   ),

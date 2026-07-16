@@ -1,21 +1,131 @@
+import 'dart:io'; // For File
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart'; // Add image_picker to pubspec.yaml
+import 'package:yemchi_wyji/core/models/utilisateur.dart';
+import 'package:yemchi_wyji/core/network/api.dart'; // Ensure this exports Api and ApiException
+import 'package:yemchi_wyji/features/auth/data/auth_user_service.dart';
+import 'package:provider/provider.dart';
+import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
 
-class ProfilPage extends StatelessWidget {
+
+
+class ProfilPage extends StatefulWidget {
   const ProfilPage({super.key});
 
   @override
+  State<ProfilPage> createState() => _ProfilPageState();
+}
+
+class _ProfilPageState extends State<ProfilPage> {
+  // Dependencies (In a real app, use GetIt or Provider)
+  final AuthUserService _authService = AuthUserService(Api()); 
+  
+  // State
+  Utilisateur? _user;
+  bool _isLoading = true;
+  final ImagePicker _picker = ImagePicker();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  // Equivalent to ngOnInit
+  Future<void> _loadUserData() async {
+    try {
+      final userId = Provider.of<AuthController>(context, listen: false).currentUser.value?.id;
+      // 1. Fetch current user (me)
+      final user = await _authService.me(userId!);
+      if (mounted) {
+        setState(() {
+          _user = user;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      // 2. Security: Redirect if not logged in or error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Session expirée ou erreur: $e')),
+        );
+        // Navigate back to login
+        // Navigator.of(context).pushReplacementNamed('/login'); 
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  // Equivalent to onLogout
+  Future<void> _onLogout() async {
+    // Clear token via your Api class or a StorageService
+    // await SecureStorage.deleteToken(); 
+    
+    // Stop presence service if you have one in Flutter
+    // PresenceService.stop();
+
+    if (mounted) {
+      // Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+      print("Logged out"); // Placeholder for navigation
+    }
+  }
+
+  // Equivalent to onFileSelected + Upload + Update
+  Future<void> _pickAndUploadImage() async {
+    try {
+      final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+      if (pickedFile == null) return;
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Upload en cours...')),
+        );
+      }
+
+      // 1. Upload
+      final File imageFile = File(pickedFile.path);
+      //final String imageUrl = await _authService.uploadImageProfil(imageFile);
+
+      // 2. Update User Profile with new URL
+      // Note: We use updateMe because we are the current user
+      // final updatedUser = await _authService.updateMe(image: imageUrl);
+
+      if (mounted) {
+        setState(() {
+          //_user = updatedUser;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Photo de profil mise à jour !')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Example static user data
-    const avatar = "assets/avatar.png"; // Put your image in assets!
-    const cameraIcon = "assets/profil/camera.png"; // Same here
-    const defaultUser = {
-      'nom': 'Dupont',
-      'prenom': 'Marie',
-      'email': 'marie.dupont@example.com',
-      'telephone': '+33 6 12 34 56 78',
-      'adresse': '12 Rue des Fleurs, Paris',
-      'dateNaissance': '15/04/1990',
-    };
+    // Assets
+    const defaultAvatar = "assets/avatar.png"; 
+    const cameraIcon = "assets/profil/camera.png"; 
+
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: Colors.green)),
+      );
+    }
+
+    if (_user == null) {
+      return const Scaffold(
+        body: Center(child: Text("Impossible de charger le profil")),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -23,6 +133,7 @@ class ProfilPage extends StatelessWidget {
         centerTitle: true,
         backgroundColor: Colors.green,
       ),
+      backgroundColor: Colors.grey.shade100,
       body: Column(
         children: [
           // Profile block
@@ -32,9 +143,13 @@ class ProfilPage extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(24),
-              boxShadow: [BoxShadow(
-                color: Colors.black12, blurRadius: 16, offset: Offset(0, 8)
-              )],
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 16,
+                  offset: Offset(0, 8),
+                )
+              ],
             ),
             child: Column(
               children: [
@@ -43,13 +158,17 @@ class ProfilPage extends StatelessWidget {
                   children: [
                     CircleAvatar(
                       radius: 48,
-                      backgroundImage: AssetImage(avatar),
+                      backgroundColor: Colors.grey.shade300,
+                      // Logic to show Network image if exists, else Asset
+                      backgroundImage: (_user!.image != null && _user!.image!.isNotEmpty)
+                          ? NetworkImage(_user!.image!) as ImageProvider
+                          : const AssetImage(defaultAvatar),
                     ),
                     Material(
                       color: Colors.transparent,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(21),
-                        onTap: () {}, // Can add change photo action
+                        onTap: _pickAndUploadImage, // Action connected here
                         child: CircleAvatar(
                           radius: 21,
                           backgroundColor: Colors.grey.shade200,
@@ -61,96 +180,118 @@ class ProfilPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  "${defaultUser['nom']} ${defaultUser['prenom']}",
+                  "${_user!.nom} ${_user!.prenom}",
                   style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.email, color: Colors.green, size: 18),
-                    const SizedBox(width: 6),
-                    Text(defaultUser['email']!, style: TextStyle(fontSize: 16, color: Colors.black54)),
-                  ],
+                _InfoRow(
+                  icon: Icons.email, 
+                  text: _user!.email ?? '—',
                 ),
                 const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.phone, color: Colors.green, size: 18),
-                    const SizedBox(width: 6),
-                    Text(defaultUser['telephone']!, style: TextStyle(fontSize: 16, color: Colors.black54)),
-                  ],
+                _InfoRow(
+                  icon: Icons.phone, 
+                  text: _user!.telephone ?? '—',
                 ),
                 const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.location_on, color: Colors.green, size: 18),
-                    const SizedBox(width: 6),
-                    Text(defaultUser['adresse']!, style: TextStyle(fontSize: 16, color: Colors.black54)),
-                  ],
+                _InfoRow(
+                  icon: Icons.location_on, 
+                  text: _user!.adresse ?? '—',
                 ),
                 const SizedBox(height: 12),
-                Divider(height: 32),
+                const Divider(height: 32),
                 Row(
                   children: [
                     const Icon(Icons.cake, color: Colors.green, size: 18),
                     const SizedBox(width: 6),
-                    const Text("Date de naissance :", style: TextStyle(fontWeight: FontWeight.w600)),
+                    const Text("Né(e) le :", style: TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(width: 6),
-                    Text(defaultUser['dateNaissance']!, style: TextStyle(color: Colors.black87)),
+                    // Assuming dateNaissance is a String (ISO or formatted)
+                    Text((_user!.dateNaissance?.toString() ?? '—'), style: const TextStyle(color: Colors.black87)),
                   ],
                 ),
               ],
             ),
           ),
+          
           // Actions block
           Expanded(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 30),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _ProfileButton(
-                    icon: Icons.edit,
-                    label: 'Modifier mon profil',
-                    color: Colors.blue,
-                    onPressed: () {},
-                  ),
-                  const SizedBox(height: 12),
-                  _ProfileButton(
-                    icon: Icons.history,
-                    label: 'Historique de commandes',
-                    color: Colors.black,
-                    onPressed: () {},
-                  ),
-                  const SizedBox(height: 12),
-                  _ProfileButton(
-                    icon: Icons.people,
-                    label: 'Mes amis',
-                    color: Colors.green,
-                    onPressed: () {},
-                  ),
-                  const SizedBox(height: 12),
-                  _ProfileButton(
-                    icon: Icons.logout,
-                    label: 'Se déconnecter',
-                    color: Colors.red,
-                    onPressed: () {},
-                  ),
-                ],
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _ProfileButton(
+                      icon: Icons.edit,
+                      label: 'Modifier mon profil',
+                      color: Colors.blue,
+                      onPressed: () {
+                        // Equivalent to router.navigate(['/profil/modifier'])
+                        // Navigator.pushNamed(context, '/profil/modifier', arguments: _user);
+                        print("Nav to Edit");
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _ProfileButton(
+                      icon: Icons.history,
+                      label: 'Historique de commandes',
+                      color: Colors.black,
+                      onPressed: () {
+                        // Equivalent to router.navigate(['/historique'])
+                         print("Nav to History");
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _ProfileButton(
+                      icon: Icons.people,
+                      label: 'Mes amis',
+                      color: Colors.green,
+                      onPressed: () {
+                         // Equivalent to router.navigate(['/mesAmis'])
+                         print("Nav to Friends");
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _ProfileButton(
+                      icon: Icons.logout,
+                      label: 'Se déconnecter',
+                      color: Colors.red,
+                      onPressed: _onLogout,
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
               ),
             ),
           ),
         ],
       ),
-      backgroundColor: Colors.grey.shade100,
     );
   }
 }
 
-// Custom button widget for profile actions
+// Helper widget for User info rows to reduce code duplication
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _InfoRow({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, color: Colors.green, size: 18),
+        const SizedBox(width: 6),
+        Text(text, style: const TextStyle(fontSize: 16, color: Colors.black54)),
+      ],
+    );
+  }
+}
+
+// Custom button widget (Kept same as before)
 class _ProfileButton extends StatelessWidget {
   final IconData icon;
   final String label;
