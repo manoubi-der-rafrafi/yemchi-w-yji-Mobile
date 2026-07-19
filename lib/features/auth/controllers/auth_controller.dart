@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:yemchi_wyji/core/models/utilisateur.dart';
+import 'package:yemchi_wyji/core/network/api.dart';
 import 'package:yemchi_wyji/core/storage/token_storage.dart';
 import 'package:yemchi_wyji/features/auth/data/auth_user_service.dart';
 
@@ -13,14 +14,61 @@ class AuthController {
   final ValueNotifier<bool> loading = ValueNotifier(false);
   final ValueNotifier<String?> error = ValueNotifier(null);
 
-  /// Login: récupère {token, user}, sauvegarde le token, met à jour l'état.
-  Future<bool> login(String email, String password) async {
-    loading.value = true; error.value = null;
+  /// Register: crée le compte puis connecte automatiquement.
+  Future<bool> register({
+    required String email,
+    required String password,
+    required String nom,
+    required String prenom,
+    required String telephone,
+    required String adresse,
+    required String dateNaissance,
+  }) async {
+    loading.value = true;
+    error.value = null;
     try {
-      final res = await _svc.login(email: email, password: password);
-      debugPrint('Auth token: ${res.token}');
+      final res = await _svc.register(
+        email: email,
+        password: password,
+        nom: nom,
+        prenom: prenom,
+        telephone: telephone,
+        adresse: adresse,
+        dateNaissance: dateNaissance,
+      );
       await TokenStorage.save(access: res.token, userId: res.user.id);
       currentUser.value = res.user;
+      _svc.currentUser.value = res.user;
+      return true;
+    } on ApiException catch (e) {
+      error.value = e.message;
+      return false;
+    } catch (e) {
+      // TimeoutException, SocketException, etc.
+      final msg = e.toString();
+      if (msg.contains('TimeoutException') || msg.contains('timeout')) {
+        error.value = 'Serveur injoignable. Vérifiez votre connexion.';
+      } else if (msg.contains('SocketException') ||
+          msg.contains('Connection refused')) {
+        error.value = 'Impossible de contacter le serveur. Est-il démarré ?';
+      } else {
+        error.value = msg;
+      }
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  /// Login: récupère {token, user}, sauvegarde le token, met à jour l'état.
+  Future<bool> login(String email, String password) async {
+    loading.value = true;
+    error.value = null;
+    try {
+      final res = await _svc.login(email: email, password: password);
+      await TokenStorage.save(access: res.token, userId: res.user.id);
+      currentUser.value = res.user;
+      _svc.currentUser.value = res.user;
       return true;
     } catch (e) {
       error.value = e.toString();
@@ -41,7 +89,7 @@ class AuthController {
     }
 
     try {
-      currentUser.value = await _svc.me(storedUserId!);
+      currentUser.value = await _svc.me();
     } catch (_) {}
   }
 
@@ -57,10 +105,10 @@ class AuthController {
     double? latitude,
     double? longitude,
   }) async {
-    loading.value = true; error.value = null;
+    loading.value = true;
+    error.value = null;
     try {
       final u = await _svc.updateMe(
-        id: currentUser.value!.id, // <--- Passer l'ID ici
         nom: nom,
         prenom: prenom,
         adresse: adresse,
@@ -72,6 +120,7 @@ class AuthController {
         longitude: longitude,
       );
       currentUser.value = u;
+      _svc.currentUser.value = u;
       return true;
     } catch (e) {
       error.value = e.toString();
@@ -83,10 +132,12 @@ class AuthController {
 
   /// 🆕 Mise à jour complète d'un utilisateur (via toJson)
   Future<bool> updateUtilisateur(Utilisateur updated) async {
-    loading.value = true; error.value = null;
+    loading.value = true;
+    error.value = null;
     try {
       final u = await _svc.updateUtilisateur(updated);
       currentUser.value = u;
+      _svc.currentUser.value = u;
       return true;
     } catch (e) {
       error.value = e.toString();
@@ -99,7 +150,8 @@ class AuthController {
   /// 🆕 Mettre à jour uniquement la zone
   Future<bool> updateZone(Zone zone) async {
     if (currentUser.value == null) return false;
-    loading.value = true; error.value = null;
+    loading.value = true;
+    error.value = null;
     try {
       final u = await _svc.updateZone(
         userId: currentUser.value!.id,
@@ -117,15 +169,15 @@ class AuthController {
 
   /// 🆕 Mettre à jour uniquement la sous-zone
   Future<bool> updateSousZone(SousZone sousZone) async {
-    
     if (currentUser.value == null) return false;
-    loading.value = true; error.value = null;
+    loading.value = true;
+    error.value = null;
     try {
       final u = await _svc.updateSousZone(
         userId: currentUser.value!.id,
         sousZone: sousZone,
       );
-     // currentUser.value = u;
+      // currentUser.value = u;
       return true;
     } catch (e) {
       error.value = e.toString();
@@ -141,7 +193,8 @@ class AuthController {
     required double longitude,
   }) async {
     if (currentUser.value == null) return false;
-    loading.value = true; error.value = null;
+    loading.value = true;
+    error.value = null;
     try {
       final u = await _svc.updateLocalisation(
         userId: currentUser.value!.id,
@@ -165,6 +218,7 @@ class AuthController {
     try {
       final u = await _svc.marquerTransporteurEnPanne(currentUser.value!.id);
       currentUser.value = u;
+      _svc.currentUser.value = u;
       return true;
     } catch (e) {
       error.value = e.toString();
@@ -181,6 +235,7 @@ class AuthController {
     try {
       final u = await _svc.marquerTransporteurEnAccident(currentUser.value!.id);
       currentUser.value = u;
+      _svc.currentUser.value = u;
       return true;
     } catch (e) {
       error.value = e.toString();
@@ -204,6 +259,7 @@ class AuthController {
         produitsNonAffectes: produitsNonAffectes,
       );
       currentUser.value = u;
+      _svc.currentUser.value = u;
       return true;
     } catch (e) {
       error.value = e.toString();
@@ -227,6 +283,7 @@ class AuthController {
         zoneArriver: zoneArriver,
       );
       currentUser.value = u;
+      _svc.currentUser.value = u;
       return true;
     } catch (e) {
       error.value = e.toString();
@@ -240,13 +297,16 @@ class AuthController {
   Future<void> logout() async {
     await TokenStorage.clear();
     currentUser.value = null;
+    _svc.currentUser.value = null;
   }
+
   Future<Utilisateur?> fetchUserById(String id) async {
     loading.value = true;
     error.value = null;
     try {
       final user = await _svc.meById(id);
       currentUser.value = user;
+      _svc.currentUser.value = user;
       return user;
     } catch (e) {
       error.value = e.toString();

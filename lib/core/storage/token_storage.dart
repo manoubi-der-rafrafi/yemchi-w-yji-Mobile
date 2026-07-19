@@ -1,59 +1,79 @@
-﻿import 'dart:convert';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'dart:convert';
 
-/// Stockage sécurisé des JWT (access + refresh) dans le coffre système.
-/// - iOS: Keychain
-/// - Android: Keystore + EncryptedSharedPreferences
+import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 class TokenStorage {
   static const _kAccess = 'access_token';
   static const _kRefresh = 'refresh_token';
   static const _kUserId = 'user_id';
-  static const FlutterSecureStorage _s = FlutterSecureStorage();
+  static const FlutterSecureStorage _secure = FlutterSecureStorage();
 
-  /// Sauvegarde (rotation possible)
   static Future<void> save({
     required String access,
     String? refresh,
     String? userId,
   }) async {
-    await _s.write(key: _kAccess, value: access);
+    await _write(_kAccess, access);
     if (refresh != null && refresh.isNotEmpty) {
-      await _s.write(key: _kRefresh, value: refresh);
+      await _write(_kRefresh, refresh);
     }
     if (userId != null && userId.isNotEmpty) {
-      await _s.write(key: _kUserId, value: userId);
+      await _write(_kUserId, userId);
     }
   }
 
-  static Future<String?> access()  => _s.read(key: _kAccess);
-  static Future<String?> refresh() => _s.read(key: _kRefresh);
-  static Future<String?> userId()  => _s.read(key: _kUserId);
+  static Future<String?> access() => _read(_kAccess);
+  static Future<String?> refresh() => _read(_kRefresh);
+  static Future<String?> userId() => _read(_kUserId);
 
   static Future<bool> hasAccess() async => (await access())?.isNotEmpty == true;
-  static Future<bool> hasRefresh() async => (await refresh())?.isNotEmpty == true;
+  static Future<bool> hasRefresh() async =>
+      (await refresh())?.isNotEmpty == true;
   static Future<bool> hasUserId() async => (await userId())?.isNotEmpty == true;
 
-  /// Efface tout (logout)
   static Future<void> clear() async {
-    await _s.delete(key: _kAccess);
-    await _s.delete(key: _kRefresh);
-    await _s.delete(key: _kUserId);
+    await _delete(_kAccess);
+    await _delete(_kRefresh);
+    await _delete(_kUserId);
   }
 
-  /// --------- Aides JWT (facultatif mais utile) ---------
+  static Future<void> _write(String key, String value) async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(key, value);
+      return;
+    }
+    await _secure.write(key: key, value: value);
+  }
 
-  /// True si l'access token est expiré (ou invalide).
-  /// Ajoute une marge (skew) pour anticiper les décalages d’horloge.
+  static Future<String?> _read(String key) async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(key);
+    }
+    return _secure.read(key: key);
+  }
+
+  static Future<void> _delete(String key) async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(key);
+      return;
+    }
+    await _secure.delete(key: key);
+  }
+
   static Future<bool> isAccessExpired({int skewSeconds = 30}) async {
     final t = await access();
     if (t == null || t.isEmpty) return true;
     final exp = _jwtExp(t);
-    if (exp == null) return false; // token opaque => on ne sait pas
+    if (exp == null) return false;
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     return (exp - skewSeconds) <= now;
   }
 
-  /// Secondes restantes avant expiration (null si inconnu).
   static Future<int?> accessRemainingSeconds() async {
     final t = await access();
     final exp = t == null ? null : _jwtExp(t);
@@ -62,14 +82,11 @@ class TokenStorage {
     return exp - now;
   }
 
-  /// Décode le payload du JWT (non vérifié cryptographiquement).
   static Future<Map<String, dynamic>?> accessPayload() async {
     final t = await access();
     if (t == null) return null;
     return _jwtPayload(t);
   }
-
-  /// --- helpers internes ---
 
   static Map<String, dynamic>? _jwtPayload(String token) {
     final parts = token.split('.');
@@ -93,10 +110,16 @@ class TokenStorage {
   static String _base64UrlDecode(String input) {
     String normalized = input.replaceAll('-', '+').replaceAll('_', '/');
     switch (normalized.length % 4) {
-      case 2: normalized += '=='; break;
-      case 3: normalized += '='; break;
-      case 0: break;
-      default: throw const FormatException('Invalid Base64URL');
+      case 2:
+        normalized += '==';
+        break;
+      case 3:
+        normalized += '=';
+        break;
+      case 0:
+        break;
+      default:
+        throw const FormatException('Invalid Base64URL');
     }
     return utf8.decode(base64.decode(normalized));
   }

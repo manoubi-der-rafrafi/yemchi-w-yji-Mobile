@@ -753,7 +753,7 @@ class CommandeService {
 
   /// GET /commandes/transporteur/{idTransporteur}/total-livree
   Future<double> getSommePrixLivreeByTransporteur(String idTransporteur) async {
-    final res = await api.get('$_base/transporteur/$idTransporteur/total-livree');
+    final res = await api.get('$_base/transporteur/$idTransporteur/total-gains-livreur');
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception(
         'GET $_base/transporteur/$idTransporteur/total-livree -> ${res.statusCode}: ${res.body}',
@@ -773,7 +773,7 @@ class CommandeService {
     String idTransporteur,
   ) async {
     final res =
-        await api.get('$_base/transporteur/$idTransporteur/total-livree-en-ligne');
+        await api.get('$_base/transporteur/$idTransporteur/total-gains-livreur-en-ligne');
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception(
         'GET $_base/transporteur/$idTransporteur/total-livree-en-ligne -> ${res.statusCode}: ${res.body}',
@@ -793,7 +793,7 @@ class CommandeService {
     String idTransporteur,
   ) async {
     final res = await api
-        .get('$_base/transporteur/$idTransporteur/total-livree-hors-ligne');
+        .get('$_base/transporteur/$idTransporteur/total-part-societe-hors-ligne');
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception(
         'GET $_base/transporteur/$idTransporteur/total-livree-hors-ligne -> ${res.statusCode}: ${res.body}',

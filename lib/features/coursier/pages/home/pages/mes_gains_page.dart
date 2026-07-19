@@ -46,11 +46,16 @@ class _MesGainsPageState extends State<MesGainsPage>
       TransporteurStatsCacheService();
 
   double get _diff =>
-      (_totalHorsLigne - _totalEnLigne) * 0.5 -
-      (_montantVertEntreprise - _montantVertLivreur);
+      _totalEnLigne -
+      _totalHorsLigne -
+      _montantVertLivreur +
+      _montantVertEntreprise;
   bool get _isCreditLivreur => _diff >= 0;
   double get _soldeLivreur => _diff.abs().clamp(0, 800);
-  double get _totalRevenue => _totalEnLigne + _totalHorsLigne;
+  double get _totalRevenue => _commandesLivrees.fold<double>(
+        0,
+        (sum, commande) => sum + (commande.prixLivreur ?? (commande.prix ?? 0) / 2),
+      );
 
   @override
   void initState() {
@@ -281,21 +286,21 @@ class _MesGainsPageState extends State<MesGainsPage>
                                   children: [
                                     Expanded(
                                       child: _MiniStatCard(
-                                        label: 'Total revenue',
+                                        label: 'Mes gains',
                                         value: _formatMoney(_totalRevenue),
                                       ),
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: _MiniStatCard(
-                                        label: 'Total enligne',
+                                        label: 'A recevoir (en ligne)',
                                         value: _formatMoney(_totalEnLigne),
                                       ),
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: _MiniStatCard(
-                                        label: 'Total non enligne',
+                                        label: 'A reverser (hors ligne)',
                                         value: _formatMoney(_totalHorsLigne),
                                       ),
                                     ),

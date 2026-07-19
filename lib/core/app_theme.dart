@@ -40,13 +40,17 @@ class AppTheme {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
       ),
       appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
@@ -85,9 +89,10 @@ class WarmCTA extends StatelessWidget {
     return FilledButton(
       onPressed: onPressed,
       child: ShaderMask(
-        shaderCallback: (bounds) => const LinearGradient(
-          colors: [Color(0xFFF6C300), Color(0xFFFF6A00), Color(0xFFFF3B2E)],
-        ).createShader(Rect.fromLTWH(0, 0, bounds.width, bounds.height)),
+        shaderCallback:
+            (bounds) => const LinearGradient(
+              colors: [Color(0xFFF6C300), Color(0xFFFF6A00), Color(0xFFFF3B2E)],
+            ).createShader(Rect.fromLTWH(0, 0, bounds.width, bounds.height)),
         blendMode: BlendMode.srcIn,
         child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
       ),
@@ -105,7 +110,7 @@ class LogoTitle extends StatelessWidget {
       children: [
         // Place ton asset du logo ici
         Image.asset(
-          'assets\images\LOGO_YEMCHI W YJI.png', // ajoute-le dans pubspec.yaml
+          'assets/images/logo_yemchi_w_yji.jpg', // ajoute-le dans pubspec.yaml
           width: 96,
           height: 96,
           fit: BoxFit.contain,

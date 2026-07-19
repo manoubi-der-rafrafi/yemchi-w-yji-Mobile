@@ -10,7 +10,7 @@ import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
 import 'package:yemchi_wyji/features/presence/data/presence_service.dart';
 
 // 🧭 Pages
-import 'package:yemchi_wyji/features/auth/pages/auth_gate.dart';
+import 'package:yemchi_wyji/features/auth/pages/splash_screen.dart';
 import 'package:yemchi_wyji/features/auth/pages/login_page.dart';
 import 'package:yemchi_wyji/features/auth/pages/signup_page.dart';
 import 'package:yemchi_wyji/features/client/client_home_navbar.dart';
@@ -51,19 +51,18 @@ class MyApp extends StatelessWidget {
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'Yemchi w Yji',
+        title: 'yemchiwyji Coursier',
         theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF34D058)),
+          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1565C0)),
           useMaterial3: true,
         ),
 
-        // ✅ Laisse AuthGate décider : LoginPage ou HomeCoursierPage
-        home: const AuthGate(),
+        home: const SplashScreen(),
 
         // ✅ Routes nommées (si tu utilises Navigator.pushNamed)
         routes: {
-          '/login': (_) => LoginPage(),
-          '/signup': (_) => SignUpPage(),
+          '/login': (_) => const LoginPage(),
+          '/signup': (_) => const SignUpPage(),
           '/home_coursier': (_) => HomeCoursierPage(),
           '/home_client': (_) => ClientHome(),
         },

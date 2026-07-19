@@ -1,26 +1,18 @@
-﻿import 'dart:convert';
-import 'dart:io'; // Needed for File
-import 'package:http/http.dart' as http; // Needed for MultipartRequest
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:yemchi_wyji/core/network/api.dart';
 import 'package:yemchi_wyji/core/models/utilisateur.dart';
-import 'package:flutter/foundation.dart';
-
-
 
 class AuthUserService {
   final Api api;
   AuthUserService(this.api);
   final ValueNotifier<Utilisateur?> currentUser = ValueNotifier(null);
 
-
   // ---- Endpoints centralisés ----
   static const _login = '/utilisateur/login';
-  static const _register = '/utilisateur/register'; // Added
-  static const _upload = '/utilisateur/upload';     // Added
-  static const _searchNum = '/utilisateur/search/numero'; // Added
-  static const _searchEmail = '/utilisateur/search/email'; // Added
-  static const _me    = '/utilisateur/me';
-  
+  static const _me = '/utilisateur/me';
+  static const _searchNum = '/utilisateur/search/numero';
+  static const _searchEmail = '/utilisateur/search/email';
   static String _byId(String id) => '/utilisateur/id/$id';
   static String _updateById(String id) => '/utilisateur/$id';
   static String _etatIncidentPanne(String id) =>
@@ -31,7 +23,51 @@ class AuthUserService {
       '/utilisateur/$id/etat-incident/accident/produits';
   static String _zonesDepartArriver(String id) =>
       '/utilisateur/$id/zones-depart-arriver';
-  static String _statusById(String id) => '/utilisateur/$id/status'; // Added
+
+  // ---- Register endpoints ----
+  static const _register = '/utilisateur/register';
+
+  // ---------- REGISTER ----------
+  /// Crée un compte complet en une seule requête (POST /api/utilisateur/register).
+  /// Retourne un [LoginResult] (token + user) directement utilisable pour connecter l'utilisateur.
+  Future<LoginResult> register({
+    required String email,
+    required String password,
+    required String nom,
+    required String prenom,
+    required String telephone,
+    required String adresse,
+    required String dateNaissance, // format "YYYY-MM-DD"
+  }) async {
+    final r = await api.post(
+      _register,
+      body: json.encode({
+        'email': email,
+        'motDePasse': password,
+        'nom': nom,
+        'prenom': prenom,
+        'telephone': telephone,
+        'adresse': adresse,
+        'dateNaissance': dateNaissance,
+      }),
+      includeAuth: false,
+    );
+
+    final m = json.decode(r.body) as Map<String, dynamic>;
+
+    final token = m['token']?.toString();
+    if (token == null || token.isEmpty) {
+      throw ApiException(500, 'Token manquant dans la réponse');
+    }
+
+    final userMap =
+        (m['user'] is Map<String, dynamic>)
+            ? m['user'] as Map<String, dynamic>
+            : m;
+    final user = Utilisateur.fromJson(userMap);
+
+    return LoginResult(token: token, user: user);
+  }
 
   // ---------- LOGIN ----------
   Future<LoginResult> login({
@@ -44,124 +80,35 @@ class AuthUserService {
       includeAuth: false,
     );
 
-    return _parseAuthResponse(r);
-  }
-
-  // ---------- REGISTER (Added) ----------
-  /// Registers a new user. Accepts a Map of user data (nom, prenom, email, etc.)
-  Future<LoginResult> register(Map<String, dynamic> userData) async {
-    final r = await api.post(
-      _register,
-      body: json.encode(userData),
-      includeAuth: false,
-    );
-
-    return _parseAuthResponse(r);
-  }
-
-  // ---------- HELPER: Parse Auth Response ----------
-  /// Refactored to avoid code duplication between Login and Register
-  LoginResult _parseAuthResponse(http.Response r) {
     final m = json.decode(r.body) as Map<String, dynamic>;
 
-    // Handle cases where token might be 'token' or 'accessToken' based on TS code
-    final token = m['token']?.toString() ?? m['accessToken']?.toString();
-    
+    final token = m['token']?.toString();
     if (token == null || token.isEmpty) {
       throw ApiException(500, 'Token manquant dans la réponse');
     }
 
-    final userMap = (m['user'] is Map<String, dynamic>)
-        ? m['user'] as Map<String, dynamic>
-        : m;
+    final userMap =
+        (m['user'] is Map<String, dynamic>)
+            ? m['user'] as Map<String, dynamic>
+            : m;
     final user = Utilisateur.fromJson(userMap);
 
     return LoginResult(token: token, user: user);
   }
 
-  // ---------- UPLOAD IMAGE (Added) ----------
-  /// Uploads a profile image using MultipartRequest
-  /*Future<String> uploadImageProfil(File imageFile) async {
-    // Note: We need the base URL from the Api class. 
-    // Assuming api.baseUrl exists or constructing it manually.
-    // If your Api class doesn't expose baseUrl, replace this with your environment url.
-    final uri = Uri.parse('${api.baseUrl}$_upload'); 
-
-    final request = http.MultipartRequest('POST', uri);
-    
-    // Add headers (Authorization) if needed. 
-    // Usually the API wrapper handles this, but for Multipart we often do it manually 
-    // unless your Api class has a upload method.
-    if (api.token != null) {
-      request.headers['Authorization'] = 'Bearer ${api.token}';
-    }
-
-    // Add the file
-    request.files.add(await http.MultipartFile.fromPath(
-      'image', 
-      imageFile.path,
-    ));
-
-    final streamedResponse = await request.send();
-    final response = await http.Response.fromStream(streamedResponse);
-
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      final data = json.decode(response.body) as Map<String, dynamic>;
-      // TS Backend returns: { success: boolean; url?: string; message: string }
-      return data['url'] as String? ?? '';
-    } else {
-      throw ApiException(response.statusCode, 'Echec de l\'upload de l\'image');
-    }
-  }*/
-
-  // ---------- SEARCH (Added) ----------
-  
-  Future<Utilisateur> chercherParNumero(String numero) async {
-    // Uses query parameter ?numero=xxxx
-    final r = await api.get('$_searchNum?numero=$numero');
-    final m = json.decode(r.body) as Map<String, dynamic>;
-    return Utilisateur.fromJson(m);
-  }
-
-  Future<Utilisateur> chercherParEmail(String email) async {
-    // Uses query parameter ?email=xxxx
-    final r = await api.get('$_searchEmail?email=$email');
-    final m = json.decode(r.body) as Map<String, dynamic>;
-    return Utilisateur.fromJson(m);
-  }
-
-  // ---------- STATUS / BEACON (Added) ----------
-  
-  /// Equivalent to leaveAppBeacon. Updates the user status (e.g. 'inactif').
-  Future<void> updateStatus(String userId, String status) async {
-    await api.post( // TS uses sendBeacon which is POST, but typically updates are PUT. Stick to POST if TS implies generic body.
-      _statusById(userId),
-      body: json.encode({'statut': status}),
-    );
-    // Return void as we just want to fire and forget or await success
-  }
-
   // ---------- PROFIL / ME ----------
-   Future<Utilisateur> me(String userId) async { 
-
-    // Your backend sends: .claim("uid", user.getId())
-
-    if (userId == null) {
-      throw ApiException(400, 'Impossible de trouver l\'ID utilisateur dans le token');
-    }
-
-    // 3. Send the ID as a query parameter (?id=...)
-    final r = await api.get('$_me?id=$userId');
-
-    // 4. Parse the response
+  Future<Utilisateur> me([String? userId]) async {
+    final r = await api.get(userId == null ? _me : '$_me?id=$userId');
     final m = json.decode(r.body);
-    
-    // Handle both direct object or { "user": ... } wrapper
-    final data = (m is Map && m.containsKey('user'))
-        ? m['user'] as Map<String, dynamic>
-        : m as Map<String, dynamic>;
 
-    return Utilisateur.fromJson(data);
+    final data =
+        (m is Map && m['user'] is Map)
+            ? m['user'] as Map<String, dynamic>
+            : (m as Map<String, dynamic>);
+
+    final user = Utilisateur.fromJson(data);
+    currentUser.value = user;
+    return user;
   }
 
   // ---------- GET BY ID ----------
@@ -171,64 +118,75 @@ class AuthUserService {
     return Utilisateur.fromJson(m);
   }
 
-  // ---------- UPDATE "ME" (profil courant) ----------
-  Future<Utilisateur> updateMe({
-  required String id, // <--- Add ID here
-  String? nom,
-  String? prenom,
-  String? adresse,
-  String? telephone,
-  String? image,
-  Zone? zone,
-  SousZone? sousZone,
-  double? latitude,
-  double? longitude,
-}) async {
-  final body = <String, dynamic>{
-    if (nom != null) 'nom': nom,
-    if (prenom != null) 'prenom': prenom,
-    if (adresse != null) 'adresse': adresse,
-    if (telephone != null) 'telephone': telephone,
-    if (image != null) 'image': image,
-    // Ensure Enums are sent in UPPERCASE if Java expects it
-    if (zone != null) 'zone': zone.name.toUpperCase(), 
-    if (sousZone != null) 'sousZone': sousZone.name.toUpperCase(),
-    if (latitude != null) 'latitude': latitude,
-    if (longitude != null) 'longitude': longitude,
-  };
-
-  // Use _updateById instead of _me
-  final r = await api.put(_updateById(id), body: json.encode(body)); 
-  
-  if (r.statusCode == 200) {
+  Future<Utilisateur> chercherParNumero(String numero) async {
+    final r = await api.get('$_searchNum?numero=$numero');
     final m = json.decode(r.body) as Map<String, dynamic>;
     return Utilisateur.fromJson(m);
-  } else {
-    throw ApiException(r.statusCode, r.body);
   }
-}
+
+  Future<Utilisateur> chercherParEmail(String email) async {
+    final r = await api.get('$_searchEmail?email=$email');
+    final m = json.decode(r.body) as Map<String, dynamic>;
+    return Utilisateur.fromJson(m);
+  }
+
+  // ---------- UPDATE "ME" (profil courant) ----------
+  Future<Utilisateur> updateMe({
+    String? nom,
+    String? prenom,
+    String? adresse,
+    String? telephone,
+    String? image,
+    // nouveaux champs si tu les exposes dans la page profil :
+    Zone? zone,
+    SousZone? sousZone,
+    double? latitude,
+    double? longitude,
+  }) async {
+    final body = <String, dynamic>{
+      if (nom != null) 'nom': nom,
+      if (prenom != null) 'prenom': prenom,
+      if (adresse != null) 'adresse': adresse,
+      if (telephone != null) 'telephone': telephone,
+      if (image != null) 'image': image,
+      if (zone != null) 'zone': zone.name,
+      if (sousZone != null) 'sousZone': sousZone.name,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+    };
+
+    final r = await api.put(_me, body: json.encode(body));
+    final m = json.decode(r.body) as Map<String, dynamic>;
+    final user = Utilisateur.fromJson(m);
+    currentUser.value = user;
+    return user;
+  }
+
   // ---------- UPDATE UTILISATEUR PAR ID ----------
+  // Utilise le modèle complet et n'envoie que les champs non-nuls (grâce à toJson()).
   Future<Utilisateur> updateUtilisateur(Utilisateur updated) async {
     final body = updated.toJson(includeId: false);
 
-    final r = await api.put(
-      _updateById(updated.id),
-      body: json.encode(body),
-    );
+    final r = await api.put(_updateById(updated.id), body: json.encode(body));
 
     if (r.statusCode == 200) {
       final Map<String, dynamic> data = json.decode(r.body);
       return Utilisateur.fromJson(data);
     } else if (r.statusCode == 400) {
+      // ex: latitude/longitude invalides
+      // décoder en utf8 si ton Api ne l’a pas déjà fait
       throw ApiException(r.statusCode, r.body);
     } else if (r.statusCode == 404) {
       throw ApiException(r.statusCode, 'Utilisateur non trouvé');
     } else {
-      throw ApiException(r.statusCode, 'Échec de mise à jour (${r.statusCode})');
+      throw ApiException(
+        r.statusCode,
+        'Échec de mise à jour (${r.statusCode})',
+      );
     }
   }
 
-  // ---------- Mises à jour ciblées ----------
+  // ---------- Mises à jour ciblées (exemples pratiques) ----------
   Future<Utilisateur> updateZone({
     required String userId,
     required Zone zone,
@@ -268,10 +226,7 @@ class AuthUserService {
   }) async {
     final r = await api.put(
       _updateById(userId),
-      body: json.encode({
-        'latitude': latitude,
-        'longitude': longitude,
-      }),
+      body: json.encode({'latitude': latitude, 'longitude': longitude}),
     );
 
     if (r.statusCode == 200) {
@@ -285,12 +240,7 @@ class AuthUserService {
 
   Future<Utilisateur> marquerTransporteurEnPanne(String userId) async {
     final r = await api.put(_etatIncidentPanne(userId), body: json.encode({}));
-
-    if (r.statusCode == 200) {
-      return Utilisateur.fromJson(json.decode(r.body));
-    } else {
-      throw ApiException(r.statusCode, r.body);
-    }
+    return Utilisateur.fromJson(json.decode(r.body));
   }
 
   Future<Utilisateur> marquerTransporteurEnAccident(String userId) async {
@@ -298,12 +248,7 @@ class AuthUserService {
       _etatIncidentAccident(userId),
       body: json.encode({}),
     );
-
-    if (r.statusCode == 200) {
-      return Utilisateur.fromJson(json.decode(r.body));
-    } else {
-      throw ApiException(r.statusCode, r.body);
-    }
+    return Utilisateur.fromJson(json.decode(r.body));
   }
 
   Future<Utilisateur> declarerAccidentAvecProduits({
@@ -318,23 +263,21 @@ class AuthUserService {
         'produitsNonAffectes': produitsNonAffectes,
       }),
     );
-
-    if (r.statusCode == 200) {
-      return Utilisateur.fromJson(json.decode(r.body));
-    } else {
-      throw ApiException(r.statusCode, r.body);
-    }
+    return Utilisateur.fromJson(json.decode(r.body));
   }
 
   Future<Utilisateur> meById(String id) async {
     final r = await api.get('$_me?id=$id');
     final m = json.decode(r.body);
 
-    final data = (m is Map && m['user'] is Map)
-        ? m['user'] as Map<String, dynamic>
-        : (m as Map<String, dynamic>);
+    final data =
+        (m is Map && m['user'] is Map)
+            ? m['user'] as Map<String, dynamic>
+            : (m as Map<String, dynamic>);
 
-    return Utilisateur.fromJson(data);
+    final user = Utilisateur.fromJson(data);
+    currentUser.value = user;
+    return user;
   }
 
   Future<Utilisateur> updateZonesDepartArriver({
@@ -344,17 +287,9 @@ class AuthUserService {
   }) async {
     final r = await api.put(
       _zonesDepartArriver(userId),
-      body: json.encode({
-        'zoneDepart': zoneDepart,
-        'zoneAriver': zoneArriver,
-      }),
+      body: json.encode({'zoneDepart': zoneDepart, 'zoneAriver': zoneArriver}),
     );
-
-    if (r.statusCode == 200) {
-      return Utilisateur.fromJson(json.decode(r.body));
-    } else {
-      throw ApiException(r.statusCode, 'Échec de mise à jour des zones');
-    }
+    return Utilisateur.fromJson(json.decode(r.body));
   }
 }
 

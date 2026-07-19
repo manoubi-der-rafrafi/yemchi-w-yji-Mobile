@@ -15,6 +15,7 @@ dependencies:
 
   # Reseau / Modeles (a utiliser dans ton app)
   dio: ^5.7.0
+  http: ^1.2.2
   json_annotation: ^4.9.0
   freezed_annotation: ^3.1.0
 

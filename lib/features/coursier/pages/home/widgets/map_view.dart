@@ -94,6 +94,9 @@ class MapViewState extends State<MapView>
   _MapFollowMode _manualFollowMode = _MapFollowMode.free;
   bool _navigationModeActive = false;
   String? _pendingRouteCommandeId;
+  String? _failedRouteCommandeId;
+  DateTime? _lastRouteFailureAt;
+  static const Duration _routeFailureRetryDelay = Duration(seconds: 15);
   static const double _minGpsDistanceMeters = 1.2;
   static const double _gpsAccuracyIgnoreAboveMeters = 60;
   static const double _gpsJitterAccuracyMeters = 35;
@@ -2629,16 +2632,18 @@ class MapViewState extends State<MapView>
       }
       if (!mounted) return;
       if (homeCtrl.selectedCommandeId != commandeId) return;
-      final points =
-          route.isEmpty ? <LatLng>[request.start, request.end] : route;
+      final points = route.points;
       homeCtrl.setRouteData(
         start: request.start,
         end: request.end,
         startOrigin: request.startOrigin,
         endOrigin: request.endOrigin,
         polyline: points,
+        distanceMeters: route.distanceMeters,
+        duration: route.duration,
       );
       _cachedRoutePoints = List<LatLng>.from(points);
+      _clearRouteFailure(commandeId);
       _resetOffRouteTracking();
       if (adjustCamera) {
         if (_following) {
@@ -2653,24 +2658,11 @@ class MapViewState extends State<MapView>
       }
       if (!mounted) return;
       if (homeCtrl.selectedCommandeId != commandeId) return;
-      final fallback = <LatLng>[request.start, request.end];
       debugPrint('Route fetch error: $e');
-      homeCtrl.setRouteData(
-        start: request.start,
-        end: request.end,
-        startOrigin: request.startOrigin,
-        endOrigin: request.endOrigin,
-        polyline: fallback,
-      );
-      _cachedRoutePoints = List<LatLng>.from(fallback);
+      _markRouteFailure(commandeId);
+      homeCtrl.clearRouteOnly();
+      _cachedRoutePoints = null;
       _resetOffRouteTracking();
-      if (adjustCamera) {
-        if (_following) {
-          _fitRouteBoundsQuickly(fallback);
-        } else {
-          _fitCameraToBounds(LatLngBounds.fromPoints(fallback));
-        }
-      }
     }
   }
 
@@ -2903,27 +2895,25 @@ class MapViewState extends State<MapView>
         end: request.end,
       );
       if (!mounted) return;
-      final points =
-          route.isEmpty ? <LatLng>[request.start, request.end] : route;
+      final points = route.points;
       homeCtrl.setRouteData(
         start: request.start,
         end: request.end,
         startOrigin: request.startOrigin,
         endOrigin: request.endOrigin,
         polyline: points,
+        distanceMeters: route.distanceMeters,
+        duration: route.duration,
       );
+      _clearRouteFailure(commande.id);
       _fitCameraToBounds(LatLngBounds.fromPoints(points));
     } catch (e) {
       if (!mounted) return;
-      final fallback = <LatLng>[request.start, request.end];
-      homeCtrl.setRouteData(
-        start: request.start,
-        end: request.end,
-        startOrigin: request.startOrigin,
-        endOrigin: request.endOrigin,
-        polyline: fallback,
-      );
-      _fitCameraToBounds(LatLngBounds.fromPoints(fallback));
+      homeCtrl.clearRouteOnly();
+      _cachedRoutePoints = null;
+      _resetOffRouteTracking();
+      _markRouteFailure(commande.id);
+      _showSnack('Aucun itineraire routier disponible pour le moment.');
     }
   }
 
@@ -3583,6 +3573,7 @@ class MapViewState extends State<MapView>
         isPanelOpen &&
         currentPolyline == null &&
         requestPreview != null &&
+        !_isRouteFailureCoolingDown(selectedId) &&
         _pendingRouteCommandeId != selectedId;
     if (shouldRequestRoute) {
       _pendingRouteCommandeId = selectedId;
@@ -3591,6 +3582,25 @@ class MapViewState extends State<MapView>
         _pendingRouteCommandeId != null) {
       _pendingRouteCommandeId = null;
     }
+  }
+
+  bool _isRouteFailureCoolingDown(String commandeId) {
+    if (_failedRouteCommandeId != commandeId || _lastRouteFailureAt == null) {
+      return false;
+    }
+    return DateTime.now().difference(_lastRouteFailureAt!) <
+        _routeFailureRetryDelay;
+  }
+
+  void _markRouteFailure(String commandeId) {
+    _failedRouteCommandeId = commandeId;
+    _lastRouteFailureAt = DateTime.now();
+  }
+
+  void _clearRouteFailure(String commandeId) {
+    if (_failedRouteCommandeId != commandeId) return;
+    _failedRouteCommandeId = null;
+    _lastRouteFailureAt = null;
   }
 
   void _fitRouteBoundsQuickly(List<LatLng> routePoints) {

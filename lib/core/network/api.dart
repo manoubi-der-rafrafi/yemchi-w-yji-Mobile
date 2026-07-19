@@ -1,4 +1,6 @@
-﻿import 'dart:convert';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:yemchi_wyji/core/env.dart';
 import 'package:yemchi_wyji/core/storage/token_storage.dart';
@@ -8,6 +10,10 @@ class Api {
   final http.Client _client;
 
   Uri _u(String path) => Uri.parse('${Env.baseUrl}$path');
+
+  void _log(String message) {
+    if (kDebugMode) debugPrint('[API] $message');
+  }
 
   Future<Map<String, String>> _headers({bool includeAuth = true}) async {
     final token = await TokenStorage.access();
@@ -22,10 +28,13 @@ class Api {
   }
 
   Future<http.Response> get(String path, {bool includeAuth = true}) async {
+    final uri = _u(path);
+    _log('REQ GET $uri includeAuth=$includeAuth');
     final r = await _client.get(
-      _u(path),
+      uri,
       headers: await _headers(includeAuth: includeAuth),
     );
+    _log('RES ${r.statusCode} GET $uri body=${_truncate(r.body)}');
     _throwIfError(r);
     return r;
   }
@@ -35,11 +44,14 @@ class Api {
     Object? body,
     bool includeAuth = true,
   }) async {
+    final uri = _u(path);
+    _log('REQ POST $uri includeAuth=$includeAuth body=${_safeBody(body)}');
     final r = await _client.post(
-      _u(path),
+      uri,
       headers: await _headers(includeAuth: includeAuth),
       body: body,
     );
+    _log('RES ${r.statusCode} POST $uri body=${_truncate(r.body)}');
     _throwIfError(r);
     return r;
   }
@@ -49,65 +61,95 @@ class Api {
     Object? body,
     bool includeAuth = true,
   }) async {
+    final uri = _u(path);
+    _log('REQ PUT $uri includeAuth=$includeAuth body=${_safeBody(body)}');
     final r = await _client.put(
-      _u(path),
+      uri,
       headers: await _headers(includeAuth: includeAuth),
       body: body,
     );
+    _log('RES ${r.statusCode} PUT $uri body=${_truncate(r.body)}');
     _throwIfError(r);
     return r;
   }
+
   Future<http.Response> delete(String path, {bool includeAuth = true}) async {
+    final uri = _u(path);
+    _log('REQ DELETE $uri includeAuth=$includeAuth');
     final r = await _client.delete(
-      _u(path),
+      uri,
       headers: await _headers(includeAuth: includeAuth),
     );
+    _log('RES ${r.statusCode} DELETE $uri body=${_truncate(r.body)}');
     _throwIfError(r);
     return r;
   }
-  //patch
+
   Future<http.Response> patch(
     String path, {
     Object? body,
     bool includeAuth = true,
   }) async {
+    final uri = _u(path);
+    _log('REQ PATCH $uri includeAuth=$includeAuth body=${_safeBody(body)}');
     final r = await _client.patch(
-      _u(path),
+      uri,
       headers: await _headers(includeAuth: includeAuth),
       body: body,
     );
+    _log('RES ${r.statusCode} PATCH $uri body=${_truncate(r.body)}');
     _throwIfError(r);
     return r;
   }
 
-  // ✅ Fix: void (et plus Never)
   void _throwIfError(http.Response r) {
-  if (r.statusCode >= 200 && r.statusCode < 300) return;
+    if (r.statusCode >= 200 && r.statusCode < 300) return;
 
-  final req = r.request;
-  // Logs visibles dans la console Flutter
-  print('[API ERROR] ${req?.method ?? "HTTP"} ${req?.url} -> ${r.statusCode}');
-  print('Response body: ${r.body}');
+    final req = r.request;
+    _log('${req?.method ?? "HTTP"} ${req?.url} -> ${r.statusCode}');
+    _log('Response body: ${r.body}');
 
-  throw ApiException(r.statusCode, _safeMsg(r.body));
-}
+    throw ApiException(r.statusCode, _safeMsg(r.body));
+  }
 
   String _safeMsg(String body) {
     try {
       final m = json.decode(body);
       if (m is Map && m['message'] != null) return m['message'].toString();
+      if (m is Map && m['error'] != null) return m['error'].toString();
       return body;
     } catch (_) {
       return body;
     }
   }
 
+  String _safeBody(Object? body) {
+    if (body == null) return 'null';
+    try {
+      final decoded = body is String ? json.decode(body) : body;
+      if (decoded is Map) {
+        final redacted = Map<String, dynamic>.from(decoded);
+        redacted.remove('motDePasse');
+        redacted.remove('password');
+        redacted.remove('token');
+        redacted.remove('accessToken');
+        return json.encode(redacted);
+      }
+    } catch (_) {}
+    return body.toString();
+  }
+
+  String _truncate(String input, {int max = 700}) {
+    if (input.length <= max) return input;
+    return '${input.substring(0, max)}...';
+  }
 }
 
 class ApiException implements Exception {
   final int statusCode;
   final String message;
   ApiException(this.statusCode, this.message);
+
   @override
   String toString() => 'ApiException($statusCode): $message';
 }

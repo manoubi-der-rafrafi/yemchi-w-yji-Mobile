@@ -34,6 +34,8 @@ class Commande {
   // Métier
   final String? statut;            // enum côté Java -> String ici
   final double? prix;              // BigDecimal Java -> double
+  final double? prixLivreur;
+  final double? prixSociete;
   final String? modePaiement;      // enum Java (EN_LIGNE, DEPART, ARRIVEE) -> String
   final String? instructions;
   final String? telDepart;
@@ -74,6 +76,8 @@ class Commande {
     this.distanceKm,
     this.statut,
     this.prix,
+    this.prixLivreur,
+    this.prixSociete,
     this.modePaiement,
     this.instructions,
     this.telDepart,
@@ -173,6 +177,8 @@ class Commande {
       // Métier
       statut: _toStringOrNull(_pick(raw, ['statut'])),
       prix: _toDouble(_pick(raw, ['prix'])),
+      prixLivreur: _toDouble(_pick(raw, ['prixLivreur', 'prix_livreur'])),
+      prixSociete: _toDouble(_pick(raw, ['prixSociete', 'prix_societe'])),
       modePaiement:
           _toStringOrNull(_pick(raw, ['modePaiement', 'mode_paiement'])),
       instructions: _toStringOrNull(_pick(raw, ['instructions'])),
@@ -231,6 +237,8 @@ class Commande {
         // Métier
         'statut': statut,
         'prix': prix,
+        'prixLivreur': prixLivreur,
+        'prixSociete': prixSociete,
         'modePaiement': modePaiement,
         'instructions': instructions,
         'telDepart': telDepart,
@@ -273,6 +281,8 @@ class Commande {
     double? distanceKm,
     String? statut,
     double? prix,
+    double? prixLivreur,
+    double? prixSociete,
     String? modePaiement,
     String? instructions,
     String? telDepart,
@@ -307,6 +317,8 @@ class Commande {
       distanceKm: distanceKm ?? this.distanceKm,
       statut: statut ?? this.statut,
       prix: prix ?? this.prix,
+      prixLivreur: prixLivreur ?? this.prixLivreur,
+      prixSociete: prixSociete ?? this.prixSociete,
       modePaiement: modePaiement ?? this.modePaiement,
       instructions: instructions ?? this.instructions,
       telDepart: telDepart ?? this.telDepart,

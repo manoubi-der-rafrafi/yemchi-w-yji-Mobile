@@ -219,9 +219,9 @@ class _CommandeInfoCard extends StatelessWidget {
             const SizedBox(height: 8),
             _InfoRow(
               icon: Icons.payments_outlined,
-              label: 'Prix',
-              value: commande.prix != null
-                  ? '${commande.prix!.toStringAsFixed(2)} DT'
+              label: 'Votre gain',
+              value: (commande.prixLivreur ?? commande.prix) != null
+                  ? '${(commande.prixLivreur ?? ((commande.prix ?? 0) / 2)).toStringAsFixed(2)} DT'
                   : 'Non precise',
             ),
             const SizedBox(height: 8),
