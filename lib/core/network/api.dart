@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:yemchi_wyji/core/env.dart';
+import 'package:yemchi_wyji/core/errors/application_error_service.dart';
 import 'package:yemchi_wyji/core/storage/token_storage.dart';
 
 class Api {
@@ -30,9 +32,11 @@ class Api {
   Future<http.Response> get(String path, {bool includeAuth = true}) async {
     final uri = _u(path);
     _log('REQ GET $uri includeAuth=$includeAuth');
-    final r = await _client.get(
+    final r = await _execute(
+      'GET',
       uri,
-      headers: await _headers(includeAuth: includeAuth),
+      () async =>
+          _client.get(uri, headers: await _headers(includeAuth: includeAuth)),
     );
     _log('RES ${r.statusCode} GET $uri body=${_truncate(r.body)}');
     _throwIfError(r);
@@ -46,10 +50,14 @@ class Api {
   }) async {
     final uri = _u(path);
     _log('REQ POST $uri includeAuth=$includeAuth body=${_safeBody(body)}');
-    final r = await _client.post(
+    final r = await _execute(
+      'POST',
       uri,
-      headers: await _headers(includeAuth: includeAuth),
-      body: body,
+      () async => _client.post(
+        uri,
+        headers: await _headers(includeAuth: includeAuth),
+        body: body,
+      ),
     );
     _log('RES ${r.statusCode} POST $uri body=${_truncate(r.body)}');
     _throwIfError(r);
@@ -63,10 +71,14 @@ class Api {
   }) async {
     final uri = _u(path);
     _log('REQ PUT $uri includeAuth=$includeAuth body=${_safeBody(body)}');
-    final r = await _client.put(
+    final r = await _execute(
+      'PUT',
       uri,
-      headers: await _headers(includeAuth: includeAuth),
-      body: body,
+      () async => _client.put(
+        uri,
+        headers: await _headers(includeAuth: includeAuth),
+        body: body,
+      ),
     );
     _log('RES ${r.statusCode} PUT $uri body=${_truncate(r.body)}');
     _throwIfError(r);
@@ -76,9 +88,13 @@ class Api {
   Future<http.Response> delete(String path, {bool includeAuth = true}) async {
     final uri = _u(path);
     _log('REQ DELETE $uri includeAuth=$includeAuth');
-    final r = await _client.delete(
+    final r = await _execute(
+      'DELETE',
       uri,
-      headers: await _headers(includeAuth: includeAuth),
+      () async => _client.delete(
+        uri,
+        headers: await _headers(includeAuth: includeAuth),
+      ),
     );
     _log('RES ${r.statusCode} DELETE $uri body=${_truncate(r.body)}');
     _throwIfError(r);
@@ -92,10 +108,14 @@ class Api {
   }) async {
     final uri = _u(path);
     _log('REQ PATCH $uri includeAuth=$includeAuth body=${_safeBody(body)}');
-    final r = await _client.patch(
+    final r = await _execute(
+      'PATCH',
       uri,
-      headers: await _headers(includeAuth: includeAuth),
-      body: body,
+      () async => _client.patch(
+        uri,
+        headers: await _headers(includeAuth: includeAuth),
+        body: body,
+      ),
     );
     _log('RES ${r.statusCode} PATCH $uri body=${_truncate(r.body)}');
     _throwIfError(r);
@@ -108,8 +128,37 @@ class Api {
     final req = r.request;
     _log('${req?.method ?? "HTTP"} ${req?.url} -> ${r.statusCode}');
     _log('Response body: ${r.body}');
+    ApplicationErrorService.report(
+      'HTTP ${r.statusCode} ${req?.method ?? "HTTP"} ${req?.url.path ?? ""}',
+      type: 'http_error',
+      severity: r.statusCode >= 500 ? 'error' : 'warning',
+      endpoint: req?.url.path,
+      httpStatus: r.statusCode,
+      metadata: {'method': req?.method ?? 'HTTP'},
+    );
 
     throw ApiException(r.statusCode, _safeMsg(r.body));
+  }
+
+  Future<http.Response> _execute(
+    String method,
+    Uri uri,
+    Future<http.Response> Function() request,
+  ) async {
+    try {
+      return await request();
+    } catch (error, stackTrace) {
+      unawaited(
+        ApplicationErrorService.report(
+          error,
+          stackTrace: stackTrace,
+          type: 'network_error',
+          endpoint: uri.path,
+          metadata: {'method': method},
+        ),
+      );
+      rethrow;
+    }
   }
 
   String _safeMsg(String body) {

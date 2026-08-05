@@ -34,10 +34,9 @@ enum _MapFollowMode { free, centered, heading }
 class MapViewState extends State<MapView>
     with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   static const MethodChannel _screenChannel = MethodChannel('yemchi/screen');
-  static const String _defaultMapboxAccessToken = '';
   static const String _mapboxAccessToken = String.fromEnvironment(
     'ACCESS_TOKEN',
-    defaultValue: _defaultMapboxAccessToken,
+    defaultValue: '',
   );
   static const String _fallbackTileUrlTemplate =
       'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
@@ -556,7 +555,11 @@ class MapViewState extends State<MapView>
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       // L'utilisateur pourra activer ensuite depuis les rÃ©glages
-      await Geolocator.openLocationSettings();
+      // Do not leave the app automatically at startup. On some devices,
+      // opening Android settings here looks like an app/phone restart and
+      // makes old lock-screen notifications visible again.
+      debugPrint('Location services are disabled; waiting for user action.');
+      return;
     }
 
     LocationPermission perm = await Geolocator.checkPermission();
@@ -2187,6 +2190,11 @@ class MapViewState extends State<MapView>
   }
 
   Future<void> handleCenterButtonTap({double zoom = 16}) async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      // Opening Android settings is only appropriate after an explicit tap.
+      await Geolocator.openLocationSettings();
+      return;
+    }
     final nextMode =
         !_following
             ? _MapFollowMode.centered

@@ -13,6 +13,44 @@ import 'package:yemchi_wyji/features/coursier/pages/home/services/transporteur_s
 import 'package:yemchi_wyji/features/coursier/pages/home/services/transporteur_stats_snapshot.dart';
 import 'package:yemchi_wyji/features/facture/data/facture_service.dart';
 
+double _gainLivreur(Commande commande) {
+  return commande.prixLivreur ??
+      ((commande.prixLivraison ?? commande.prix ?? 0) / 2);
+}
+
+double _partSociete(Commande commande) {
+  return commande.prixSociete ??
+      ((commande.prixLivraison ?? commande.prix ?? 0) / 2);
+}
+
+double _produitsPartenaire(Commande commande) {
+  if (!_isB2c(commande)) return 0;
+  return commande.prixProduitsPartenaire ?? 0;
+}
+
+double _totalClient(Commande commande) {
+  return commande.prixTotalClient ??
+      ((commande.prixLivraison ?? commande.prix ?? 0) +
+          (commande.prixProduitsPartenaire ?? 0));
+}
+
+double _montantLivreurAReverser(Commande commande) {
+  if (!_isPaiementHorsLigne(commande)) return 0;
+  return _partSociete(commande) + _produitsPartenaire(commande);
+}
+
+bool _isB2c(Commande commande) {
+  final source = (commande.sourceCommande ?? '').toUpperCase();
+  return source == 'B2C' || commande.prixProduitsPartenaire != null;
+}
+
+bool _isPaiementHorsLigne(Commande commande) {
+  final mode = (commande.modePaiement ?? '').toUpperCase().replaceAll(' ', '_');
+  return mode != 'EN_LIGNE';
+}
+
+String _sourceLabel(Commande commande) => _isB2c(commande) ? 'B2C' : 'C2C';
+
 class MesGainsPage extends StatefulWidget {
   const MesGainsPage({super.key});
 
@@ -26,8 +64,6 @@ class _MesGainsPageState extends State<MesGainsPage>
   bool _isRefreshing = false;
   bool _hasLoadedData = false;
   String? _error;
-  double _totalEnLigne = 0;
-  double _totalHorsLigne = 0;
   double _montantVertEntreprise = 0;
   double _montantVertLivreur = 0;
   Map<String, double> _pourcentageParSousZone = {};
@@ -45,17 +81,27 @@ class _MesGainsPageState extends State<MesGainsPage>
   final TransporteurStatsCacheService _cacheService =
       TransporteurStatsCacheService();
 
+  double get _totalGainsLivreur =>
+      _commandesLivrees.fold<double>(0, (sum, c) => sum + _gainLivreur(c));
+  double get _totalProduitsPartenaireDestination => _commandesLivrees
+      .where(_isPaiementHorsLigne)
+      .fold<double>(0, (sum, c) => sum + _produitsPartenaire(c));
+  double get _totalSocieteDestination => _commandesLivrees
+      .where(_isPaiementHorsLigne)
+      .fold<double>(0, (sum, c) => sum + _partSociete(c));
+  double get _totalARecevoirEnLigne => _commandesLivrees
+      .where((c) => !_isPaiementHorsLigne(c))
+      .fold<double>(0, (sum, c) => sum + _gainLivreur(c));
+  double get _totalAReverserDestination =>
+      _totalSocieteDestination + _totalProduitsPartenaireDestination;
   double get _diff =>
-      _totalEnLigne -
-      _totalHorsLigne -
+      _totalARecevoirEnLigne -
+      _totalAReverserDestination -
       _montantVertLivreur +
       _montantVertEntreprise;
   bool get _isCreditLivreur => _diff >= 0;
   double get _soldeLivreur => _diff.abs().clamp(0, 800);
-  double get _totalRevenue => _commandesLivrees.fold<double>(
-        0,
-        (sum, commande) => sum + (commande.prixLivreur ?? (commande.prix ?? 0) / 2),
-      );
+  double get _totalRevenue => _totalGainsLivreur;
 
   @override
   void initState() {
@@ -103,8 +149,6 @@ class _MesGainsPageState extends State<MesGainsPage>
   }
 
   void _applySnapshot(TransporteurStatsSnapshot snapshot) {
-    _totalEnLigne = snapshot.totalEnLigne;
-    _totalHorsLigne = snapshot.totalHorsLigne;
     _pourcentageParSousZone = Map<String, double>.from(
       snapshot.pourcentageParSousZone,
     );
@@ -294,14 +338,40 @@ class _MesGainsPageState extends State<MesGainsPage>
                                     Expanded(
                                       child: _MiniStatCard(
                                         label: 'A recevoir (en ligne)',
-                                        value: _formatMoney(_totalEnLigne),
+                                        value: _formatMoney(
+                                          _totalARecevoirEnLigne,
+                                        ),
                                       ),
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: _MiniStatCard(
                                         label: 'A reverser (hors ligne)',
-                                        value: _formatMoney(_totalHorsLigne),
+                                        value: _formatMoney(
+                                          _totalAReverserDestination,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _MiniStatCard(
+                                        label: 'Part societe destination',
+                                        value: _formatMoney(
+                                          _totalSocieteDestination,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _MiniStatCard(
+                                        label: 'Produits B2C chez livreur',
+                                        value: _formatMoney(
+                                          _totalProduitsPartenaireDestination,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -542,8 +612,9 @@ class _MesGainsPageState extends State<MesGainsPage>
     final zone = _normalizeZone(zoneLabel);
     return _commandesLivrees.where((commande) {
       if (selectedMode != 'Tous') {
-        final mode = _normalizeModePaiement(commande.modePaiement);
-        if (mode != selectedMode) return false;
+        final isHorsLigne = _isPaiementHorsLigne(commande);
+        if (selectedMode == 'EN_LIGNE' && isHorsLigne) return false;
+        if (selectedMode == 'HORS_LIGNE' && !isHorsLigne) return false;
       }
       if (dateRange != null) {
         final date = commande.dateDemande;
@@ -599,11 +670,6 @@ class _MesGainsPageState extends State<MesGainsPage>
         .replaceAll('Û', 'U')
         .replaceAll('Ü', 'U')
         .replaceAll('Ç', 'C');
-  }
-
-  String _normalizeModePaiement(String? value) {
-    if (value == null) return '';
-    return value.toUpperCase().replaceAll(' ', '_');
   }
 
   DateTime? _parseDateTime(String? value) {
@@ -1083,10 +1149,15 @@ class _CommandesLivreesSectionState extends State<_CommandesLivreesSection> {
                     color: const Color(0xFF4E5A52),
                   ),
                   columns: const [
+                    DataColumn(label: Text('Type')),
                     DataColumn(label: Text('Zone depart')),
                     DataColumn(label: Text('Zone arrivee')),
                     DataColumn(label: Text('Date')),
-                    DataColumn(label: Text('Prix')),
+                    DataColumn(label: Text('Total client')),
+                    DataColumn(label: Text('Gain livreur')),
+                    DataColumn(label: Text('Part societe')),
+                    DataColumn(label: Text('Produits B2C')),
+                    DataColumn(label: Text('A reverser')),
                     DataColumn(label: Text('')),
                   ],
                   rows:
@@ -1100,13 +1171,32 @@ class _CommandesLivreesSectionState extends State<_CommandesLivreesSection> {
                           commande.sousZoneArrivee,
                         );
                         final dateCommande = _formatDate(commande.dateDemande);
-                        final prix = _formatMoney(commande.prix ?? 0);
+                        final totalClient = _formatMoney(
+                          _totalClient(commande),
+                        );
+                        final gainLivreur = _formatMoney(
+                          _gainLivreur(commande),
+                        );
+                        final partSociete = _formatMoney(
+                          _partSociete(commande),
+                        );
+                        final produitsB2c = _formatMoney(
+                          _produitsPartenaire(commande),
+                        );
+                        final aReverser = _formatMoney(
+                          _montantLivreurAReverser(commande),
+                        );
                         return DataRow(
                           cells: [
+                            DataCell(Text(_sourceLabel(commande))),
                             DataCell(Text(zoneDepart)),
                             DataCell(Text(zoneArrivee)),
                             DataCell(Text(dateCommande)),
-                            DataCell(Text(prix)),
+                            DataCell(Text(totalClient)),
+                            DataCell(Text(gainLivreur)),
+                            DataCell(Text(partSociete)),
+                            DataCell(Text(produitsB2c)),
+                            DataCell(Text(aReverser)),
                             DataCell(
                               TextButton(
                                 onPressed: () {},

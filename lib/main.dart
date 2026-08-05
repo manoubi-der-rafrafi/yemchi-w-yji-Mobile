@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
@@ -5,6 +6,8 @@ import 'package:provider/provider.dart';
 
 // 🔌 Services & contrôleurs
 import 'package:yemchi_wyji/core/network/api.dart';
+import 'package:yemchi_wyji/core/analytics/analytics_service.dart';
+import 'package:yemchi_wyji/core/errors/application_error_service.dart';
 import 'package:yemchi_wyji/features/auth/data/auth_user_service.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
 import 'package:yemchi_wyji/features/presence/data/presence_service.dart';
@@ -16,13 +19,33 @@ import 'package:yemchi_wyji/features/auth/pages/signup_page.dart';
 import 'package:yemchi_wyji/features/client/client_home_navbar.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/home_coursier_page.dart';
 
-const String _defaultMapboxAccessToken = '';
-
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    unawaited(
+      ApplicationErrorService.report(
+        details.exception,
+        stackTrace: details.stack,
+        type: 'flutter_error',
+      ),
+    );
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    unawaited(
+      ApplicationErrorService.report(
+        error,
+        stackTrace: stack,
+        type: 'unhandled_async_error',
+        severity: 'critical',
+      ),
+    );
+    return false;
+  };
+  unawaited(AnalyticsService.track('app_open'));
   const accessToken = String.fromEnvironment(
     'ACCESS_TOKEN',
-    defaultValue: _defaultMapboxAccessToken,
+    defaultValue: '',
   );
   if (!kIsWeb && accessToken.isNotEmpty) {
     MapboxOptions.setAccessToken(accessToken);
