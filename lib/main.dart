@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:yemchi_wyji/core/config/mapbox_config.dart';
 
 // 🔌 Services & contrôleurs
 import 'package:yemchi_wyji/core/network/api.dart';
@@ -43,12 +44,13 @@ void main() {
     return false;
   };
   unawaited(AnalyticsService.track('app_open'));
-  const accessToken = String.fromEnvironment(
-    'ACCESS_TOKEN',
-    defaultValue: '',
-  );
-  if (!kIsWeb && accessToken.isNotEmpty) {
-    MapboxOptions.setAccessToken(accessToken);
+  if (!kIsWeb && MapboxConfig.hasValidAccessToken) {
+    MapboxOptions.setAccessToken(MapboxConfig.accessToken);
+  } else if (!kIsWeb) {
+    debugPrint(
+      'MAPBOX CONFIGURATION ERROR: ACCESS_TOKEN is missing or invalid. '
+      'Start with --dart-define=ACCESS_TOKEN=pk...',
+    );
   }
   runApp(const MyApp());
 }
