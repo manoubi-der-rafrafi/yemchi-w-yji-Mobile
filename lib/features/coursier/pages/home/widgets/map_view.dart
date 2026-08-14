@@ -9,6 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mbx;
 import 'package:provider/provider.dart';
+import 'package:yemchi_wyji/core/config/mapbox_config.dart';
 import 'package:yemchi_wyji/core/models/commande.dart';
 import 'package:yemchi_wyji/core/models/utilisateur.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
@@ -34,15 +35,6 @@ enum _MapFollowMode { free, centered, heading }
 class MapViewState extends State<MapView>
     with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   static const MethodChannel _screenChannel = MethodChannel('yemchi/screen');
-  static const String _defaultMapboxAccessToken = '';
-  static const String _mapboxAccessToken = String.fromEnvironment(
-    'ACCESS_TOKEN',
-    defaultValue: _defaultMapboxAccessToken,
-  );
-  static const String _fallbackTileUrlTemplate =
-      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-  static const String _webMapboxTileUrlTemplate =
-      'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}{r}?access_token=$_mapboxAccessToken';
   final MapController _webMapController = MapController();
   mbx.MapboxMap? _mapboxMap;
   mbx.CircleAnnotationManager? _markerAnnotationManager;
@@ -87,6 +79,7 @@ class MapViewState extends State<MapView>
   bool _mapboxManagersReady = false;
   bool _mapboxOverlaySyncRunning = false;
   bool _mapboxOverlaySyncQueued = false;
+  String? _mapboxLoadError;
 
   LatLng? _myPos; // derniÃ¨re position connue
   double? _accuracyMeters;
@@ -94,6 +87,9 @@ class MapViewState extends State<MapView>
   _MapFollowMode _manualFollowMode = _MapFollowMode.free;
   bool _navigationModeActive = false;
   String? _pendingRouteCommandeId;
+  String? _failedRouteCommandeId;
+  DateTime? _lastRouteFailureAt;
+  static const Duration _routeFailureRetryDelay = Duration(seconds: 15);
   static const double _minGpsDistanceMeters = 1.2;
   static const double _gpsAccuracyIgnoreAboveMeters = 60;
   static const double _gpsJitterAccuracyMeters = 35;
@@ -553,7 +549,11 @@ class MapViewState extends State<MapView>
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       // L'utilisateur pourra activer ensuite depuis les rÃ©glages
-      await Geolocator.openLocationSettings();
+      // Do not leave the app automatically at startup. On some devices,
+      // opening Android settings here looks like an app/phone restart and
+      // makes old lock-screen notifications visible again.
+      debugPrint('Location services are disabled; waiting for user action.');
+      return;
     }
 
     LocationPermission perm = await Geolocator.checkPermission();
@@ -2184,6 +2184,11 @@ class MapViewState extends State<MapView>
   }
 
   Future<void> handleCenterButtonTap({double zoom = 16}) async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      // Opening Android settings is only appropriate after an explicit tap.
+      await Geolocator.openLocationSettings();
+      return;
+    }
     final nextMode =
         !_following
             ? _MapFollowMode.centered
@@ -2629,16 +2634,18 @@ class MapViewState extends State<MapView>
       }
       if (!mounted) return;
       if (homeCtrl.selectedCommandeId != commandeId) return;
-      final points =
-          route.isEmpty ? <LatLng>[request.start, request.end] : route;
+      final points = route.points;
       homeCtrl.setRouteData(
         start: request.start,
         end: request.end,
         startOrigin: request.startOrigin,
         endOrigin: request.endOrigin,
         polyline: points,
+        distanceMeters: route.distanceMeters,
+        duration: route.duration,
       );
       _cachedRoutePoints = List<LatLng>.from(points);
+      _clearRouteFailure(commandeId);
       _resetOffRouteTracking();
       if (adjustCamera) {
         if (_following) {
@@ -2653,24 +2660,11 @@ class MapViewState extends State<MapView>
       }
       if (!mounted) return;
       if (homeCtrl.selectedCommandeId != commandeId) return;
-      final fallback = <LatLng>[request.start, request.end];
       debugPrint('Route fetch error: $e');
-      homeCtrl.setRouteData(
-        start: request.start,
-        end: request.end,
-        startOrigin: request.startOrigin,
-        endOrigin: request.endOrigin,
-        polyline: fallback,
-      );
-      _cachedRoutePoints = List<LatLng>.from(fallback);
+      _markRouteFailure(commandeId);
+      homeCtrl.clearRouteOnly();
+      _cachedRoutePoints = null;
       _resetOffRouteTracking();
-      if (adjustCamera) {
-        if (_following) {
-          _fitRouteBoundsQuickly(fallback);
-        } else {
-          _fitCameraToBounds(LatLngBounds.fromPoints(fallback));
-        }
-      }
     }
   }
 
@@ -2903,27 +2897,25 @@ class MapViewState extends State<MapView>
         end: request.end,
       );
       if (!mounted) return;
-      final points =
-          route.isEmpty ? <LatLng>[request.start, request.end] : route;
+      final points = route.points;
       homeCtrl.setRouteData(
         start: request.start,
         end: request.end,
         startOrigin: request.startOrigin,
         endOrigin: request.endOrigin,
         polyline: points,
+        distanceMeters: route.distanceMeters,
+        duration: route.duration,
       );
+      _clearRouteFailure(commande.id);
       _fitCameraToBounds(LatLngBounds.fromPoints(points));
     } catch (e) {
       if (!mounted) return;
-      final fallback = <LatLng>[request.start, request.end];
-      homeCtrl.setRouteData(
-        start: request.start,
-        end: request.end,
-        startOrigin: request.startOrigin,
-        endOrigin: request.endOrigin,
-        polyline: fallback,
-      );
-      _fitCameraToBounds(LatLngBounds.fromPoints(fallback));
+      homeCtrl.clearRouteOnly();
+      _cachedRoutePoints = null;
+      _resetOffRouteTracking();
+      _markRouteFailure(commande.id);
+      _showSnack('Aucun itineraire routier disponible pour le moment.');
     }
   }
 
@@ -3223,6 +3215,9 @@ class MapViewState extends State<MapView>
   Widget build(BuildContext context) {
     super.build(context);
     final theme = Theme.of(context);
+    if (!MapboxConfig.hasValidAccessToken) {
+      return _buildMapboxConfigurationError(theme);
+    }
     return Container(
       color: theme.colorScheme.surface,
       child: kIsWeb ? _buildWebMap() : _buildNativeMap(),
@@ -3230,20 +3225,42 @@ class MapViewState extends State<MapView>
   }
 
   Widget _buildNativeMap() {
-    return mbx.MapWidget(
-      key: const ValueKey('coursier-mapbox-map'),
-      styleUri: mbx.MapboxStyles.MAPBOX_STREETS,
-      cameraOptions: mbx.CameraOptions(
-        center: _toMapboxPoint(_defaultInitialCenter),
-        zoom: 12,
-        bearing: 0,
-        pitch: 0,
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        mbx.MapWidget(
+          key: const ValueKey('coursier-mapbox-map'),
+          styleUri: MapboxConfig.streetsStyleUri,
+          // Hybrid Composition avoids stale Virtual Display touch routing on
+          // Android ("Sending touch to an unknown view with id: 0").
+          androidHostingMode: mbx.AndroidPlatformViewHostingMode.HC,
+          cameraOptions: mbx.CameraOptions(
+            center: _toMapboxPoint(_defaultInitialCenter),
+            zoom: 12,
+            bearing: 0,
+            pitch: 0,
+          ),
+          onMapCreated: _onMapboxCreated,
+          onMapLoadedListener: _onMapboxLoaded,
+          onMapLoadErrorListener: _onMapboxLoadError,
+          onCameraChangeListener: _onMapboxCameraChanged,
+          onScrollListener: _onMapboxScroll,
+          onZoomListener: _onMapboxZoom,
+        ),
+        if (_mapboxLoadError != null)
+          _MapboxErrorOverlay(message: _mapboxLoadError!),
+      ],
+    );
+  }
+
+  Widget _buildMapboxConfigurationError(ThemeData theme) {
+    return ColoredBox(
+      color: theme.colorScheme.surface,
+      child: const _MapboxErrorOverlay(
+        message:
+            'Configuration Mapbox manquante. Ajoutez un jeton public valide '
+            'avec --dart-define=ACCESS_TOKEN=pk...',
       ),
-      onMapCreated: _onMapboxCreated,
-      onMapLoadedListener: _onMapboxLoaded,
-      onCameraChangeListener: _onMapboxCameraChanged,
-      onScrollListener: _onMapboxScroll,
-      onZoomListener: _onMapboxZoom,
     );
   }
 
@@ -3253,14 +3270,8 @@ class MapViewState extends State<MapView>
       options: _webMapOptions,
       children: [
         TileLayer(
-          urlTemplate:
-              _mapboxAccessToken.trim().isNotEmpty
-                  ? _webMapboxTileUrlTemplate
-                  : _fallbackTileUrlTemplate,
-          subdomains:
-              _mapboxAccessToken.trim().isNotEmpty
-                  ? const <String>[]
-                  : const ['a', 'b', 'c', 'd'],
+          urlTemplate: MapboxConfig.webStreetsTileUrl,
+          subdomains: const <String>[],
           maxNativeZoom: 20,
           maxZoom: 20,
           keepBuffer: 5,
@@ -3372,8 +3383,21 @@ class MapViewState extends State<MapView>
   }
 
   void _onMapboxLoaded(mbx.MapLoadedEventData _) {
+    if (mounted && _mapboxLoadError != null) {
+      setState(() => _mapboxLoadError = null);
+    }
     _mapboxStyleReady = true;
     unawaited(_initializeMapboxMap());
+  }
+
+  void _onMapboxLoadError(mbx.MapLoadingErrorEventData error) {
+    debugPrint('Mapbox load error (${error.type.name}): ${error.message}');
+    if (!mounted) return;
+    setState(() {
+      _mapboxLoadError =
+          'Mapbox n\'a pas pu charger la carte. Vérifiez le jeton et la '
+          'connexion Internet.';
+    });
   }
 
   void _onMapboxScroll(mbx.MapContentGestureContext _) {
@@ -3583,6 +3607,7 @@ class MapViewState extends State<MapView>
         isPanelOpen &&
         currentPolyline == null &&
         requestPreview != null &&
+        !_isRouteFailureCoolingDown(selectedId) &&
         _pendingRouteCommandeId != selectedId;
     if (shouldRequestRoute) {
       _pendingRouteCommandeId = selectedId;
@@ -3591,6 +3616,25 @@ class MapViewState extends State<MapView>
         _pendingRouteCommandeId != null) {
       _pendingRouteCommandeId = null;
     }
+  }
+
+  bool _isRouteFailureCoolingDown(String commandeId) {
+    if (_failedRouteCommandeId != commandeId || _lastRouteFailureAt == null) {
+      return false;
+    }
+    return DateTime.now().difference(_lastRouteFailureAt!) <
+        _routeFailureRetryDelay;
+  }
+
+  void _markRouteFailure(String commandeId) {
+    _failedRouteCommandeId = commandeId;
+    _lastRouteFailureAt = DateTime.now();
+  }
+
+  void _clearRouteFailure(String commandeId) {
+    if (_failedRouteCommandeId != commandeId) return;
+    _failedRouteCommandeId = null;
+    _lastRouteFailureAt = null;
   }
 
   void _fitRouteBoundsQuickly(List<LatLng> routePoints) {
@@ -3605,6 +3649,55 @@ class MapViewState extends State<MapView>
         ),
       );
     });
+  }
+}
+
+class _MapboxErrorOverlay extends StatelessWidget {
+  const _MapboxErrorOverlay({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ColoredBox(
+      color: theme.colorScheme.surface.withValues(alpha: 0.94),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Semantics(
+              liveRegion: true,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.map_outlined,
+                    size: 48,
+                    color: theme.colorScheme.error,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Carte Mapbox indisponible',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -1,31 +1,58 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:yemchi_wyji/core/config/mapbox_config.dart';
 
 // 🔌 Services & contrôleurs
 import 'package:yemchi_wyji/core/network/api.dart';
+import 'package:yemchi_wyji/core/analytics/analytics_service.dart';
+import 'package:yemchi_wyji/core/errors/application_error_service.dart';
 import 'package:yemchi_wyji/features/auth/data/auth_user_service.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
 import 'package:yemchi_wyji/features/presence/data/presence_service.dart';
 
 // 🧭 Pages
-import 'package:yemchi_wyji/features/auth/pages/auth_gate.dart';
+import 'package:yemchi_wyji/features/auth/pages/splash_screen.dart';
 import 'package:yemchi_wyji/features/auth/pages/login_page.dart';
 import 'package:yemchi_wyji/features/auth/pages/signup_page.dart';
 import 'package:yemchi_wyji/features/client/client_home_navbar.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/home_coursier_page.dart';
 
-const String _defaultMapboxAccessToken = '';
-
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  const accessToken = String.fromEnvironment(
-    'ACCESS_TOKEN',
-    defaultValue: _defaultMapboxAccessToken,
-  );
-  if (!kIsWeb && accessToken.isNotEmpty) {
-    MapboxOptions.setAccessToken(accessToken);
+  await dotenv.load(fileName: '.env');
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    unawaited(
+      ApplicationErrorService.report(
+        details.exception,
+        stackTrace: details.stack,
+        type: 'flutter_error',
+      ),
+    );
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    unawaited(
+      ApplicationErrorService.report(
+        error,
+        stackTrace: stack,
+        type: 'unhandled_async_error',
+        severity: 'critical',
+      ),
+    );
+    return false;
+  };
+  unawaited(AnalyticsService.track('app_open'));
+  if (!kIsWeb && MapboxConfig.hasValidAccessToken) {
+    MapboxOptions.setAccessToken(MapboxConfig.accessToken);
+  } else if (!kIsWeb) {
+    debugPrint(
+      'MAPBOX CONFIGURATION ERROR: ACCESS_TOKEN is missing or invalid. '
+      'Start with --dart-define=ACCESS_TOKEN=pk...',
+    );
   }
   runApp(const MyApp());
 }
@@ -51,19 +78,18 @@ class MyApp extends StatelessWidget {
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'Yemchi w Yji',
+        title: 'yemchiwyji Coursier',
         theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF34D058)),
+          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1565C0)),
           useMaterial3: true,
         ),
 
-        // ✅ Laisse AuthGate décider : LoginPage ou HomeCoursierPage
-        home: const AuthGate(),
+        home: const SplashScreen(),
 
         // ✅ Routes nommées (si tu utilises Navigator.pushNamed)
         routes: {
-          '/login': (_) => LoginPage(),
-          '/signup': (_) => SignUpPage(),
+          '/login': (_) => const LoginPage(),
+          '/signup': (_) => const SignUpPage(),
           '/home_coursier': (_) => HomeCoursierPage(),
           '/home_client': (_) => ClientHome(),
         },

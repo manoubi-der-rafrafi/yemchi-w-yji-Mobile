@@ -18,7 +18,8 @@ class Commande {
 
   // Relations (IDs simples)
   final String? clientId;
-  final String? transporteurId; // backend: transporteurId (alias id_transporteur / transporteur_id)
+  final String?
+  transporteurId; // backend: transporteurId (alias id_transporteur / transporteur_id)
   final String? transporteurSecoursId;
   final String? idAmie;
 
@@ -32,19 +33,28 @@ class Commande {
   final double? distanceKm;
 
   // Métier
-  final String? statut;            // enum côté Java -> String ici
-  final double? prix;              // BigDecimal Java -> double
-  final String? modePaiement;      // enum Java (EN_LIGNE, DEPART, ARRIVEE) -> String
+  final String? statut; // enum côté Java -> String ici
+  final double? prix; // BigDecimal Java -> double
+  final double? prixLivreur;
+  final double? prixSociete;
+  final double? prixProduitsPartenaire;
+  final double? prixLivraison;
+  final double? prixTotalClient;
+  final String? sourceCommande;
+  final String? encaisseurInitial;
+  final String? statutReglement;
+  final String? statutEncaissementSociete;
+  final String? modePaiement; // enum Java (EN_LIGNE, DEPART, ARRIVEE) -> String
   final String? instructions;
   final String? telDepart;
   final String? telArrivee;
 
   // Dates métier (LocalDateTime côté Java)
-  final DateTime? dateDemande;     // @CreatedDate
+  final DateTime? dateDemande; // @CreatedDate
   final DateTime? dateDebut;
   final DateTime? dateFin;
   final DateTime? dateConfirmer;
-  final DateTime? majLe;           // @LastModifiedDate
+  final DateTime? majLe; // @LastModifiedDate
 
   // Zones (enums Java -> String ici)
   final String? sousZoneDepart;
@@ -74,6 +84,15 @@ class Commande {
     this.distanceKm,
     this.statut,
     this.prix,
+    this.prixLivreur,
+    this.prixSociete,
+    this.prixProduitsPartenaire,
+    this.prixLivraison,
+    this.prixTotalClient,
+    this.sourceCommande,
+    this.encaisseurInitial,
+    this.statutReglement,
+    this.statutEncaissementSociete,
     this.modePaiement,
     this.instructions,
     this.telDepart,
@@ -126,15 +145,12 @@ class Commande {
 
     String? _pickTransporteurSecoursId(Map<String, dynamic> m) {
       final direct = _toStringOrNull(
-        _pick(
-          m,
-          [
-            'transporteurSecoursId',
-            'transporteur_secours_id',
-            'idTransporteurSecours',
-            'id_transporteur_secours',
-          ],
-        ),
+        _pick(m, [
+          'transporteurSecoursId',
+          'transporteur_secours_id',
+          'idTransporteurSecours',
+          'id_transporteur_secours',
+        ]),
       );
       if (direct != null && direct.isNotEmpty) {
         return direct;
@@ -162,19 +178,50 @@ class Commande {
         _pick(raw, ['localisationDepart', 'localisation_depart']),
       ),
       destination: _toStringOrNull(_pick(raw, ['destination'])),
-      latitudeDepart: _toDouble(_pick(raw, ['latitudeDepart', 'latitude_depart'])),
-      longitudeDepart: _toDouble(_pick(raw, ['longitudeDepart', 'longitude_depart'])),
-      latitudeDestination:
-          _toDouble(_pick(raw, ['latitudeDestination', 'latitude_destination'])),
-      longitudeDestination:
-          _toDouble(_pick(raw, ['longitudeDestination', 'longitude_destination'])),
+      latitudeDepart: _toDouble(
+        _pick(raw, ['latitudeDepart', 'latitude_depart']),
+      ),
+      longitudeDepart: _toDouble(
+        _pick(raw, ['longitudeDepart', 'longitude_depart']),
+      ),
+      latitudeDestination: _toDouble(
+        _pick(raw, ['latitudeDestination', 'latitude_destination']),
+      ),
+      longitudeDestination: _toDouble(
+        _pick(raw, ['longitudeDestination', 'longitude_destination']),
+      ),
       distanceKm: _toDouble(_pick(raw, ['distanceKm', 'distance_km'])),
 
       // Métier
       statut: _toStringOrNull(_pick(raw, ['statut'])),
       prix: _toDouble(_pick(raw, ['prix'])),
-      modePaiement:
-          _toStringOrNull(_pick(raw, ['modePaiement', 'mode_paiement'])),
+      prixLivreur: _toDouble(_pick(raw, ['prixLivreur', 'prix_livreur'])),
+      prixSociete: _toDouble(_pick(raw, ['prixSociete', 'prix_societe'])),
+      prixProduitsPartenaire: _toDouble(
+        _pick(raw, ['prixProduitsPartenaire', 'prix_produits_partenaire']),
+      ),
+      prixLivraison: _toDouble(_pick(raw, ['prixLivraison', 'prix_livraison'])),
+      prixTotalClient: _toDouble(
+        _pick(raw, ['prixTotalClient', 'prix_total_client']),
+      ),
+      sourceCommande: _toStringOrNull(
+        _pick(raw, ['sourceCommande', 'source_commande']),
+      ),
+      encaisseurInitial: _toStringOrNull(
+        _pick(raw, ['encaisseurInitial', 'encaisseur_initial']),
+      ),
+      statutReglement: _toStringOrNull(
+        _pick(raw, ['statutReglement', 'statut_reglement']),
+      ),
+      statutEncaissementSociete: _toStringOrNull(
+        _pick(raw, [
+          'statutEncaissementSociete',
+          'statut_encaissement_societe',
+        ]),
+      ),
+      modePaiement: _toStringOrNull(
+        _pick(raw, ['modePaiement', 'mode_paiement']),
+      ),
       instructions: _toStringOrNull(_pick(raw, ['instructions'])),
       telDepart: _toStringOrNull(_pick(raw, ['telDepart', 'tel_depart'])),
       telArrivee: _toStringOrNull(_pick(raw, ['telArrivee', 'tel_arrivee'])),
@@ -183,77 +230,96 @@ class Commande {
       dateDemande: _toDate(_pick(raw, ['dateDemande', 'date_demande'])),
       dateDebut: _toDate(_pick(raw, ['dateDebut', 'date_debut'])),
       dateFin: _toDate(_pick(raw, ['dateFin', 'date_fin'])),
-      dateConfirmer:
-          _toDate(_pick(raw, ['dateConfirmer', 'date_confirmer'])),
+      dateConfirmer: _toDate(_pick(raw, ['dateConfirmer', 'date_confirmer'])),
       majLe: _toDate(_pick(raw, ['majLe'])),
 
       // Zones
-      sousZoneDepart:
-          _toStringOrNull(_pick(raw, ['sousZoneDepart', 'sous_zone_depart'])),
-      sousZoneArrivee:
-          _toStringOrNull(_pick(raw, ['sousZoneArrivee', 'sous_zone_arrivee'])),
+      sousZoneDepart: _toStringOrNull(
+        _pick(raw, ['sousZoneDepart', 'sous_zone_depart']),
+      ),
+      sousZoneArrivee: _toStringOrNull(
+        _pick(raw, ['sousZoneArrivee', 'sous_zone_arrivee']),
+      ),
       zonePrincipaleDepart: _toStringOrNull(
         _pick(raw, ['zonePrincipaleDepart', 'zone_principale_depart']),
       ),
       zonePrincipaleArrivee: _toStringOrNull(
         _pick(raw, ['zonePrincipaleArrivee', 'zone_principale_arrivee']),
       ),
-      qrCodeDepartScanne: _pick(raw, ['qrCodeDepartScanne', 'qr_code_depart_scanne']) as bool?,
-      dateScanDepart: _toDate(_pick(raw, ['dateScanDepart', 'date_scan_depart'])),
-      relaisTransporteurEffectue: _pick(
-        raw,
-        ['relaisTransporteurEffectue', 'relais_transporteur_effectue'],
-      ) as bool?,
-      qrCodeReceptionScanne: _pick(raw, ['qrCodeReceptionScanne', 'qr_code_reception_scanne']) as bool?,
-      dateScanReception: _toDate(_pick(raw, ['dateScanReception', 'date_scan_reception'])),
+      qrCodeDepartScanne:
+          _pick(raw, ['qrCodeDepartScanne', 'qr_code_depart_scanne']) as bool?,
+      dateScanDepart: _toDate(
+        _pick(raw, ['dateScanDepart', 'date_scan_depart']),
+      ),
+      relaisTransporteurEffectue:
+          _pick(raw, [
+                'relaisTransporteurEffectue',
+                'relais_transporteur_effectue',
+              ])
+              as bool?,
+      qrCodeReceptionScanne:
+          _pick(raw, ['qrCodeReceptionScanne', 'qr_code_reception_scanne'])
+              as bool?,
+      dateScanReception: _toDate(
+        _pick(raw, ['dateScanReception', 'date_scan_reception']),
+      ),
     );
   }
 
   Map<String, dynamic> toJson() => {
-        // On renvoie en camelCase (adaptable si ton API préfère snake_case).
-        'id': id,
+    // On renvoie en camelCase (adaptable si ton API préfère snake_case).
+    'id': id,
 
-        // Relations
-        'clientId': clientId,
-        'transporteurId': transporteurId,
-        'transporteurSecoursId': transporteurSecoursId,
-        'idAmie': idAmie,
+    // Relations
+    'clientId': clientId,
+    'transporteurId': transporteurId,
+    'transporteurSecoursId': transporteurSecoursId,
+    'idAmie': idAmie,
 
-        // Localisation & géo
-        'localisationDepart': localisationDepart,
-        'destination': destination,
-        'latitudeDepart': latitudeDepart,
-        'longitudeDepart': longitudeDepart,
-        'latitudeDestination': latitudeDestination,
-        'longitudeDestination': longitudeDestination,
-        'distanceKm': distanceKm,
+    // Localisation & géo
+    'localisationDepart': localisationDepart,
+    'destination': destination,
+    'latitudeDepart': latitudeDepart,
+    'longitudeDepart': longitudeDepart,
+    'latitudeDestination': latitudeDestination,
+    'longitudeDestination': longitudeDestination,
+    'distanceKm': distanceKm,
 
-        // Métier
-        'statut': statut,
-        'prix': prix,
-        'modePaiement': modePaiement,
-        'instructions': instructions,
-        'telDepart': telDepart,
-        'telArrivee': telArrivee,
+    // Métier
+    'statut': statut,
+    'prix': prix,
+    'prixLivreur': prixLivreur,
+    'prixSociete': prixSociete,
+    'prixProduitsPartenaire': prixProduitsPartenaire,
+    'prixLivraison': prixLivraison,
+    'prixTotalClient': prixTotalClient,
+    'sourceCommande': sourceCommande,
+    'encaisseurInitial': encaisseurInitial,
+    'statutReglement': statutReglement,
+    'statutEncaissementSociete': statutEncaissementSociete,
+    'modePaiement': modePaiement,
+    'instructions': instructions,
+    'telDepart': telDepart,
+    'telArrivee': telArrivee,
 
-        // Dates
-        'dateDemande': dateDemande?.toIso8601String(),
-        'dateDebut': dateDebut?.toIso8601String(),
-        'dateFin': dateFin?.toIso8601String(),
-        'dateConfirmer': dateConfirmer?.toIso8601String(),
-        'majLe': majLe?.toIso8601String(),
+    // Dates
+    'dateDemande': dateDemande?.toIso8601String(),
+    'dateDebut': dateDebut?.toIso8601String(),
+    'dateFin': dateFin?.toIso8601String(),
+    'dateConfirmer': dateConfirmer?.toIso8601String(),
+    'majLe': majLe?.toIso8601String(),
 
-        // Zones
-        'sousZoneDepart': sousZoneDepart,
-        'sousZoneArrivee': sousZoneArrivee,
-        'zonePrincipaleDepart': zonePrincipaleDepart,
-        'zonePrincipaleArrivee': zonePrincipaleArrivee,
-        'qrCodeDepartScanne': qrCodeDepartScanne,
-        'dateScanDepart': dateScanDepart?.toIso8601String(),
-        'relaisTransporteurEffectue': relaisTransporteurEffectue,
-        'qrCodeReceptionScanne': qrCodeReceptionScanne,
-        'dateScanReception': dateScanReception?.toIso8601String(),
-      };
+    // Zones
+    'sousZoneDepart': sousZoneDepart,
+    'sousZoneArrivee': sousZoneArrivee,
+    'zonePrincipaleDepart': zonePrincipaleDepart,
+    'zonePrincipaleArrivee': zonePrincipaleArrivee,
+    'qrCodeDepartScanne': qrCodeDepartScanne,
+    'dateScanDepart': dateScanDepart?.toIso8601String(),
+    'relaisTransporteurEffectue': relaisTransporteurEffectue,
+    'qrCodeReceptionScanne': qrCodeReceptionScanne,
+    'dateScanReception': dateScanReception?.toIso8601String(),
+  };
 
   static Commande fromJsonString(String jsonStr) =>
       Commande.fromJson(json.decode(jsonStr) as Map<String, dynamic>);
@@ -273,6 +339,15 @@ class Commande {
     double? distanceKm,
     String? statut,
     double? prix,
+    double? prixLivreur,
+    double? prixSociete,
+    double? prixProduitsPartenaire,
+    double? prixLivraison,
+    double? prixTotalClient,
+    String? sourceCommande,
+    String? encaisseurInitial,
+    String? statutReglement,
+    String? statutEncaissementSociete,
     String? modePaiement,
     String? instructions,
     String? telDepart,
@@ -296,7 +371,8 @@ class Commande {
       id: id ?? this.id,
       clientId: clientId ?? this.clientId,
       transporteurId: transporteurId ?? this.transporteurId,
-      transporteurSecoursId: transporteurSecoursId ?? this.transporteurSecoursId,
+      transporteurSecoursId:
+          transporteurSecoursId ?? this.transporteurSecoursId,
       idAmie: idAmie ?? this.idAmie,
       localisationDepart: localisationDepart ?? this.localisationDepart,
       destination: destination ?? this.destination,
@@ -307,6 +383,17 @@ class Commande {
       distanceKm: distanceKm ?? this.distanceKm,
       statut: statut ?? this.statut,
       prix: prix ?? this.prix,
+      prixLivreur: prixLivreur ?? this.prixLivreur,
+      prixSociete: prixSociete ?? this.prixSociete,
+      prixProduitsPartenaire:
+          prixProduitsPartenaire ?? this.prixProduitsPartenaire,
+      prixLivraison: prixLivraison ?? this.prixLivraison,
+      prixTotalClient: prixTotalClient ?? this.prixTotalClient,
+      sourceCommande: sourceCommande ?? this.sourceCommande,
+      encaisseurInitial: encaisseurInitial ?? this.encaisseurInitial,
+      statutReglement: statutReglement ?? this.statutReglement,
+      statutEncaissementSociete:
+          statutEncaissementSociete ?? this.statutEncaissementSociete,
       modePaiement: modePaiement ?? this.modePaiement,
       instructions: instructions ?? this.instructions,
       telDepart: telDepart ?? this.telDepart,
@@ -318,17 +405,16 @@ class Commande {
       majLe: majLe ?? this.majLe,
       sousZoneDepart: sousZoneDepart ?? this.sousZoneDepart,
       sousZoneArrivee: sousZoneArrivee ?? this.sousZoneArrivee,
-      zonePrincipaleDepart:
-          zonePrincipaleDepart ?? this.zonePrincipaleDepart,
+      zonePrincipaleDepart: zonePrincipaleDepart ?? this.zonePrincipaleDepart,
       zonePrincipaleArrivee:
           zonePrincipaleArrivee ?? this.zonePrincipaleArrivee,
       qrCodeDepartScanne: qrCodeDepartScanne ?? this.qrCodeDepartScanne,
       dateScanDepart: dateScanDepart ?? this.dateScanDepart,
       relaisTransporteurEffectue:
           relaisTransporteurEffectue ?? this.relaisTransporteurEffectue,
-      qrCodeReceptionScanne: qrCodeReceptionScanne ?? this.qrCodeReceptionScanne,
+      qrCodeReceptionScanne:
+          qrCodeReceptionScanne ?? this.qrCodeReceptionScanne,
       dateScanReception: dateScanReception ?? this.dateScanReception,
-
     );
   }
 }

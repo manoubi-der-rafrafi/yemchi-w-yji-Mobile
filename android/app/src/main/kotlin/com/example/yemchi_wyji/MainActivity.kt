@@ -33,4 +33,10 @@ class MainActivity : FlutterActivity() {
             }
         }
     }
+
+    override fun onStop() {
+        // Never leave the navigation screen flag active in the background.
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        super.onStop()
+    }
 }

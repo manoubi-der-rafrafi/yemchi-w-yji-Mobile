@@ -12,7 +12,9 @@ import 'package:yemchi_wyji/features/commande/dto/transporteur_panne_commandes_r
 import 'package:yemchi_wyji/features/commande/dto/transporteur_secours_commandes_response.dart';
 
 enum AppLang { ar, en }
+
 enum CommandTab { mes, envoyees }
+
 enum RoutePointOrigin { depart, destination, courier, contact }
 
 class SelectedContactInfo {
@@ -82,9 +84,9 @@ class HomeController extends ChangeNotifier {
               .toList(growable: false)
           : (_commandTab == CommandTab.mes
               ? <Commande>[
-                  ..._mesCommandes,
-                  ..._mesCommandesSecours.map((entry) => entry.commande),
-                ]
+                ..._mesCommandes,
+                ..._mesCommandesSecours.map((entry) => entry.commande),
+              ]
               : commandes);
   Map<String, bool> get minTransporteursByCommandeId =>
       Map.unmodifiable(_minTransporteursByCommandeId);
@@ -199,8 +201,7 @@ class HomeController extends ChangeNotifier {
     final bool relaisEffectue = commande.relaisTransporteurEffectue == true;
     final bool shouldGoToTransporteur = departScanne && !relaisEffectue;
     return SelectedContactInfo(
-      displayName:
-          displayName.isEmpty ? 'Transporteur en panne' : displayName,
+      displayName: displayName.isEmpty ? 'Transporteur en panne' : displayName,
       imageUrl: transporteur.image,
       phoneDepart: commande.telDepart,
       phoneArrivee: commande.telArrivee,
@@ -245,15 +246,6 @@ class HomeController extends ChangeNotifier {
   Timer? _refreshTimer;
   Duration autoRefreshEvery = const Duration(seconds: 3);
 
-  // --- AUTRES (existant) ---
-  final List<Map<String, String>> notifications = [
-    {'title': 'Nouvelle commande', 'detail': 'Pickup à 14:30 - Centre ville'},
-    {
-      'title': 'Mise à jour',
-      'detail': 'Commande #124 en attente de validation',
-    },
-  ];
-
   void setLang(AppLang lang) {
     currentLang = lang;
     notifyListeners();
@@ -266,9 +258,8 @@ class HomeController extends ChangeNotifier {
     }
     final idChanged = selectedCommandeId != commande.id;
     selectedCommandeId = commande.id;
-    _selectedCommandeOverride = _findCommandeById(commande.id) == null
-        ? commande
-        : null;
+    _selectedCommandeOverride =
+        _findCommandeById(commande.id) == null ? commande : null;
     isPanelOpen = openPanel;
     if (idChanged) {
       resetRoute();
@@ -341,13 +332,14 @@ class HomeController extends ChangeNotifier {
   void setCommandTab(CommandTab tab) {
     if (_commandTab == tab) return;
     _commandTab = tab;
-      if (selectedCommandeId != null) {
-      final currentList = _commandTab == CommandTab.mes
-          ? <Commande>[
-              ..._mesCommandes,
-              ..._mesCommandesSecours.map((entry) => entry.commande),
-            ]
-          : _commandes;
+    if (selectedCommandeId != null) {
+      final currentList =
+          _commandTab == CommandTab.mes
+              ? <Commande>[
+                ..._mesCommandes,
+                ..._mesCommandesSecours.map((entry) => entry.commande),
+              ]
+              : _commandes;
       if (!currentList.any((c) => c.id == selectedCommandeId)) {
         clearSelection(notify: false);
       }
@@ -384,7 +376,9 @@ class HomeController extends ChangeNotifier {
       final isIndisponible = isCurrentTransporteurIndisponible;
       final vehicule = user?.typeVehicule?.name;
       if (vehicule == null || vehicule.isEmpty) {
-        throw Exception('Type vehicule introuvable pour l\'utilisateur courant');
+        throw Exception(
+          'Type vehicule introuvable pour l\'utilisateur courant',
+        );
       }
       final zoneDepart = user?.zoneDepart ?? const <String, List<String>>{};
       final zoneArriver = user?.zoneArriver ?? const <String, List<String>>{};
@@ -411,16 +405,17 @@ class HomeController extends ChangeNotifier {
             )
             .toList(growable: false);
       } else {
-        list = hasSousZones
-            ? await service.getBySousZonesAndVehicule(
-                sousZonesDepart: sousZonesDepart,
-                sousZonesArrivee: sousZonesArrivee,
-                vehicule: vehicule,
-              )
-            : await service.getByZoneAndVehicule(
-                zone: zone,
-                vehicule: vehicule,
-              );
+        list =
+            hasSousZones
+                ? await service.getBySousZonesAndVehicule(
+                  sousZonesDepart: sousZonesDepart,
+                  sousZonesArrivee: sousZonesArrivee,
+                  vehicule: vehicule,
+                )
+                : await service.getByZoneAndVehicule(
+                  zone: zone,
+                  vehicule: vehicule,
+                );
       }
       List<TransporteurPanneCommandesResponse> transporteursEnPanne =
           const <TransporteurPanneCommandesResponse>[];
@@ -432,10 +427,8 @@ class HomeController extends ChangeNotifier {
         if (isIndisponible) {
           final transporteurId = user?.id;
           if (transporteurId != null && transporteurId.isNotEmpty) {
-            transporteursSecours =
-                await service.getTransporteursSecoursAvecCommandes(
-              transporteurId,
-            );
+            transporteursSecours = await service
+                .getTransporteursSecoursAvecCommandes(transporteurId);
           }
         } else {
           transporteursEnPanne =
@@ -453,10 +446,8 @@ class HomeController extends ChangeNotifier {
           transporteurId,
         );
         try {
-          mesCommandesSecours =
-              await service.getCommandesEnRouteByTransporteurSecours(
-            transporteurId,
-          );
+          mesCommandesSecours = await service
+              .getCommandesEnRouteByTransporteurSecours(transporteurId);
         } catch (e) {
           debugPrint('mes commandes secours refresh failed: $e');
           mesCommandesSecours = const <CommandeTransporteurPrincipalResponse>[];
@@ -490,7 +481,9 @@ class HomeController extends ChangeNotifier {
       }
 
       // LOG CONSOLE UNIQUEMENT
-      debugPrint('---- [REFRESH] Commandes pour zone $zone : ${list.length} ----');
+      debugPrint(
+        '---- [REFRESH] Commandes pour zone $zone : ${list.length} ----',
+      );
       for (final c in list) {
         debugPrint(
           'Commande ${c.id} | depart=${c.zonePrincipaleDepart} | arrivee=${c.zonePrincipaleArrivee}',
@@ -511,7 +504,7 @@ class HomeController extends ChangeNotifier {
         ..addAll(transporteursSecours);
 
       if (silent) {
-      // Silent mode: keep data without resetting visible UI state.
+        // Silent mode: keep data without resetting visible UI state.
       }
 
       _syncSelectedSecoursContactAfterRefresh();
@@ -539,9 +532,10 @@ class HomeController extends ChangeNotifier {
   void _removeCommandeFromPanneList(String commandeId) {
     final updatedEntries = <TransporteurPanneCommandesResponse>[];
     for (final entry in _transporteursEnPanne) {
-      final filteredCommandes = entry.commandes
-          .where((commandeEntry) => commandeEntry.commande.id != commandeId)
-          .toList();
+      final filteredCommandes =
+          entry.commandes
+              .where((commandeEntry) => commandeEntry.commande.id != commandeId)
+              .toList();
       if (filteredCommandes.isEmpty) {
         continue;
       }

@@ -410,8 +410,11 @@ class _DemandeCommandeCardState extends State<_DemandeCommandeCard> {
                       children: [
                         Expanded(
                           child: _InfoChip(
-                            label: 'Prix',
-                            value: _formatPrice(widget.commande.prix),
+                            label: 'Votre gain',
+                            value: _formatPrice(
+                              widget.commande.prixLivreur ??
+                                  ((widget.commande.prix ?? 0) / 2),
+                            ),
                             icon: Icons.payments_outlined,
                           ),
                         ),

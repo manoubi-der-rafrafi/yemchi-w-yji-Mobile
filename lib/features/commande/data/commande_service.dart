@@ -1,6 +1,7 @@
 // lib/features/commande/data/commande_service.dart
 import 'dart:convert';
 
+import 'package:yemchi_wyji/core/analytics/analytics_service.dart';
 import 'package:yemchi_wyji/core/models/commande.dart';
 import 'package:yemchi_wyji/core/models/utilisateur.dart';
 import 'package:yemchi_wyji/core/network/api.dart';
@@ -9,6 +10,7 @@ import 'package:yemchi_wyji/features/commande/dto/commande_produits_response.dar
 import 'package:yemchi_wyji/features/commande/dto/commande_transporteur_principal_response.dart';
 import 'package:yemchi_wyji/features/commande/dto/transporteur_panne_commandes_response.dart';
 import 'package:yemchi_wyji/features/commande/dto/transporteur_secours_commandes_response.dart';
+
 class CommandeService {
   final Api api;
   CommandeService(this.api);
@@ -28,7 +30,9 @@ class CommandeService {
 
     final decoded = json.decode(res.body);
     if (decoded is List) {
-      return decoded.map<Commande>((e) => Commande.fromJson(e as Map<String, dynamic>)).toList();
+      return decoded
+          .map<Commande>((e) => Commande.fromJson(e as Map<String, dynamic>))
+          .toList();
     }
     if (decoded is Map && decoded['content'] is List) {
       return (decoded['content'] as List)
@@ -79,7 +83,9 @@ class CommandeService {
   Future<Commande> confirmerCommande(String id) async {
     final res = await api.put('$_base/$id/confirmer', body: json.encode({}));
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('PUT $_base/$id/confirmer -> ${res.statusCode}: ${res.body}');
+      throw Exception(
+        'PUT $_base/$id/confirmer -> ${res.statusCode}: ${res.body}',
+      );
     }
     final map = json.decode(res.body) as Map<String, dynamic>;
     return Commande.fromJson(map);
@@ -105,20 +111,34 @@ class CommandeService {
   Future<Commande> marquerDepartScanne(String id) async {
     final res = await api.put('$_base/$id/scan-depart', body: json.encode({}));
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('PUT $_base/$id/scan-depart -> ${res.statusCode}: ${res.body}');
+      throw Exception(
+        'PUT $_base/$id/scan-depart -> ${res.statusCode}: ${res.body}',
+      );
     }
     final map = json.decode(res.body) as Map<String, dynamic>;
-    return Commande.fromJson(map);
+    final commande = Commande.fromJson(map);
+    await AnalyticsService.track('start_delivery', metadata: {'order_id': id});
+    return commande;
   }
 
   /// PUT /commandes/{id}/scan-reception
   Future<Commande> marquerReceptionScanne(String id) async {
-    final res = await api.put('$_base/$id/scan-reception', body: json.encode({}));
+    final res = await api.put(
+      '$_base/$id/scan-reception',
+      body: json.encode({}),
+    );
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('PUT $_base/$id/scan-reception -> ${res.statusCode}: ${res.body}');
+      throw Exception(
+        'PUT $_base/$id/scan-reception -> ${res.statusCode}: ${res.body}',
+      );
     }
     final map = json.decode(res.body) as Map<String, dynamic>;
-    return Commande.fromJson(map);
+    final commande = Commande.fromJson(map);
+    await AnalyticsService.track(
+      'complete_delivery',
+      metadata: {'order_id': id},
+    );
+    return commande;
   }
 
   Future<Commande> marquerRelaisTransporteurEffectue(String id) async {
@@ -151,7 +171,9 @@ class CommandeService {
     }
     final body = res.body.trim();
     if (body.isEmpty || body == 'null') {
-      throw Exception('Reponse vide lors de la reinitialisation de l etat incident.');
+      throw Exception(
+        'Reponse vide lors de la reinitialisation de l etat incident.',
+      );
     }
     final map = json.decode(body) as Map<String, dynamic>;
     return Utilisateur.fromJson(map);
@@ -161,11 +183,15 @@ class CommandeService {
   Future<List<Commande>> getByIdAmie(String idAmie) async {
     final res = await api.get('$_base/ami/$idAmie');
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('GET $_base/ami/$idAmie -> ${res.statusCode}: ${res.body}');
+      throw Exception(
+        'GET $_base/ami/$idAmie -> ${res.statusCode}: ${res.body}',
+      );
     }
     final decoded = json.decode(res.body);
     if (decoded is List) {
-      return decoded.map<Commande>((e) => Commande.fromJson(e as Map<String, dynamic>)).toList();
+      return decoded
+          .map<Commande>((e) => Commande.fromJson(e as Map<String, dynamic>))
+          .toList();
     }
     return const <Commande>[];
   }
@@ -174,19 +200,23 @@ class CommandeService {
   Future<int> countByIdAmie(String idAmie) async {
     final res = await api.get('$_base/ami/$idAmie/count');
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('GET $_base/ami/$idAmie/count -> ${res.statusCode}: ${res.body}');
+      throw Exception(
+        'GET $_base/ami/$idAmie/count -> ${res.statusCode}: ${res.body}',
+      );
     }
     final decoded = json.decode(res.body);
     if (decoded is num) return decoded.toInt();
     if (decoded is String) return int.tryParse(decoded) ?? 0;
     return 0;
-    }
+  }
 
   /// GET /commandes/ami/{idAmie}/count/envoyee
   Future<int> countByIdAmieEnvoyee(String idAmie) async {
     final res = await api.get('$_base/ami/$idAmie/count/envoyee');
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('GET $_base/ami/$idAmie/count/envoyee -> ${res.statusCode}: ${res.body}');
+      throw Exception(
+        'GET $_base/ami/$idAmie/count/envoyee -> ${res.statusCode}: ${res.body}',
+      );
     }
     final decoded = json.decode(res.body);
     if (decoded is num) return decoded.toInt();
@@ -200,11 +230,15 @@ class CommandeService {
   Future<List<Commande>> getByZone(String zone) async {
     final res = await api.get('$_base/zone/$zone/confirmees');
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('GET $_base/zone/$zone/confirmees -> ${res.statusCode}: ${res.body}');
+      throw Exception(
+        'GET $_base/zone/$zone/confirmees -> ${res.statusCode}: ${res.body}',
+      );
     }
     final decoded = json.decode(res.body);
     if (decoded is List) {
-      return decoded.map<Commande>((e) => Commande.fromJson(e as Map<String, dynamic>)).toList();
+      return decoded
+          .map<Commande>((e) => Commande.fromJson(e as Map<String, dynamic>))
+          .toList();
     }
     return const <Commande>[];
   }
@@ -216,11 +250,15 @@ class CommandeService {
   }) async {
     final res = await api.get('$_base/zone/$zone/vehicule/$vehicule');
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('GET $_base/zone/$zone/vehicule/$vehicule -> ${res.statusCode}: ${res.body}');
+      throw Exception(
+        'GET $_base/zone/$zone/vehicule/$vehicule -> ${res.statusCode}: ${res.body}',
+      );
     }
     final decoded = json.decode(res.body);
     if (decoded is List) {
-      return decoded.map<Commande>((e) => Commande.fromJson(e as Map<String, dynamic>)).toList();
+      return decoded
+          .map<Commande>((e) => Commande.fromJson(e as Map<String, dynamic>))
+          .toList();
     }
     return const <Commande>[];
   }
@@ -238,11 +276,15 @@ class CommandeService {
     });
     final res = await api.post('$_base/sous-zones', body: payload);
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('POST $_base/sous-zones -> ${res.statusCode}: ${res.body}');
+      throw Exception(
+        'POST $_base/sous-zones -> ${res.statusCode}: ${res.body}',
+      );
     }
     final decoded = json.decode(res.body);
     if (decoded is List) {
-      return decoded.map<Commande>((e) => Commande.fromJson(e as Map<String, dynamic>)).toList();
+      return decoded
+          .map<Commande>((e) => Commande.fromJson(e as Map<String, dynamic>))
+          .toList();
     }
     return const <Commande>[];
   }
@@ -261,37 +303,53 @@ class CommandeService {
     });
     final res = await api.post('$_base/sous-zones/vehicule', body: payload);
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('POST $_base/sous-zones/vehicule -> ${res.statusCode}: ${res.body}');
+      throw Exception(
+        'POST $_base/sous-zones/vehicule -> ${res.statusCode}: ${res.body}',
+      );
     }
     final decoded = json.decode(res.body);
     if (decoded is List) {
-      return decoded.map<Commande>((e) => Commande.fromJson(e as Map<String, dynamic>)).toList();
+      return decoded
+          .map<Commande>((e) => Commande.fromJson(e as Map<String, dynamic>))
+          .toList();
     }
     return const <Commande>[];
   }
 
-  Future<Commande> assignerTransporteur(String idCommande, String idTransporteur) async {
-  final res = await api.put('/commandes/$idCommande/assigner/$idTransporteur', body: '{}');
-  if (res.statusCode == 400) {
-    throw StateError('Commande deja assignee ou invalide.');
+  Future<Commande> assignerTransporteur(
+    String idCommande,
+    String idTransporteur,
+  ) async {
+    final res = await api.put(
+      '/commandes/$idCommande/assigner/$idTransporteur',
+      body: '{}',
+    );
+    if (res.statusCode == 400) {
+      throw StateError('Commande deja assignee ou invalide.');
+    }
+    if (res.statusCode == 404) {
+      throw ArgumentError('Commande ou transporteur introuvable.');
+    }
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception(
+        'PUT /commandes/$idCommande/assigner/$idTransporteur -> ${res.statusCode}: ${res.body}',
+      );
+    }
+    await AnalyticsService.track(
+      'accept_delivery',
+      metadata: {'order_id': idCommande},
+    );
+    final body = res.body.trim();
+    if (body.isEmpty || body == 'null') {
+      return getById(idCommande);
+    }
+    try {
+      final map = json.decode(body) as Map<String, dynamic>;
+      return Commande.fromJson(map);
+    } catch (_) {
+      return getById(idCommande);
+    }
   }
-  if (res.statusCode == 404) {
-    throw ArgumentError('Commande ou transporteur introuvable.');
-  }
-  if (res.statusCode < 200 || res.statusCode >= 300) {
-    throw Exception('PUT /commandes/$idCommande/assigner/$idTransporteur -> ${res.statusCode}: ${res.body}');
-  }
-  final body = res.body.trim();
-  if (body.isEmpty || body == 'null') {
-    return getById(idCommande);
-  }
-  try {
-    final map = json.decode(body) as Map<String, dynamic>;
-    return Commande.fromJson(map);
-  } catch (_) {
-    return getById(idCommande);
-  }
-}
 
   Future<Commande> assignerTransporteurSecours(
     String idCommande,
@@ -336,7 +394,8 @@ class CommandeService {
       throw StateError(
         _userVisibleApiMessage(
           e,
-          fallback: 'Erreur serveur lors de l assignation du transporteur secours.',
+          fallback:
+              'Erreur serveur lors de l assignation du transporteur secours.',
         ),
       );
     } catch (_) {
@@ -381,8 +440,10 @@ class CommandeService {
 
   /// PUT /commandes/{id}/debut-appel-client-1
   Future<Commande> demarrerAppelClient1(String idCommande) async {
-    final res =
-        await api.put('$_base/$idCommande/debut-appel-client-1', body: '{}');
+    final res = await api.put(
+      '$_base/$idCommande/debut-appel-client-1',
+      body: '{}',
+    );
     if (res.statusCode == 400) {
       throw StateError('Commande deja assignee ou invalide.');
     }
@@ -434,8 +495,10 @@ class CommandeService {
 
   /// PUT /commandes/{id}/non-repondre-client-1
   Future<Commande> marquerNonReponseClient1(String idCommande) async {
-    final res =
-        await api.put('$_base/$idCommande/non-repondre-client-1', body: '{}');
+    final res = await api.put(
+      '$_base/$idCommande/non-repondre-client-1',
+      body: '{}',
+    );
     if (res.statusCode == 400) {
       throw StateError('Commande deja assignee ou invalide.');
     }
@@ -461,8 +524,10 @@ class CommandeService {
 
   /// PUT /commandes/{id}/non-repondre-client-2
   Future<Commande> marquerNonReponseClient2(String idCommande) async {
-    final res =
-        await api.put('$_base/$idCommande/non-repondre-client-2', body: '{}');
+    final res = await api.put(
+      '$_base/$idCommande/non-repondre-client-2',
+      body: '{}',
+    );
     if (res.statusCode == 400) {
       throw StateError('Commande deja assignee ou invalide.');
     }
@@ -485,8 +550,11 @@ class CommandeService {
       return getById(idCommande);
     }
   }
+
   /// GET /commandes/transporteur/{idTransporteur}
-  Future<List<Commande>> getCommandesByTransporteur(String idTransporteur) async {
+  Future<List<Commande>> getCommandesByTransporteur(
+    String idTransporteur,
+  ) async {
     final res = await api.get('$_base/transporteur/$idTransporteur');
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception(
@@ -496,7 +564,9 @@ class CommandeService {
     final decoded = json.decode(res.body);
     if (decoded is List) {
       return decoded
-          .map<Commande>((item) => Commande.fromJson(item as Map<String, dynamic>))
+          .map<Commande>(
+            (item) => Commande.fromJson(item as Map<String, dynamic>),
+          )
           .toList();
     }
     return const <Commande>[];
@@ -540,7 +610,9 @@ class CommandeService {
     final decoded = json.decode(res.body);
     if (decoded is List) {
       return decoded
-          .map<Commande>((item) => Commande.fromJson(item as Map<String, dynamic>))
+          .map<Commande>(
+            (item) => Commande.fromJson(item as Map<String, dynamic>),
+          )
           .toList();
     }
     return const <Commande>[];
@@ -550,8 +622,9 @@ class CommandeService {
   Future<List<Commande>> getCommandesNonLivreesByTransporteur(
     String idTransporteur,
   ) async {
-    final res =
-        await api.get('$_base/transporteur/$idTransporteur/non-livrees');
+    final res = await api.get(
+      '$_base/transporteur/$idTransporteur/non-livrees',
+    );
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception(
         'GET $_base/transporteur/$idTransporteur/non-livrees -> ${res.statusCode}: ${res.body}',
@@ -560,7 +633,9 @@ class CommandeService {
     final decoded = json.decode(res.body);
     if (decoded is List) {
       return decoded
-          .map<Commande>((item) => Commande.fromJson(item as Map<String, dynamic>))
+          .map<Commande>(
+            (item) => Commande.fromJson(item as Map<String, dynamic>),
+          )
           .toList();
     }
     return const <Commande>[];
@@ -579,7 +654,9 @@ class CommandeService {
     final decoded = json.decode(res.body);
     if (decoded is List) {
       return decoded
-          .map<Commande>((item) => Commande.fromJson(item as Map<String, dynamic>))
+          .map<Commande>(
+            (item) => Commande.fromJson(item as Map<String, dynamic>),
+          )
           .toList();
     }
     return const <Commande>[];
@@ -598,7 +675,9 @@ class CommandeService {
     final decoded = json.decode(res.body);
     if (decoded is List) {
       return decoded
-          .map<Commande>((item) => Commande.fromJson(item as Map<String, dynamic>))
+          .map<Commande>(
+            (item) => Commande.fromJson(item as Map<String, dynamic>),
+          )
           .toList();
     }
     return const <Commande>[];
@@ -620,7 +699,9 @@ class CommandeService {
     final decoded = json.decode(res.body);
     if (decoded is List) {
       return decoded
-          .map<Commande>((item) => Commande.fromJson(item as Map<String, dynamic>))
+          .map<Commande>(
+            (item) => Commande.fromJson(item as Map<String, dynamic>),
+          )
           .toList();
     }
     return const <Commande>[];
@@ -642,7 +723,9 @@ class CommandeService {
     final decoded = json.decode(res.body);
     if (decoded is List) {
       return decoded
-          .map<Commande>((item) => Commande.fromJson(item as Map<String, dynamic>))
+          .map<Commande>(
+            (item) => Commande.fromJson(item as Map<String, dynamic>),
+          )
           .toList();
     }
     return const <Commande>[];
@@ -650,9 +733,7 @@ class CommandeService {
 
   /// GET /commandes/transporteur/{idTransporteur}/en-route/produits
   Future<List<CommandeProduitsResponse>>
-      getCommandesEnRouteAvecProduitsByTransporteur(
-    String idTransporteur,
-  ) async {
+  getCommandesEnRouteAvecProduitsByTransporteur(String idTransporteur) async {
     final res = await api.get(
       '$_base/transporteur/$idTransporteur/en-route/produits',
     );
@@ -667,9 +748,8 @@ class CommandeService {
       return decoded
           .whereType<Map>()
           .map(
-            (item) => CommandeProduitsResponse.fromJson(
-              item.cast<String, dynamic>(),
-            ),
+            (item) =>
+                CommandeProduitsResponse.fromJson(item.cast<String, dynamic>()),
           )
           .toList();
     }
@@ -677,9 +757,7 @@ class CommandeService {
   }
 
   Future<List<CommandeTransporteurPrincipalResponse>>
-      getCommandesEnRouteByTransporteurSecours(
-    String idTransporteur,
-  ) async {
+  getCommandesEnRouteByTransporteurSecours(String idTransporteur) async {
     final res = await api.get(
       '$_base/transporteur-secours/$idTransporteur/en-route',
     );
@@ -705,7 +783,7 @@ class CommandeService {
   }
 
   Future<List<TransporteurPanneCommandesResponse>>
-      getTransporteursEnPanneAvecCommandes() async {
+  getTransporteursEnPanneAvecCommandes() async {
     final res = await api.get('/utilisateur/transporteurs/panne/commandes');
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception(
@@ -728,7 +806,7 @@ class CommandeService {
   }
 
   Future<List<TransporteurSecoursCommandesResponse>>
-      getTransporteursSecoursAvecCommandes(String idTransporteur) async {
+  getTransporteursSecoursAvecCommandes(String idTransporteur) async {
     final res = await api.get('$_base/transporteur/$idTransporteur/secours');
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception(
@@ -753,14 +831,17 @@ class CommandeService {
 
   /// GET /commandes/transporteur/{idTransporteur}/total-livree
   Future<double> getSommePrixLivreeByTransporteur(String idTransporteur) async {
-    final res = await api.get('$_base/transporteur/$idTransporteur/total-livree');
+    final res = await api.get(
+      '$_base/transporteur/$idTransporteur/total-gains-livreur',
+    );
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception(
         'GET $_base/transporteur/$idTransporteur/total-livree -> ${res.statusCode}: ${res.body}',
       );
     }
     final decoded = json.decode(res.body);
-    final total = _parseDouble(decoded) ??
+    final total =
+        _parseDouble(decoded) ??
         (decoded is Map<String, dynamic>
             ? _parseDouble(decoded['total'] ?? decoded['value'])
             : null);
@@ -772,15 +853,17 @@ class CommandeService {
   Future<double> getSommePrixLivreeEnLigneByTransporteur(
     String idTransporteur,
   ) async {
-    final res =
-        await api.get('$_base/transporteur/$idTransporteur/total-livree-en-ligne');
+    final res = await api.get(
+      '$_base/transporteur/$idTransporteur/total-gains-livreur-en-ligne',
+    );
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception(
         'GET $_base/transporteur/$idTransporteur/total-livree-en-ligne -> ${res.statusCode}: ${res.body}',
       );
     }
     final decoded = json.decode(res.body);
-    final total = _parseDouble(decoded) ??
+    final total =
+        _parseDouble(decoded) ??
         (decoded is Map<String, dynamic>
             ? _parseDouble(decoded['total'] ?? decoded['value'])
             : null);
@@ -792,26 +875,30 @@ class CommandeService {
   Future<double> getSommePrixLivreeHorsLigneByTransporteur(
     String idTransporteur,
   ) async {
-    final res = await api
-        .get('$_base/transporteur/$idTransporteur/total-livree-hors-ligne');
+    final res = await api.get(
+      '$_base/transporteur/$idTransporteur/total-part-societe-hors-ligne',
+    );
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception(
         'GET $_base/transporteur/$idTransporteur/total-livree-hors-ligne -> ${res.statusCode}: ${res.body}',
       );
     }
     final decoded = json.decode(res.body);
-    final total = _parseDouble(decoded) ??
+    final total =
+        _parseDouble(decoded) ??
         (decoded is Map<String, dynamic>
             ? _parseDouble(decoded['total'] ?? decoded['value'])
             : null);
     if (total != null) return total;
-    throw Exception('Format inattendu pour total-livree-hors-ligne: ${res.body}');
+    throw Exception(
+      'Format inattendu pour total-livree-hors-ligne: ${res.body}',
+    );
   }
 
   /// GET /commandes/transporteur/{idTransporteur}/pourcentage-sous-zone
   /// Retourne un map de sous-zone -> pourcentage (0-100)
   Future<Map<String, double>>
-      getPourcentageRevenuParSousZoneLivreeByTransporteur(
+  getPourcentageRevenuParSousZoneLivreeByTransporteur(
     String idTransporteur,
   ) async {
     final res = await api.get(
@@ -829,9 +916,7 @@ class CommandeService {
         return MapEntry(key.toString(), pct);
       });
     }
-    throw Exception(
-      'Format inattendu pour pourcentage-sous-zone: ${res.body}',
-    );
+    throw Exception('Format inattendu pour pourcentage-sous-zone: ${res.body}');
   }
 
   double? _parseDouble(dynamic value) {

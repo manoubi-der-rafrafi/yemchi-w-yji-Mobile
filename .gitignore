@@ -33,6 +33,10 @@ migrate_working_dir/
 .pub/
 /build/
 
+# Local public Mapbox token used with --dart-define-from-file.
+mapbox.json
+.env
+
 # Symbolication related
 app.*.symbols
 

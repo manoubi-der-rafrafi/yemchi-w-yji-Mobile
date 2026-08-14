@@ -1,5 +1,21 @@
 # yemchi_wyji
 
+## Mapbox (obligatoire)
+
+La carte ne possède volontairement aucun fournisseur de secours. Copiez
+`.env.example` vers `.env`, renseignez un jeton public Mapbox (`pk...`), puis
+démarrez l'application avec :
+
+```powershell
+flutter run
+```
+
+Pour produire un APK :
+
+```powershell
+flutter build apk
+```
+
 A new Flutter project.
 
 ## Getting Started

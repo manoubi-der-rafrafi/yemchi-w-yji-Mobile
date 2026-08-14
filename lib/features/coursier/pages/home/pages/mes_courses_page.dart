@@ -263,8 +263,10 @@ class _CommandeCard extends StatelessWidget {
                       children: [
                         Expanded(
                           child: _InfoChip(
-                            label: 'Prix',
-                            value: _formatPrice(commande.prix),
+                            label: 'Votre gain',
+                            value: _formatPrice(
+                              commande.prixLivreur ?? ((commande.prix ?? 0) / 2),
+                            ),
                             icon: Icons.payments_outlined,
                           ),
                         ),
