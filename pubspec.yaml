@@ -21,6 +21,7 @@ dependencies:
 
   # Icones iOS
   cupertino_icons: ^1.0.8
+  flutter_dotenv: ^5.2.1
   mapbox_maps_flutter: ^2.20.0
   provider: ^6.1.2
   flutter_map: ^8.2.2
@@ -48,6 +49,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - .env
     - assets/images/
     - assets/
 

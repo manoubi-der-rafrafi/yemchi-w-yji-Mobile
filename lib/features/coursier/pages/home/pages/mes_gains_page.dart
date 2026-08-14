@@ -278,7 +278,7 @@ class _MesGainsPageState extends State<MesGainsPage>
                                 Text(
                                   _isCreditLivreur
                                       ? 'Credit livreur'
-                                      : 'Dette livreurr',
+                                      : 'Dette livreur',
                                   style: theme.textTheme.titleMedium,
                                 ),
                                 const SizedBox(height: 12),
@@ -292,7 +292,7 @@ class _MesGainsPageState extends State<MesGainsPage>
                                     backgroundColor: theme.dividerColor,
                                   ),
                                 ),
-                                if (_isCreditLivreur) ...[
+                                if (!_isCreditLivreur) ...[
                                   const SizedBox(height: 12),
                                   Row(
                                     children: [

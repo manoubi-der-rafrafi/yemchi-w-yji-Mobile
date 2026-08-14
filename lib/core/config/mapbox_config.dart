@@ -1,12 +1,16 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 /// Compile-time Mapbox configuration shared by every map implementation.
 ///
-/// Supply the public token with:
-/// `flutter run --dart-define=ACCESS_TOKEN=pk...`
+/// A local `.env` file supplies the normal development token. A Dart define
+/// can override it for CI or production builds.
 abstract final class MapboxConfig {
-  static const String accessToken = String.fromEnvironment(
-    'ACCESS_TOKEN',
-    defaultValue: '',
-  );
+  static String get accessToken {
+    const dartDefineToken = String.fromEnvironment('ACCESS_TOKEN');
+    return dartDefineToken.trim().isNotEmpty
+        ? dartDefineToken.trim()
+        : (dotenv.env['ACCESS_TOKEN'] ?? '').trim();
+  }
 
   static bool get hasValidAccessToken {
     final token = accessToken.trim();

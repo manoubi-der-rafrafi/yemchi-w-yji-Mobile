@@ -3,17 +3,17 @@
 ## Mapbox (obligatoire)
 
 La carte ne possède volontairement aucun fournisseur de secours. Copiez
-`mapbox.json.example` vers `mapbox.json`, renseignez un jeton public Mapbox
-(`pk...`), puis démarrez l'application avec :
+`.env.example` vers `.env`, renseignez un jeton public Mapbox (`pk...`), puis
+démarrez l'application avec :
 
 ```powershell
-flutter run --dart-define-from-file=mapbox.json
+flutter run
 ```
 
 Pour produire un APK :
 
 ```powershell
-flutter build apk --dart-define-from-file=mapbox.json
+flutter build apk
 ```
 
 A new Flutter project.

@@ -35,6 +35,7 @@ migrate_working_dir/
 
 # Local public Mapbox token used with --dart-define-from-file.
 mapbox.json
+.env
 
 # Symbolication related
 app.*.symbols
