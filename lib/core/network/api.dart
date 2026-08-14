@@ -1,5 +1,4 @@
 ﻿import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:yemchi_wyji/core/env.dart';
 import 'package:yemchi_wyji/core/storage/token_storage.dart';
@@ -25,7 +24,9 @@ class Api {
   }
 
   Future<http.Response> get(String path) async {
-    final r = await _client.get(_u(path), headers: await _headers()).timeout(_timeout);
+    final r = await _client
+        .get(_u(path), headers: await _headers())
+        .timeout(_timeout);
     _throwIfError(r);
     return r;
   }
@@ -47,7 +48,9 @@ class Api {
   }
 
   Future<http.Response> delete(String path) async {
-    final r = await _client.delete(_u(path), headers: await _headers()).timeout(_timeout);
+    final r = await _client
+        .delete(_u(path), headers: await _headers())
+        .timeout(_timeout);
     _throwIfError(r);
     return r;
   }
@@ -64,7 +67,9 @@ class Api {
     if (r.statusCode >= 200 && r.statusCode < 300) return;
 
     final req = r.request;
-    print('[API ERROR] ${req?.method ?? "HTTP"} ${req?.url} -> ${r.statusCode}');
+    print(
+      '[API ERROR] ${req?.method ?? "HTTP"} ${req?.url} -> ${r.statusCode}',
+    );
     print('Response body: ${r.body}');
 
     // Try to extract a readable message from the response
@@ -72,11 +77,15 @@ class Api {
     try {
       final m = json.decode(r.body);
       if (m is Map) {
-        message = (m['message'] ?? m['error'] ?? m['reason'] ?? r.body).toString();
+        message =
+            (m['message'] ?? m['error'] ?? m['reason'] ?? r.body).toString();
       }
     } catch (_) {}
 
-    throw ApiException(r.statusCode, message.isNotEmpty ? message : 'Erreur ${r.statusCode}');
+    throw ApiException(
+      r.statusCode,
+      message.isNotEmpty ? message : 'Erreur ${r.statusCode}',
+    );
   }
 }
 

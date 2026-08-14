@@ -16,8 +16,7 @@ class SignUpPage extends StatefulWidget {
   State<SignUpPage> createState() => _SignUpPageState();
 }
 
-class _SignUpPageState extends State<SignUpPage>
-    with TickerProviderStateMixin {
+class _SignUpPageState extends State<SignUpPage> with TickerProviderStateMixin {
   final _formKeys = [
     GlobalKey<FormState>(),
     GlobalKey<FormState>(),
@@ -26,7 +25,7 @@ class _SignUpPageState extends State<SignUpPage>
 
   int _step = 0;
   bool _isLoading = false;
-  bool _termsAccepted = false;
+  final bool _termsAccepted = false;
 
   // Step 0
   final _phone = TextEditingController();
@@ -81,7 +80,16 @@ class _SignUpPageState extends State<SignUpPage>
   @override
   void dispose() {
     _slideCtrl.dispose();
-    for (final c in [_phone, _dob, _address, _firstName, _lastName, _email, _password, _confirmPassword]) {
+    for (final c in [
+      _phone,
+      _dob,
+      _address,
+      _firstName,
+      _lastName,
+      _email,
+      _password,
+      _confirmPassword,
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -116,9 +124,10 @@ class _SignUpPageState extends State<SignUpPage>
     setState(() => _isLoading = true);
 
     final dobParts = _dob.text.split('/');
-    final dateNaissance = dobParts.length == 3
-        ? '${dobParts[2]}-${dobParts[1]}-${dobParts[0]}'
-        : _dob.text;
+    final dateNaissance =
+        dobParts.length == 3
+            ? '${dobParts[2]}-${dobParts[1]}-${dobParts[0]}'
+            : _dob.text;
 
     final auth = context.read<AuthController>();
     final success = await auth.register(
@@ -139,9 +148,7 @@ class _SignUpPageState extends State<SignUpPage>
       await showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (ctx) => _SuccessDialog(
-          name: _firstName.text.trim(),
-        ),
+        builder: (ctx) => _SuccessDialog(name: _firstName.text.trim()),
       );
       if (!mounted) return;
       final role = auth.currentUser.value?.role;
@@ -156,12 +163,16 @@ class _SignUpPageState extends State<SignUpPage>
             children: [
               const Icon(Icons.error_outline, color: Colors.white, size: 18),
               const SizedBox(width: 8),
-              Expanded(child: Text(auth.error.value ?? "Erreur lors de l'inscription")),
+              Expanded(
+                child: Text(auth.error.value ?? "Erreur lors de l'inscription"),
+              ),
             ],
           ),
           backgroundColor: const Color(0xFFE53935),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
     }
@@ -172,21 +183,22 @@ class _SignUpPageState extends State<SignUpPage>
     final defaultYear = now.year - 18;
 
     // Start controllers at 18 years ago
-    DateTime _selected = DateTime(defaultYear, now.month, now.day);
+    DateTime selected = DateTime(defaultYear, now.month, now.day);
 
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withValues(alpha: 0.6),
-      builder: (ctx) => _DobPickerSheet(
-        initialDate: _selected,
-        onConfirm: (date) {
-          _dob.text =
-              '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
-          setState(() {});
-        },
-      ),
+      builder:
+          (ctx) => _DobPickerSheet(
+            initialDate: selected,
+            onConfirm: (date) {
+              _dob.text =
+                  '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+              setState(() {});
+            },
+          ),
     );
   }
 
@@ -330,8 +342,11 @@ class _SignUpPageState extends State<SignUpPage>
                   style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
                 ),
                 TextButton(
-                  onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
-                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+                  onPressed:
+                      _isLoading ? null : () => Navigator.of(context).pop(),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
                   child: const Text(
                     'Se connecter',
                     style: TextStyle(
@@ -364,7 +379,9 @@ class _SignUpPageState extends State<SignUpPage>
                 hintText: '+216 12 345 678',
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'Numéro obligatoire';
-                  if (v.replaceAll(' ', '').length < 8) return 'Numéro invalide';
+                  if (v.replaceAll(' ', '').length < 8) {
+                    return 'Numéro invalide';
+                  }
                   return null;
                 },
               ),
@@ -376,8 +393,11 @@ class _SignUpPageState extends State<SignUpPage>
                   child: TextFormField(
                     controller: _dob,
                     readOnly: true,
-                    validator: (v) =>
-                        (v == null || v.isEmpty) ? 'Date de naissance obligatoire' : null,
+                    validator:
+                        (v) =>
+                            (v == null || v.isEmpty)
+                                ? 'Date de naissance obligatoire'
+                                : null,
                     decoration: InputDecoration(
                       labelText: 'Date de naissance',
                       hintText: 'JJ/MM/AAAA',
@@ -395,26 +415,36 @@ class _SignUpPageState extends State<SignUpPage>
                       fillColor: const Color(0xFFF7F8FA),
                       constraints: const BoxConstraints(minHeight: 52),
                       labelStyle: const TextStyle(
-                          color: Color(0xFF9AA0A6), fontSize: 14),
+                        color: Color(0xFF9AA0A6),
+                        fontSize: 14,
+                      ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(
-                            color: Color(0xFFE2E5EA), width: 1.0),
+                          color: Color(0xFFE2E5EA),
+                          width: 1.0,
+                        ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(
-                            color: Color(0xFF1565C0), width: 1.5),
+                          color: Color(0xFF1565C0),
+                          width: 1.5,
+                        ),
                       ),
                       errorBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(
-                            color: Color(0xFFE53935), width: 1.5),
+                          color: Color(0xFFE53935),
+                          width: 1.5,
+                        ),
                       ),
                       focusedErrorBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(
-                            color: Color(0xFFE53935), width: 1.5),
+                          color: Color(0xFFE53935),
+                          width: 1.5,
+                        ),
                       ),
                     ),
                   ),
@@ -427,8 +457,11 @@ class _SignUpPageState extends State<SignUpPage>
                 prefixIcon: Icons.home_outlined,
                 hintText: 'Rue, ville, code postal',
                 maxLines: 2,
-                validator: (v) =>
-                    (v == null || v.length < 5) ? 'Adresse trop courte' : null,
+                validator:
+                    (v) =>
+                        (v == null || v.length < 5)
+                            ? 'Adresse trop courte'
+                            : null,
               ),
             ],
           ),
@@ -446,8 +479,9 @@ class _SignUpPageState extends State<SignUpPage>
                       controller: _lastName,
                       label: 'Nom',
                       prefixIcon: Icons.badge_outlined,
-                      validator: (v) =>
-                          (v == null || v.isEmpty) ? 'Obligatoire' : null,
+                      validator:
+                          (v) =>
+                              (v == null || v.isEmpty) ? 'Obligatoire' : null,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -456,8 +490,9 @@ class _SignUpPageState extends State<SignUpPage>
                       controller: _firstName,
                       label: 'Prénom',
                       prefixIcon: Icons.person_outline,
-                      validator: (v) =>
-                          (v == null || v.isEmpty) ? 'Obligatoire' : null,
+                      validator:
+                          (v) =>
+                              (v == null || v.isEmpty) ? 'Obligatoire' : null,
                     ),
                   ),
                 ],
@@ -477,9 +512,12 @@ class _SignUpPageState extends State<SignUpPage>
               ),
               const SizedBox(height: 16),
               GoogleSignInButton(
-                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Google Sign-In — bientôt disponible')),
-                ),
+                onPressed:
+                    () => ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Google Sign-In — bientôt disponible'),
+                      ),
+                    ),
               ),
             ],
           ),
@@ -494,8 +532,11 @@ class _SignUpPageState extends State<SignUpPage>
               AuthPasswordField(
                 controller: _password,
                 showStrength: true,
-                validator: (v) =>
-                    (v == null || v.length < 6) ? 'Minimum 6 caractères' : null,
+                validator:
+                    (v) =>
+                        (v == null || v.length < 6)
+                            ? 'Minimum 6 caractères'
+                            : null,
               ),
               const SizedBox(height: 16),
               AuthPasswordField(
@@ -503,7 +544,9 @@ class _SignUpPageState extends State<SignUpPage>
                 label: 'Confirmer le mot de passe',
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'Obligatoire';
-                  if (v != _password.text) return 'Les mots de passe ne correspondent pas';
+                  if (v != _password.text) {
+                    return 'Les mots de passe ne correspondent pas';
+                  }
                   return null;
                 },
               ),
@@ -535,16 +578,17 @@ class _AnimatedStepper extends StatelessWidget {
         // Step name with animated text switch
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 250),
-          transitionBuilder: (child, anim) => FadeTransition(
-            opacity: anim,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.3),
-                end: Offset.zero,
-              ).animate(anim),
-              child: child,
-            ),
-          ),
+          transitionBuilder:
+              (child, anim) => FadeTransition(
+                opacity: anim,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.3),
+                    end: Offset.zero,
+                  ).animate(anim),
+                  child: child,
+                ),
+              ),
           child: Text(
             _steps[currentStep].$2,
             key: ValueKey(currentStep),
@@ -567,29 +611,30 @@ class _AnimatedStepper extends StatelessWidget {
           tween: Tween(begin: 0, end: (currentStep + 1) / _steps.length),
           duration: const Duration(milliseconds: 400),
           curve: Curves.easeInOut,
-          builder: (_, v, __) => Stack(
-            children: [
-              Container(
-                height: 5,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE2E8F0),
-                  borderRadius: BorderRadius.circular(99),
-                ),
-              ),
-              FractionallySizedBox(
-                widthFactor: v,
-                child: Container(
-                  height: 5,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(99),
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF0F6DDA), Color(0xFF18C0F9)],
+          builder:
+              (_, v, __) => Stack(
+                children: [
+                  Container(
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE2E8F0),
+                      borderRadius: BorderRadius.circular(99),
                     ),
                   ),
-                ),
+                  FractionallySizedBox(
+                    widthFactor: v,
+                    child: Container(
+                      height: 5,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(99),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF0F6DDA), Color(0xFF18C0F9)],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
         ),
         const SizedBox(height: 16),
 
@@ -608,39 +653,49 @@ class _AnimatedStepper extends StatelessWidget {
                           tween: Tween(begin: 0.8, end: isActive ? 1.1 : 1.0),
                           duration: const Duration(milliseconds: 300),
                           curve: Curves.elasticOut,
-                          builder: (_, scale, child) =>
-                              Transform.scale(scale: scale, child: child),
+                          builder:
+                              (_, scale, child) =>
+                                  Transform.scale(scale: scale, child: child),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 300),
                             width: 42,
                             height: 42,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              gradient: (isDone || isActive)
-                                  ? const LinearGradient(
-                                      colors: [Color(0xFF0F6DDA), Color(0xFF18C0F9)],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    )
-                                  : null,
-                              color: (isDone || isActive)
-                                  ? null
-                                  : const Color(0xFFEDF1F7),
-                              boxShadow: isActive
-                                  ? [
-                                      BoxShadow(
-                                        color: const Color(0xFF0F6DDA).withValues(alpha: 0.3),
-                                        blurRadius: 10,
-                                        spreadRadius: 1,
+                              gradient:
+                                  (isDone || isActive)
+                                      ? const LinearGradient(
+                                        colors: [
+                                          Color(0xFF0F6DDA),
+                                          Color(0xFF18C0F9),
+                                        ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
                                       )
-                                    ]
-                                  : [],
+                                      : null,
+                              color:
+                                  (isDone || isActive)
+                                      ? null
+                                      : const Color(0xFFEDF1F7),
+                              boxShadow:
+                                  isActive
+                                      ? [
+                                        BoxShadow(
+                                          color: const Color(
+                                            0xFF0F6DDA,
+                                          ).withValues(alpha: 0.3),
+                                          blurRadius: 10,
+                                          spreadRadius: 1,
+                                        ),
+                                      ]
+                                      : [],
                             ),
                             child: Icon(
                               isDone ? Icons.check_rounded : _steps[i].$1,
-                              color: (isDone || isActive)
-                                  ? Colors.white
-                                  : const Color(0xFFAAB4C8),
+                              color:
+                                  (isDone || isActive)
+                                      ? Colors.white
+                                      : const Color(0xFFAAB4C8),
                               size: 20,
                             ),
                           ),
@@ -650,10 +705,12 @@ class _AnimatedStepper extends StatelessWidget {
                           _steps[i].$2,
                           style: TextStyle(
                             fontSize: 11,
-                            fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                            color: isActive
-                                ? const Color(0xFF0F6DDA)
-                                : isDone
+                            fontWeight:
+                                isActive ? FontWeight.w700 : FontWeight.w500,
+                            color:
+                                isActive
+                                    ? const Color(0xFF0F6DDA)
+                                    : isDone
                                     ? const Color(0xFF1A2033)
                                     : const Color(0xFFAAB4C8),
                           ),
@@ -670,11 +727,15 @@ class _AnimatedStepper extends StatelessWidget {
                         margin: const EdgeInsets.only(bottom: 20),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(99),
-                          gradient: isDone
-                              ? const LinearGradient(
-                                  colors: [Color(0xFF0F6DDA), Color(0xFF18C0F9)],
-                                )
-                              : null,
+                          gradient:
+                              isDone
+                                  ? const LinearGradient(
+                                    colors: [
+                                      Color(0xFF0F6DDA),
+                                      Color(0xFF18C0F9),
+                                    ],
+                                  )
+                                  : null,
                           color: isDone ? null : const Color(0xFFE2E8F0),
                         ),
                       ),
@@ -705,11 +766,16 @@ class _SecondaryButton extends StatelessWidget {
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
           side: const BorderSide(color: Color(0xFFDDE3EE), width: 1.4),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
           foregroundColor: const Color(0xFF4A5568),
           padding: const EdgeInsets.symmetric(horizontal: 20),
         ),
-        child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+        child: Text(
+          label,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+        ),
       ),
     );
   }
@@ -723,10 +789,7 @@ class _SecondaryButton extends StatelessWidget {
 // Opens directly at initialDate, no scrolling through years required.
 // ─────────────────────────────────────────────────────────────────────────────
 class _DobPickerSheet extends StatefulWidget {
-  const _DobPickerSheet({
-    required this.initialDate,
-    required this.onConfirm,
-  });
+  const _DobPickerSheet({required this.initialDate, required this.onConfirm});
 
   final DateTime initialDate;
   final ValueChanged<DateTime> onConfirm;
@@ -737,8 +800,18 @@ class _DobPickerSheet extends StatefulWidget {
 
 class _DobPickerSheetState extends State<_DobPickerSheet> {
   static const _months = [
-    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+    'Janvier',
+    'Février',
+    'Mars',
+    'Avril',
+    'Mai',
+    'Juin',
+    'Juillet',
+    'Août',
+    'Septembre',
+    'Octobre',
+    'Novembre',
+    'Décembre',
   ];
 
   late int _day;
@@ -757,13 +830,13 @@ class _DobPickerSheetState extends State<_DobPickerSheet> {
   @override
   void initState() {
     super.initState();
-    _day   = widget.initialDate.day;
+    _day = widget.initialDate.day;
     _month = widget.initialDate.month;
-    _year  = widget.initialDate.year.clamp(_minYear, _maxYear);
+    _year = widget.initialDate.year.clamp(_minYear, _maxYear);
 
-    _dayCtrl   = FixedExtentScrollController(initialItem: _day - 1);
+    _dayCtrl = FixedExtentScrollController(initialItem: _day - 1);
     _monthCtrl = FixedExtentScrollController(initialItem: _month - 1);
-    _yearCtrl  = FixedExtentScrollController(initialItem: _year - _minYear);
+    _yearCtrl = FixedExtentScrollController(initialItem: _year - _minYear);
   }
 
   @override
@@ -782,8 +855,7 @@ class _DobPickerSheetState extends State<_DobPickerSheet> {
     }
   }
 
-  DateTime get _current =>
-      DateTime(_year, _month, _day.clamp(1, _daysInMonth));
+  DateTime get _current => DateTime(_year, _month, _day.clamp(1, _daysInMonth));
 
   @override
   Widget build(BuildContext context) {
@@ -825,8 +897,7 @@ class _DobPickerSheetState extends State<_DobPickerSheet> {
                     foregroundColor: Colors.white60,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                   ),
-                  child: const Text('Annuler',
-                      style: TextStyle(fontSize: 15)),
+                  child: const Text('Annuler', style: TextStyle(fontSize: 15)),
                 ),
                 const Expanded(
                   child: Text(
@@ -848,9 +919,10 @@ class _DobPickerSheetState extends State<_DobPickerSheet> {
                     foregroundColor: const Color(0xFF4FC3F7),
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                   ),
-                  child: const Text('Confirmer',
-                      style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w700)),
+                  child: const Text(
+                    'Confirmer',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                  ),
                 ),
               ],
             ),
@@ -875,14 +947,17 @@ class _DobPickerSheetState extends State<_DobPickerSheet> {
                       color: Colors.white.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.12)),
+                        color: Colors.white.withValues(alpha: 0.12),
+                      ),
                     ),
                   ),
                 ),
 
                 // Top gradient fade
                 Positioned(
-                  top: 0, left: 0, right: 0,
+                  top: 0,
+                  left: 0,
+                  right: 0,
                   child: IgnorePointer(
                     child: Container(
                       height: itemH * 2,
@@ -901,7 +976,9 @@ class _DobPickerSheetState extends State<_DobPickerSheet> {
                 ),
                 // Bottom gradient fade
                 Positioned(
-                  bottom: 0, left: 0, right: 0,
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
                   child: IgnorePointer(
                     child: Container(
                       height: itemH * 2,
@@ -932,10 +1009,13 @@ class _DobPickerSheetState extends State<_DobPickerSheet> {
                           itemCount: 31,
                           itemH: itemH,
                           selectedIndex: _day - 1,
-                          labelBuilder: (i) =>
-                              (i + 1).toString().padLeft(2, '0'),
-                          onChanged: (i) =>
-                              setState(() { _day = i + 1; _clampDay(); }),
+                          labelBuilder:
+                              (i) => (i + 1).toString().padLeft(2, '0'),
+                          onChanged:
+                              (i) => setState(() {
+                                _day = i + 1;
+                                _clampDay();
+                              }),
                         ),
                       ),
                       // MONTH
@@ -947,8 +1027,11 @@ class _DobPickerSheetState extends State<_DobPickerSheet> {
                           itemH: itemH,
                           selectedIndex: _month - 1,
                           labelBuilder: (i) => _months[i],
-                          onChanged: (i) =>
-                              setState(() { _month = i + 1; _clampDay(); }),
+                          onChanged:
+                              (i) => setState(() {
+                                _month = i + 1;
+                                _clampDay();
+                              }),
                         ),
                       ),
                       // YEAR
@@ -960,8 +1043,11 @@ class _DobPickerSheetState extends State<_DobPickerSheet> {
                           itemH: itemH,
                           selectedIndex: _year - _minYear,
                           labelBuilder: (i) => (_minYear + i).toString(),
-                          onChanged: (i) =>
-                              setState(() { _year = _minYear + i; _clampDay(); }),
+                          onChanged:
+                              (i) => setState(() {
+                                _year = _minYear + i;
+                                _clampDay();
+                              }),
                         ),
                       ),
                     ],
@@ -1000,11 +1086,11 @@ class _DobPickerSheetState extends State<_DobPickerSheet> {
               labelBuilder(i),
               style: TextStyle(
                 fontSize: selected ? 18 : 15,
-                fontWeight:
-                    selected ? FontWeight.w700 : FontWeight.w400,
-                color: selected
-                    ? Colors.white
-                    : Colors.white.withValues(alpha: 0.35),
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                color:
+                    selected
+                        ? Colors.white
+                        : Colors.white.withValues(alpha: 0.35),
                 height: 1,
               ),
             ),
@@ -1042,19 +1128,31 @@ class _SuccessDialog extends StatelessWidget {
                   colors: [Color(0xFF0F6DDA), Color(0xFF18C0F9)],
                 ),
               ),
-              child: const Icon(Icons.check_rounded, color: Colors.white, size: 40),
+              child: const Icon(
+                Icons.check_rounded,
+                color: Colors.white,
+                size: 40,
+              ),
             ),
             const SizedBox(height: 18),
             Text(
               'Bienvenue${name.isNotEmpty ? ', $name' : ''} 🎉',
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF1A2033)),
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF1A2033),
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             const Text(
               'Votre compte livreur a été créé avec succès.\nPrêt à démarrer vos courses ?',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xFF8896AB), fontSize: 13, height: 1.5),
+              style: TextStyle(
+                color: Color(0xFF8896AB),
+                fontSize: 13,
+                height: 1.5,
+              ),
             ),
             const SizedBox(height: 24),
             GradientButton(
