@@ -46,10 +46,17 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
     final statut = widget.commande.statut?.trim().toLowerCase();
     if (statut == 'appelle_client_1') {
       _departCalled = true;
+      _arriveeCalled = _hasSameContactNumber;
     } else if (statut == 'appelle_client_2') {
       _departCalled = true;
       _arriveeCalled = true;
     }
+  }
+
+  bool get _hasSameContactNumber {
+    final telDepart = widget.commande.telDepart?.trim();
+    final telArrivee = widget.commande.telArrivee?.trim();
+    return telDepart != null && telDepart.isNotEmpty && telDepart == telArrivee;
   }
 
   Future<void> _fetchProduits() async {
@@ -181,7 +188,12 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
     try {
       final api = context.read<Api>();
       final service = CommandeService(api);
-      final updated = await service.demarrerAppelClient1(widget.commande.id);
+      var updated = await service.demarrerAppelClient1(widget.commande.id);
+      if (_hasSameContactNumber) {
+        // Un seul appel couvre le depart et l'arrivee. Avancer aussi le statut
+        // du premier contact pour permettre la confirmation de la reponse.
+        updated = await service.marquerAppelClient1(widget.commande.id);
+      }
       if (mounted) {
         context.read<HomeController>().updateCommande(updated);
       }
@@ -191,6 +203,9 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
     }
     setState(() {
       _departCalled = true;
+      if (_hasSameContactNumber) {
+        _arriveeCalled = true;
+      }
     });
   }
 
@@ -351,10 +366,7 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
     }
 
     if (isCallFlow || widget.isMine || _accepted) {
-      final telDepart = widget.commande.telDepart?.trim();
-      final telArrivee = widget.commande.telArrivee?.trim();
-      final bool sameNumber =
-          telDepart != null && telDepart.isNotEmpty && telDepart == telArrivee;
+      final bool sameNumber = _hasSameContactNumber;
       final bool canCallDepart = true;
       final bool canCallArrivee =
           _departCalled ||

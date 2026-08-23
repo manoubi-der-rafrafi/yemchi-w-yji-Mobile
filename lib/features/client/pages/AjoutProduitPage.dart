@@ -16,7 +16,6 @@ class _AjoutProduitPageState extends State<AjoutProduitPage> {
   String _nom = '';
   String _type = '';
   int _quantite = 1;
-  bool _fragile = false;
   XFile? _image;
   bool _loading = false;
 
@@ -25,29 +24,35 @@ class _AjoutProduitPageState extends State<AjoutProduitPage> {
     setState(() => _loading = true);
 
     try {
-      final userId = Provider.of<AuthController>(context, listen: false).currentUser.value?.id;
+      final userId =
+          Provider.of<AuthController>(
+            context,
+            listen: false,
+          ).currentUser.value?.id;
       final produitService = ProduitService();
 
-      Map<String, dynamic> payload = {
+      final payload = <String, dynamic>{
         'nom': _nom,
         'type': _type,
         'quantite': _quantite,
-        'fragile': _fragile,
         // Add additional fields as needed
       };
 
-      final produit = await produitService.addProduitForUser(
+      await produitService.addProduitForUser(
         userId: userId!,
         formPayload: payload,
         imagePath: _image?.path,
       );
+      if (!mounted) return;
       Navigator.of(context).pop(); // Success, go back to cart
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur: $e')),
-      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-    setState(() => _loading = false);
   }
 
   Future<void> _pickImage() async {
@@ -68,28 +73,36 @@ class _AjoutProduitPageState extends State<AjoutProduitPage> {
             children: [
               TextFormField(
                 decoration: const InputDecoration(labelText: 'Nom'),
-                validator: (v) => v == null || v.isEmpty ? 'Nom obligatoire' : null,
+                validator:
+                    (v) => v == null || v.isEmpty ? 'Nom obligatoire' : null,
                 onChanged: (v) => _nom = v,
               ),
               DropdownButtonFormField(
                 decoration: const InputDecoration(labelText: 'Type'),
-                items: [
-                  'Standard (≤ 5kg)', 'Moyen (5–15kg)', 'Gros (15–50kg)', 'Mobilier', 'Électroménager'
-                ].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                validator: (v) => v == null || v.isEmpty ? 'Type obligatoire' : null,
+                items:
+                    [
+                          'Standard (≤ 5kg)',
+                          'Moyen (5–15kg)',
+                          'Gros (15–50kg)',
+                          'Mobilier',
+                          'Électroménager',
+                        ]
+                        .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                        .toList(),
+                validator:
+                    (v) => v == null || v.isEmpty ? 'Type obligatoire' : null,
                 onChanged: (v) => _type = v ?? '',
               ),
               TextFormField(
                 decoration: const InputDecoration(labelText: 'Quantité'),
                 keyboardType: TextInputType.number,
                 initialValue: '1',
-                validator: (v) => (int.tryParse(v ?? '') ?? 0) < 1 ? 'Doit être ≥ 1' : null,
+                validator:
+                    (v) =>
+                        (int.tryParse(v ?? '') ?? 0) < 1
+                            ? 'Doit être ≥ 1'
+                            : null,
                 onChanged: (v) => _quantite = int.tryParse(v) ?? 1,
-              ),
-              SwitchListTile(
-                value: _fragile,
-                title: const Text('Produit fragile ?'),
-                onChanged: (v) => setState(() => _fragile = v),
               ),
               FormField(
                 validator: (v) => _image == null ? 'Image obligatoire' : null,
@@ -99,14 +112,21 @@ class _AjoutProduitPageState extends State<AjoutProduitPage> {
                     children: [
                       ElevatedButton(
                         onPressed: _pickImage,
-                        child: Text(_image == null ? 'Choisir une image' : 'Image sélectionnée'),
+                        child: Text(
+                          _image == null
+                              ? 'Choisir une image'
+                              : 'Image sélectionnée',
+                        ),
                       ),
                       if (state.hasError)
                         Padding(
                           padding: const EdgeInsets.only(top: 8.0),
                           child: Text(
                             state.errorText ?? '',
-                            style: const TextStyle(color: Colors.red, fontSize: 12),
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
                     ],
@@ -116,7 +136,10 @@ class _AjoutProduitPageState extends State<AjoutProduitPage> {
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _loading ? null : _handleAddProduit,
-                child: _loading ? const CircularProgressIndicator() : const Text('Ajouter'),
+                child:
+                    _loading
+                        ? const CircularProgressIndicator()
+                        : const Text('Ajouter'),
               ),
             ],
           ),

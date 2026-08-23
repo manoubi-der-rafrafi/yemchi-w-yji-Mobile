@@ -7,12 +7,15 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:yemchi_wyji/core/models/commande.dart';
 import 'package:yemchi_wyji/core/models/facture.dart';
+import 'package:yemchi_wyji/core/network/api.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/services/transporteur_stats_cache_service.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/services/transporteur_stats_service.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/services/transporteur_stats_snapshot.dart';
 import 'package:yemchi_wyji/features/facture/data/facture_service.dart';
 import 'package:yemchi_wyji/features/finance/domain/livreur_balance.dart';
+import 'package:yemchi_wyji/features/finance/data/finance_livreur_service.dart';
+import 'package:yemchi_wyji/features/finance/models/livreur_debt_details.dart';
 
 double _gainLivreur(Commande commande) {
   return commande.prixLivreur ??
@@ -70,6 +73,7 @@ class _MesGainsPageState extends State<MesGainsPage>
   Map<String, double> _pourcentageParSousZone = {};
   List<Commande> _commandesLivrees = [];
   List<Facture> _factures = [];
+  LivreurDebtDetails? _debtDetails;
   int? _selectedSousZoneIndex;
   int? _hoveredSousZoneIndex;
   String? _modePaiementFilter;
@@ -81,26 +85,36 @@ class _MesGainsPageState extends State<MesGainsPage>
   final TransporteurStatsService _statsService = TransporteurStatsService();
   final TransporteurStatsCacheService _cacheService =
       TransporteurStatsCacheService();
+  final FinanceLivreurService _financeService = FinanceLivreurService(Api());
 
   double get _totalGainsLivreur =>
       _commandesLivrees.fold<double>(0, (sum, c) => sum + _gainLivreur(c));
-  double get _totalProduitsPartenaireDestination => _commandesLivrees
-      .where(_isPaiementHorsLigne)
-      .fold<double>(0, (sum, c) => sum + _produitsPartenaire(c));
-  double get _totalSocieteDestination => _commandesLivrees
-      .where(_isPaiementHorsLigne)
-      .fold<double>(0, (sum, c) => sum + _partSociete(c));
-  double get _totalARecevoirEnLigne => _commandesLivrees
-      .where((c) => !_isPaiementHorsLigne(c))
-      .fold<double>(0, (sum, c) => sum + _gainLivreur(c));
+  double get _totalProduitsPartenaireDestination =>
+      _debtDetails?.produitsB2cAPayer ??
+      _commandesLivrees
+          .where(_isPaiementHorsLigne)
+          .fold<double>(0, (sum, c) => sum + _produitsPartenaire(c));
+  double get _totalSocieteDestination =>
+      _debtDetails?.coursesAPayer ??
+      _commandesLivrees
+          .where(_isPaiementHorsLigne)
+          .fold<double>(0, (sum, c) => sum + _partSociete(c));
+  double get _totalARecevoirEnLigne =>
+      _debtDetails?.creditEnLigneDisponible ??
+      _commandesLivrees
+          .where((c) => !_isPaiementHorsLigne(c))
+          .fold<double>(0, (sum, c) => sum + _gainLivreur(c));
   double get _totalAReverserDestination =>
       _totalSocieteDestination + _totalProduitsPartenaireDestination;
-  double get _diff => calculerSoldeNetLivreur(
-    creditEnLigne: _totalARecevoirEnLigne,
-    montantAReverser: _totalAReverserDestination,
-    paiementsLivreurAcceptes: _paiementsLivreurAcceptes,
-    versementsEntrepriseAcceptes: _versementsEntrepriseAcceptes,
-  );
+  double get _diff =>
+      _debtDetails != null
+          ? _debtDetails!.creditLivreur - _debtDetails!.detteNette
+          : calculerSoldeNetLivreur(
+            creditEnLigne: _totalARecevoirEnLigne,
+            montantAReverser: _totalAReverserDestination,
+            paiementsLivreurAcceptes: _paiementsLivreurAcceptes,
+            versementsEntrepriseAcceptes: _versementsEntrepriseAcceptes,
+          );
   bool get _isCreditLivreur => _diff >= 0;
   double get _soldeLivreur => _diff.abs();
   double get _totalRevenue => _totalGainsLivreur;
@@ -192,11 +206,17 @@ class _MesGainsPageState extends State<MesGainsPage>
     }
 
     try {
-      final snapshot = await _statsService.fetch(transporteurId);
+      final results = await Future.wait<Object?>([
+        _statsService.fetch(transporteurId),
+        _fetchDebtDetailsSafely(),
+      ]);
+      final snapshot = results[0] as TransporteurStatsSnapshot;
+      final debtDetails = results[1] as LivreurDebtDetails?;
       await _cacheService.write(snapshot);
       if (!mounted) return;
       setState(() {
         _applySnapshot(snapshot);
+        _debtDetails = debtDetails;
         _isLoading = false;
         _isRefreshing = false;
       });
@@ -210,6 +230,14 @@ class _MesGainsPageState extends State<MesGainsPage>
         _isLoading = false;
         _isRefreshing = false;
       });
+    }
+  }
+
+  Future<LivreurDebtDetails?> _fetchDebtDetailsSafely() async {
+    try {
+      return await _financeService.getMesDetails();
+    } catch (_) {
+      return null;
     }
   }
 
@@ -379,6 +407,10 @@ class _MesGainsPageState extends State<MesGainsPage>
                                     ),
                                   ],
                                 ),
+                                if (_debtDetails != null) ...[
+                                  const SizedBox(height: 16),
+                                  _DebtDetailsSection(details: _debtDetails!),
+                                ],
                                 const SizedBox(height: 16),
                                 Container(
                                   padding: const EdgeInsets.all(20),
@@ -754,6 +786,193 @@ class _MesGainsPageState extends State<MesGainsPage>
           onSuccess: _fetchGains,
         );
       },
+    );
+  }
+}
+
+class _DebtDetailsSection extends StatelessWidget {
+  const _DebtDetailsSection({required this.details});
+
+  final LivreurDebtDetails details;
+
+  String _money(double value) => '${value.toStringAsFixed(2)} DT';
+
+  String _date(DateTime? value) {
+    if (value == null) return '-';
+    return '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final restantes =
+        details.commandes
+            .where((commande) => commande.resteAPayer > 0.005)
+            .toList();
+    final soldees = details.commandes.length - restantes.length;
+    final paiements =
+        details.paiements
+            .where((paiement) => paiement.affectations.isNotEmpty)
+            .toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Commandes a payer',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Les paiements sont affectes aux commandes les plus anciennes, produits puis course.',
+                  style: theme.textTheme.bodySmall,
+                ),
+                if (details.paiementsEnAttente > 0) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      'Factures en attente de validation : ${_money(details.paiementsEnAttente)}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.amber.shade900,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (restantes.isEmpty)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Text('Aucune commande restante a payer.'),
+            )
+          else
+            ...restantes.map(
+              (commande) => ExpansionTile(
+                tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+                childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                title: Text(
+                  'Commande ${commande.externalOrderId ?? commande.commandeId}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  '${_date(commande.dateLivraison)} · paye ${_money(commande.montantPaye)} / ${_money(commande.montantInitial)}',
+                ),
+                trailing: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    const Text('Reste', style: TextStyle(fontSize: 11)),
+                    Text(
+                      _money(commande.resteAPayer),
+                      style: TextStyle(
+                        color: theme.colorScheme.error,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                children:
+                    commande.lignes
+                        .map(
+                          (ligne) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(ligne.nom),
+                                      Text(
+                                        ligne.type == 'PRODUIT_B2C'
+                                            ? '${ligne.quantite} x ${_money(ligne.prixUnitaire)}'
+                                            : 'Part societe de la course',
+                                        style: theme.textTheme.bodySmall,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Text(
+                                  '${_money(ligne.montantPaye)} payes\n${_money(ligne.resteAPayer)} restants',
+                                  textAlign: TextAlign.right,
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                        .toList(),
+              ),
+            ),
+          ExpansionTile(
+            title: Text('Commandes soldees ($soldees)'),
+            children:
+                details.commandes
+                    .where((commande) => commande.resteAPayer <= 0.005)
+                    .map(
+                      (commande) => ListTile(
+                        dense: true,
+                        title: Text(
+                          commande.externalOrderId ?? commande.commandeId,
+                        ),
+                        trailing: Text(
+                          '${_money(commande.montantInitial)} payes',
+                        ),
+                      ),
+                    )
+                    .toList(),
+          ),
+          ExpansionTile(
+            title: Text('Affectations de mes factures (${paiements.length})'),
+            children:
+                paiements
+                    .map(
+                      (paiement) => ExpansionTile(
+                        title: Text('Facture ${paiement.factureId}'),
+                        subtitle: Text(
+                          '${_money(paiement.montantAffecte)} affectes',
+                        ),
+                        children:
+                            paiement.affectations
+                                .map(
+                                  (affectation) => ListTile(
+                                    dense: true,
+                                    title: Text(affectation.libelle),
+                                    subtitle: Text(
+                                      'Commande ${affectation.commandeId}',
+                                    ),
+                                    trailing: Text(_money(affectation.montant)),
+                                  ),
+                                )
+                                .toList(),
+                      ),
+                    )
+                    .toList(),
+          ),
+        ],
+      ),
     );
   }
 }
