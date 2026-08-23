@@ -254,6 +254,14 @@ class _DemandeCommandeCardState extends State<_DemandeCommandeCard> {
   }
 
   Future<void> _loadClient() async {
+    if (widget.commande.isB2c) {
+      if (!mounted) return;
+      setState(() {
+        _client = null;
+        _isClientLoading = false;
+      });
+      return;
+    }
     final clientId = widget.commande.clientId;
     if (clientId == null || clientId.trim().isEmpty) {
       if (!mounted) return;
@@ -500,7 +508,18 @@ class _ClientRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avatarImage = user?.image?.trim();
+    final isB2c = commande.isB2c;
+    final avatarImage =
+        (isB2c ? commande.partenaireLogoUrl : user?.image)?.trim();
+    final displayName =
+        isB2c
+            ? (commande.partenaireDisplayName ?? 'E-commerce')
+            : _fallback(
+              user != null
+                  ? '${user!.prenom ?? ''} ${user!.nom ?? ''}'.trim()
+                  : '',
+              'Client inconnu',
+            );
     return Row(
       children: [
         CircleAvatar(
@@ -517,7 +536,7 @@ class _ClientRow extends StatelessWidget {
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                      : const Icon(Icons.person))
+                      : Icon(isB2c ? Icons.storefront : Icons.person))
                   : null,
         ),
         const SizedBox(width: 12),
@@ -526,12 +545,7 @@ class _ClientRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _fallback(
-                  user != null
-                      ? '${user!.prenom ?? ''} ${user!.nom ?? ''}'.trim()
-                      : '',
-                  'Client inconnu',
-                ),
+                displayName,
                 style: Theme.of(
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
@@ -539,7 +553,9 @@ class _ClientRow extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                _fallback(user?.email, 'Email indisponible'),
+                isB2c
+                    ? 'Commande e-commerce'
+                    : _fallback(user?.email, 'Email indisponible'),
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 2),

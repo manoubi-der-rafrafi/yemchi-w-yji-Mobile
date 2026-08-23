@@ -10,6 +10,8 @@ import 'package:yemchi_wyji/features/commande/data/commande_service.dart';
 import 'package:yemchi_wyji/features/commande/dto/commande_transporteur_principal_response.dart';
 import 'package:yemchi_wyji/features/commande/dto/transporteur_panne_commandes_response.dart';
 import 'package:yemchi_wyji/features/commande/dto/transporteur_secours_commandes_response.dart';
+import 'package:yemchi_wyji/features/finance/data/finance_livreur_service.dart';
+import 'package:yemchi_wyji/features/finance/models/statut_financier_livreur.dart';
 
 enum AppLang { ar, en }
 
@@ -58,6 +60,7 @@ class HomeController extends ChangeNotifier {
   final List<TransporteurPanneCommandesResponse> _transporteursEnPanne = [];
   final List<TransporteurSecoursCommandesResponse> _transporteursSecours = [];
   Map<String, bool> _minTransporteursByCommandeId = {};
+  StatutFinancierLivreur? _statutFinancier;
 
   List<Commande> get commandes => List.unmodifiable(_commandes);
   List<Commande> get mesCommandes => List.unmodifiable(_mesCommandes);
@@ -74,22 +77,27 @@ class HomeController extends ChangeNotifier {
   bool get isCurrentTransporteurIndisponible =>
       isCurrentTransporteurEnPanne || isCurrentTransporteurEnAccident;
   String? get currentTransporteurId => _authController.currentUser.value?.id;
-  List<Commande> get activeCommandes =>
-      isCurrentTransporteurIndisponible
-          ? _mesCommandes
-              .where(
-                (commande) =>
-                    (commande.transporteurSecoursId ?? '').trim().isEmpty,
-              )
-              .toList(growable: false)
-          : (_commandTab == CommandTab.mes
-              ? <Commande>[
-                ..._mesCommandes,
-                ..._mesCommandesSecours.map((entry) => entry.commande),
-              ]
-              : commandes);
+  List<Commande> get activeCommandes {
+    if (isCurrentTransporteurIndisponible) {
+      return _mesCommandes
+          .where(
+            (commande) => (commande.transporteurSecoursId ?? '').trim().isEmpty,
+          )
+          .toList(growable: false);
+    }
+    if (isFinanciallyBlocked || _commandTab == CommandTab.mes) {
+      return <Commande>[
+        ..._mesCommandes,
+        ..._mesCommandesSecours.map((entry) => entry.commande),
+      ];
+    }
+    return commandes;
+  }
+
   Map<String, bool> get minTransporteursByCommandeId =>
       Map.unmodifiable(_minTransporteursByCommandeId);
+  StatutFinancierLivreur? get statutFinancier => _statutFinancier;
+  bool get isFinanciallyBlocked => _statutFinancier?.bloque == true;
   bool get canResetCurrentIncident {
     if (!isCurrentTransporteurIndisponible) return false;
     final allCommandes = _transporteursSecours
@@ -372,8 +380,14 @@ class HomeController extends ChangeNotifier {
   Future<void> refreshByZone(String zone, {bool silent = false}) async {
     try {
       final service = CommandeService(Api());
+      try {
+        _statutFinancier = await FinanceLivreurService(Api()).getMonStatut();
+      } catch (e) {
+        debugPrint('financial status refresh failed: $e');
+      }
       final user = _authController.currentUser.value;
       final isIndisponible = isCurrentTransporteurIndisponible;
+      final isBlocked = isFinanciallyBlocked;
       final vehicule = user?.typeVehicule?.name;
       if (vehicule == null || vehicule.isEmpty) {
         throw Exception(
@@ -404,6 +418,8 @@ class HomeController extends ChangeNotifier {
                   (commande.transporteurSecoursId ?? '').trim().isEmpty,
             )
             .toList(growable: false);
+      } else if (isBlocked) {
+        list = const <Commande>[];
       } else {
         list =
             hasSousZones

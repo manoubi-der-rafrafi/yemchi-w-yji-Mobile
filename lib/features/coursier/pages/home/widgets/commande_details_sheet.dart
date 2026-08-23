@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:yemchi_wyji/core/models/commande.dart';
 import 'package:yemchi_wyji/core/models/produit.dart';
+import 'package:yemchi_wyji/core/media/product_image_url.dart';
 import 'package:yemchi_wyji/core/network/api.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
 import 'package:yemchi_wyji/features/commande/data/commande_service.dart';
@@ -58,8 +59,7 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
     });
 
     try {
-      final produits =
-          await _produitService.getByCommande(widget.commande.id);
+      final produits = await _produitService.getByCommande(widget.commande.id);
       if (!mounted) return;
       setState(() {
         _produits = produits;
@@ -80,6 +80,14 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
   }
 
   void _onAccepter() async {
+    final homeCtrl = context.read<HomeController>();
+    if (homeCtrl.isFinanciallyBlocked) {
+      final restant = homeCtrl.statutFinancier?.paiementRestant ?? 0;
+      _showSnack(
+        'Nouvelles commandes bloquees. Paiement restant: ${restant.toStringAsFixed(3)} DT.',
+      );
+      return;
+    }
     final auth = context.read<AuthController>();
     final currentUserId = auth.currentUser.value?.id;
 
@@ -91,20 +99,20 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
     try {
       final api = context.read<Api>();
       final service = CommandeService(api);
-      final homeCtrl = context.read<HomeController>();
       final transporteurPanneId = homeCtrl.getTransporteurPanneIdForCommande(
         widget.commande.id,
       );
 
-      final updated = transporteurPanneId != null
-          ? await service.assignerTransporteurSecours(
-              widget.commande.id,
-              currentUserId,
-            )
-          : await service.assignerTransporteur(
-              widget.commande.id,
-              currentUserId,
-            );
+      final updated =
+          transporteurPanneId != null
+              ? await service.assignerTransporteurSecours(
+                widget.commande.id,
+                currentUserId,
+              )
+              : await service.assignerTransporteur(
+                widget.commande.id,
+                currentUserId,
+              );
 
       if (!mounted) return;
       homeCtrl.moveToMesCommandes(updated);
@@ -124,7 +132,9 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
       if (!mounted) return;
       _showSnack(e.message?.toString() ?? 'Erreur de donnees.');
     } on ApiException catch (e) {
-      debugPrint('Erreur assignation transporteur (${e.statusCode}): ${e.message}');
+      debugPrint(
+        'Erreur assignation transporteur (${e.statusCode}): ${e.message}',
+      );
       if (!mounted) return;
       _showSnack(
         e.message.trim().isEmpty
@@ -171,8 +181,7 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
     try {
       final api = context.read<Api>();
       final service = CommandeService(api);
-      final updated =
-          await service.demarrerAppelClient1(widget.commande.id);
+      final updated = await service.demarrerAppelClient1(widget.commande.id);
       if (mounted) {
         context.read<HomeController>().updateCommande(updated);
       }
@@ -204,9 +213,7 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
     }
   }
 
-  Future<void> _markNonReponse({
-    required bool sameNumber,
-  }) async {
+  Future<void> _markNonReponse({required bool sameNumber}) async {
     if (!_departCalled) return;
     try {
       final api = context.read<Api>();
@@ -228,9 +235,7 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
     }
   }
 
-  Future<void> _confirmNonReponse({
-    required bool sameNumber,
-  }) async {
+  Future<void> _confirmNonReponse({required bool sameNumber}) async {
     if (!_departCalled) return;
     final shouldContinue = await showDialog<bool>(
       context: context,
@@ -305,9 +310,7 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
                 ),
               ),
               const SizedBox(height: 16),
-              Expanded(
-                child: _buildProduitsSection(theme),
-              ),
+              Expanded(child: _buildProduitsSection(theme)),
               const SizedBox(height: 20),
               _buildActionButtons(context),
             ],
@@ -319,9 +322,10 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
 
   Widget _buildActionButtons(BuildContext context) {
     final statut = widget.commande.statut?.trim().toLowerCase();
-    final isNonRepond = statut == 'non_repondre_client_1' ||
-        statut == 'non_repondre_client_2';
-    final isCallFlow = statut == 'en_appelle' ||
+    final isNonRepond =
+        statut == 'non_repondre_client_1' || statut == 'non_repondre_client_2';
+    final isCallFlow =
+        statut == 'en_appelle' ||
         statut == 'appelle_client_1' ||
         statut == 'appelle_client_2';
 
@@ -352,13 +356,16 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
       final bool sameNumber =
           telDepart != null && telDepart.isNotEmpty && telDepart == telArrivee;
       final bool canCallDepart = true;
-      final bool canCallArrivee = _departCalled ||
+      final bool canCallArrivee =
+          _departCalled ||
           statut == 'appelle_client_1' ||
           statut == 'appelle_client_2';
-      final bool canMarkNonReponse = _departCalled ||
+      final bool canMarkNonReponse =
+          _departCalled ||
           statut == 'appelle_client_1' ||
           statut == 'appelle_client_2';
-      final bool canMarkReponse = _arriveeCalled || statut == 'appelle_client_2';
+      final bool canMarkReponse =
+          _arriveeCalled || statut == 'appelle_client_2';
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -368,9 +375,7 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
                 child: FilledButton(
                   onPressed: canCallDepart ? _callDepart : null,
                   child: Text(
-                    sameNumber
-                        ? 'Appeler depart et arrivee'
-                        : 'Appeler depart',
+                    sameNumber ? 'Appeler depart et arrivee' : 'Appeler depart',
                   ),
                 ),
               ),
@@ -378,10 +383,10 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton(
-                  onPressed: canCallArrivee ? _callArrivee : null,
-                  child: const Text('Appeler arrivee'),
+                    onPressed: canCallArrivee ? _callArrivee : null,
+                    child: const Text('Appeler arrivee'),
+                  ),
                 ),
-              ),
               ],
             ],
           ),
@@ -397,9 +402,10 @@ class _CommandeDetailsSheetState extends State<CommandeDetailsSheet> {
               const SizedBox(width: 12),
               Expanded(
                 child: OutlinedButton(
-                  onPressed: canMarkNonReponse
-                      ? () => _confirmNonReponse(sameNumber: sameNumber)
-                      : null,
+                  onPressed:
+                      canMarkNonReponse
+                          ? () => _confirmNonReponse(sameNumber: sameNumber)
+                          : null,
                   child: const Text('Numero non repondu'),
                 ),
               ),
@@ -528,10 +534,7 @@ class _ProduitTile extends StatelessWidget {
   final Produit produit;
   final VoidCallback onDetails;
 
-  const _ProduitTile({
-    required this.produit,
-    required this.onDetails,
-  });
+  const _ProduitTile({required this.produit, required this.onDetails});
 
   @override
   Widget build(BuildContext context) {
@@ -542,9 +545,7 @@ class _ProduitTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant,
-        ),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
         boxShadow: [
           BoxShadow(
             color: theme.shadowColor.withOpacity(0.05),
@@ -556,7 +557,9 @@ class _ProduitTile extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       child: Row(
         children: [
-          _ProduitImage(imageUrl: produit.image1),
+          _ProduitImage(
+            imageUrls: [produit.image1, produit.image2, produit.image3],
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -583,10 +586,7 @@ class _ModePaiementBadge extends StatelessWidget {
   final String label;
   final Color color;
 
-  const _ModePaiementBadge({
-    required this.label,
-    required this.color,
-  });
+  const _ModePaiementBadge({required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -621,27 +621,37 @@ class _ModePaiementBadge extends StatelessWidget {
 }
 
 class _ProduitImage extends StatelessWidget {
-  final String? imageUrl;
+  final List<String?> imageUrls;
 
-  const _ProduitImage({required this.imageUrl});
+  const _ProduitImage({required this.imageUrls});
 
   @override
   Widget build(BuildContext context) {
     const double size = 64;
     final theme = Theme.of(context);
+    String? resolvedUrl;
+    for (final imageUrl in imageUrls) {
+      resolvedUrl = ProductImageUrl.resolve(imageUrl);
+      if (resolvedUrl != null) break;
+    }
 
-    if (imageUrl == null || imageUrl!.trim().isEmpty) {
+    if (resolvedUrl == null) {
       return _PlaceholderImage(theme: theme, size: size);
     }
+    final displayUrl = resolvedUrl;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: Image.network(
-        imageUrl!,
+        displayUrl,
         width: size,
         height: size,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _PlaceholderImage(theme: theme, size: size),
+        errorBuilder: (_, error, stackTrace) {
+          final host = Uri.tryParse(displayUrl)?.host ?? 'hote inconnu';
+          debugPrint('Image produit inaccessible ($host): $error');
+          return _PlaceholderImage(theme: theme, size: size);
+        },
       ),
     );
   }
@@ -661,9 +671,7 @@ class _PlaceholderImage extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
         color: theme.colorScheme.surfaceVariant,
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant,
-        ),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       alignment: Alignment.center,
       child: Icon(

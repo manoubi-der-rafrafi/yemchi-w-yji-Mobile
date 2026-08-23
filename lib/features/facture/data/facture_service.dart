@@ -6,7 +6,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:yemchi_wyji/core/env.dart';
 import 'package:yemchi_wyji/core/models/facture.dart';
 import 'package:yemchi_wyji/core/network/api.dart';
-import 'package:yemchi_wyji/core/storage/token_storage.dart';
 import 'package:yemchi_wyji/features/facture/dto/facture_dto.dart';
 
 class FactureService {
@@ -17,10 +16,7 @@ class FactureService {
 
   /// Creation d'une facture.
   Future<Facture> create(FactureDto dto) async {
-    final r = await _api.post(
-      _base,
-      body: jsonEncode(dto.toMap()),
-    );
+    final r = await _api.post(_base, body: jsonEncode(dto.toMap()));
     final body = _safeJsonDecode(r.body);
     if (body is Map<String, dynamic>) {
       return FactureDto.fromMap(body).toModel();
@@ -40,7 +36,7 @@ class FactureService {
     required FactureType type,
     FactureConfirmation confirmer = FactureConfirmation.nonTraiter,
   }) async {
-    final token = await TokenStorage.access();
+    final token = await _api.authenticatedAccessToken();
     final bytes = await image.readAsBytes();
     final dio = Dio(
       BaseOptions(
@@ -54,9 +50,10 @@ class FactureService {
     );
     final mimeType = image.mimeType ?? 'image/jpeg';
     final parts = mimeType.split('/');
-    final mediaType = parts.length == 2
-        ? MediaType(parts[0], parts[1])
-        : MediaType('image', 'jpeg');
+    final mediaType =
+        parts.length == 2
+            ? MediaType(parts[0], parts[1])
+            : MediaType('image', 'jpeg');
     final formData = FormData.fromMap({
       'image': MultipartFile.fromBytes(
         bytes,
@@ -69,10 +66,17 @@ class FactureService {
       'type': type.value,
       'confirmer': confirmer.value,
     });
-    final response = await dio.post(
-      _base,
-      data: formData,
-    );
+    late final Response<dynamic> response;
+    try {
+      response = await dio.post<dynamic>(_base, data: formData);
+    } on DioException catch (error) {
+      final data = error.response?.data;
+      final message =
+          data is Map && data['message'] != null
+              ? data['message'].toString()
+              : 'Impossible d\'envoyer le justificatif de paiement.';
+      throw ApiException(error.response?.statusCode ?? 0, message);
+    }
     if (response.statusCode == null ||
         response.statusCode! < 200 ||
         response.statusCode! >= 300) {
@@ -119,7 +123,8 @@ class FactureService {
       '$_base/livreur/$livreurId/sum-entreprise-verse-livreur',
     );
     final body = _safeJsonDecode(r.body);
-    final total = _parseDouble(body) ??
+    final total =
+        _parseDouble(body) ??
         (body is Map<String, dynamic>
             ? _parseDouble(body['total'] ?? body['value'])
             : null);
@@ -137,7 +142,8 @@ class FactureService {
       '$_base/livreur/$livreurId/sum-livreur-verse-entreprise',
     );
     final body = _safeJsonDecode(r.body);
-    final total = _parseDouble(body) ??
+    final total =
+        _parseDouble(body) ??
         (body is Map<String, dynamic>
             ? _parseDouble(body['total'] ?? body['value'])
             : null);

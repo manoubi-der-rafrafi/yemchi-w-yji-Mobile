@@ -7,6 +7,13 @@ import '../controllers/auth_controller.dart';
 import '../widgets/auth_hero.dart';
 import '../widgets/auth_text_field.dart';
 
+bool _isStrongPassword(String value) =>
+    value.length >= 8 &&
+    value.length <= 128 &&
+    RegExp(r'[a-z]').hasMatch(value) &&
+    RegExp(r'[A-Z]').hasMatch(value) &&
+    RegExp(r'\d').hasMatch(value);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Signup Page — 3 steps with animated stepper + slide transitions
 // ─────────────────────────────────────────────────────────────────────────────
@@ -26,6 +33,7 @@ class _SignUpPageState extends State<SignUpPage> with TickerProviderStateMixin {
   int _step = 0;
   bool _isLoading = false;
   bool _termsAccepted = false;
+  String? _signupToken;
 
   // Step 0
   final _phone = TextEditingController();
@@ -95,12 +103,36 @@ class _SignUpPageState extends State<SignUpPage> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  void _onContinue() {
+  Future<void> _onContinue() async {
     if (_formKeys[_step].currentState?.validate() != true) {
       HapticFeedback.mediumImpact();
       return;
     }
-    if (_step < 2) {
+    if (_step == 1) {
+      setState(() => _isLoading = true);
+      try {
+        _signupToken = await context.read<AuthController>().initiateSignup(
+          _email.text.trim(),
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Email envoyé. Cliquez sur le lien avant de terminer.',
+            ),
+          ),
+        );
+        await _goTo(2);
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(error.toString())));
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    } else if (_step < 2) {
       _goTo(_step + 1);
     } else {
       _onSubmit();
@@ -130,6 +162,15 @@ class _SignUpPageState extends State<SignUpPage> with TickerProviderStateMixin {
             : _dob.text;
 
     final auth = context.read<AuthController>();
+    if (_signupToken == null ||
+        !await auth.isEmailVerified(_email.text.trim(), _signupToken!)) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("L'email n'est pas encore vérifié.")),
+      );
+      return;
+    }
     final success = await auth.register(
       email: _email.text.trim(),
       password: _password.text,
@@ -138,6 +179,7 @@ class _SignUpPageState extends State<SignUpPage> with TickerProviderStateMixin {
       telephone: _phone.text.trim(),
       adresse: _address.text.trim(),
       dateNaissance: dateNaissance,
+      signupToken: _signupToken!,
     );
 
     if (!mounted) return;
@@ -533,8 +575,8 @@ class _SignUpPageState extends State<SignUpPage> with TickerProviderStateMixin {
                 showStrength: true,
                 validator:
                     (v) =>
-                        (v == null || v.length < 6)
-                            ? 'Minimum 6 caractères'
+                        (v == null || !_isStrongPassword(v))
+                            ? '8 à 128 caractères, avec majuscule, minuscule et chiffre'
                             : null,
               ),
               const SizedBox(height: 16),

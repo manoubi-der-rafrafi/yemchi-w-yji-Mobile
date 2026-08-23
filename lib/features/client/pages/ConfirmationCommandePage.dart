@@ -420,6 +420,7 @@ class _ConfirmationCommandePageState extends State<ConfirmationCommandePage> {
           includeModePaiement: true,
         ),
       );
+      _commande = await _commandeService.confirmerCommande(widget.commandeId);
 
       if (!mounted) return;
 

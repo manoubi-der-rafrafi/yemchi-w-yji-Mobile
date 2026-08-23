@@ -12,6 +12,7 @@ import 'package:yemchi_wyji/features/coursier/pages/home/services/transporteur_s
 import 'package:yemchi_wyji/features/coursier/pages/home/services/transporteur_stats_service.dart';
 import 'package:yemchi_wyji/features/coursier/pages/home/services/transporteur_stats_snapshot.dart';
 import 'package:yemchi_wyji/features/facture/data/facture_service.dart';
+import 'package:yemchi_wyji/features/finance/domain/livreur_balance.dart';
 
 double _gainLivreur(Commande commande) {
   return commande.prixLivreur ??
@@ -64,8 +65,8 @@ class _MesGainsPageState extends State<MesGainsPage>
   bool _isRefreshing = false;
   bool _hasLoadedData = false;
   String? _error;
-  double _montantVertEntreprise = 0;
-  double _montantVertLivreur = 0;
+  double _paiementsLivreurAcceptes = 0;
+  double _versementsEntrepriseAcceptes = 0;
   Map<String, double> _pourcentageParSousZone = {};
   List<Commande> _commandesLivrees = [];
   List<Facture> _factures = [];
@@ -94,13 +95,14 @@ class _MesGainsPageState extends State<MesGainsPage>
       .fold<double>(0, (sum, c) => sum + _gainLivreur(c));
   double get _totalAReverserDestination =>
       _totalSocieteDestination + _totalProduitsPartenaireDestination;
-  double get _diff =>
-      _totalARecevoirEnLigne -
-      _totalAReverserDestination -
-      _montantVertLivreur +
-      _montantVertEntreprise;
+  double get _diff => calculerSoldeNetLivreur(
+    creditEnLigne: _totalARecevoirEnLigne,
+    montantAReverser: _totalAReverserDestination,
+    paiementsLivreurAcceptes: _paiementsLivreurAcceptes,
+    versementsEntrepriseAcceptes: _versementsEntrepriseAcceptes,
+  );
   bool get _isCreditLivreur => _diff >= 0;
-  double get _soldeLivreur => _diff.abs().clamp(0, 800);
+  double get _soldeLivreur => _diff.abs();
   double get _totalRevenue => _totalGainsLivreur;
 
   @override
@@ -157,10 +159,10 @@ class _MesGainsPageState extends State<MesGainsPage>
     final facturesConfirmees = _factures.where(
       (f) => f.confirmer == FactureConfirmation.acceter,
     );
-    _montantVertEntreprise = facturesConfirmees
+    _paiementsLivreurAcceptes = facturesConfirmees
         .where((f) => f.type == FactureType.livreurVerseEntreprise)
         .fold<double>(0, (sum, f) => sum + f.montant);
-    _montantVertLivreur = facturesConfirmees
+    _versementsEntrepriseAcceptes = facturesConfirmees
         .where((f) => f.type == FactureType.entrepriseVerseLivreur)
         .fold<double>(0, (sum, f) => sum + f.montant);
     _hasLoadedData = true;
@@ -236,7 +238,8 @@ class _MesGainsPageState extends State<MesGainsPage>
       selectedMode,
       _dateRange,
     );
-    final gaugeRatio = (_soldeLivreur / 800).clamp(0.0, 1.0);
+    final gaugeMax = _soldeLivreur > 800 ? _soldeLivreur : 800.0;
+    final gaugeRatio = (_soldeLivreur / gaugeMax).clamp(0.0, 1.0);
     final gaugeColor =
         Color.lerp(const Color(0xFF2E7D32), Colors.red, gaugeRatio) ??
         theme.colorScheme.primary;
@@ -286,7 +289,7 @@ class _MesGainsPageState extends State<MesGainsPage>
                                   child: _SemiCircularGauge(
                                     value: _soldeLivreur,
                                     min: 0,
-                                    max: 800,
+                                    max: gaugeMax,
                                     label: _formatMoney(_soldeLivreur),
                                     color: gaugeColor,
                                     backgroundColor: theme.dividerColor,
@@ -747,6 +750,7 @@ class _MesGainsPageState extends State<MesGainsPage>
       builder: (dialogContext) {
         return _PayByFactureDialog(
           parentContext: context,
+          montantDu: _soldeLivreur,
           onSuccess: _fetchGains,
         );
       },
@@ -756,10 +760,12 @@ class _MesGainsPageState extends State<MesGainsPage>
 
 class _PayByFactureDialog extends StatefulWidget {
   final BuildContext parentContext;
+  final double montantDu;
   final VoidCallback onSuccess;
 
   const _PayByFactureDialog({
     required this.parentContext,
+    required this.montantDu,
     required this.onSuccess,
   });
 
@@ -771,10 +777,24 @@ class _PayByFactureDialogState extends State<_PayByFactureDialog> {
   bool _isSaving = false;
   XFile? _pickedImage;
   Uint8List? _pickedImageBytes;
+  late final TextEditingController _montantController;
+
+  @override
+  void initState() {
+    super.initState();
+    _montantController = TextEditingController(
+      text: widget.montantDu.toStringAsFixed(3),
+    );
+  }
 
   @override
   void dispose() {
+    _montantController.dispose();
     super.dispose();
+  }
+
+  double? _montantSaisi() {
+    return double.tryParse(_montantController.text.trim().replaceAll(',', '.'));
   }
 
   @override
@@ -809,6 +829,21 @@ class _PayByFactureDialogState extends State<_PayByFactureDialog> {
                     ],
                   ),
                   const SizedBox(height: 12),
+                  TextField(
+                    controller: _montantController,
+                    enabled: !_isSaving,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Montant paye',
+                      helperText:
+                          'Dette actuelle : ${widget.montantDu.toStringAsFixed(3)} DT',
+                      suffixText: 'DT',
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
@@ -889,6 +924,19 @@ class _PayByFactureDialogState extends State<_PayByFactureDialog> {
                           _isSaving
                               ? null
                               : () async {
+                                final montant = _montantSaisi();
+                                if (montant == null || montant <= 0) {
+                                  ScaffoldMessenger.of(
+                                    widget.parentContext,
+                                  ).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Saisissez un montant superieur a 0 DT.',
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
                                 if (_pickedImage == null) {
                                   ScaffoldMessenger.of(
                                     widget.parentContext,
@@ -908,7 +956,7 @@ class _PayByFactureDialogState extends State<_PayByFactureDialog> {
                                       auth.currentUser.value?.id ?? '';
                                   await FactureService().createWithImage(
                                     image: _pickedImage!,
-                                    montant: 0.0,
+                                    montant: montant,
                                     dateTimle: DateTime.now().toIso8601String(),
                                     idLivreur: livreurId,
                                     type: FactureType.livreurVerseEntreprise,

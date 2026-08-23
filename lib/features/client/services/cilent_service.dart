@@ -4,7 +4,6 @@ import '../models/produit.dart';
 import 'package:yemchi_wyji/core/models/commande.dart';
 import '../../../core/network/api.dart';
 import '../../../core/env.dart';
-import '../../../core/storage/token_storage.dart';
 
 class CommandeService {
   final api = Api();
@@ -272,7 +271,7 @@ class ProduitService {
   Future<String> uploadProduitImageAuth(String filePath) async {
     // Ensure we use the correct full URL
     final uri = Uri.parse('${Env.baseUrl}/produits/upload');
-    final token = await TokenStorage.access();
+    final token = await api.authenticatedAccessToken();
 
     final request = http.MultipartRequest('POST', uri);
 

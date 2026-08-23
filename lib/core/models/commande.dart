@@ -22,6 +22,13 @@ class Commande {
   transporteurId; // backend: transporteurId (alias id_transporteur / transporteur_id)
   final String? transporteurSecoursId;
   final String? idAmie;
+  final String? partenaireId;
+  final String? externalBusinessId;
+  final String? partenaireNom;
+  final String? partenaireLogoUrl;
+  final String? externalOrderId;
+  final String? nomDepart;
+  final String? nomArrivee;
 
   // Localisation & géo
   final String? localisationDepart;
@@ -75,6 +82,13 @@ class Commande {
     this.transporteurId,
     this.transporteurSecoursId,
     this.idAmie,
+    this.partenaireId,
+    this.externalBusinessId,
+    this.partenaireNom,
+    this.partenaireLogoUrl,
+    this.externalOrderId,
+    this.nomDepart,
+    this.nomArrivee,
     this.localisationDepart,
     this.destination,
     this.latitudeDepart,
@@ -112,6 +126,16 @@ class Commande {
     this.qrCodeReceptionScanne,
     this.dateScanReception,
   });
+
+  bool get isB2c => sourceCommande?.trim().toUpperCase() == 'B2C';
+
+  String? get partenaireDisplayName {
+    for (final value in [partenaireNom, nomDepart, externalBusinessId]) {
+      final normalized = value?.trim();
+      if (normalized != null && normalized.isNotEmpty) return normalized;
+    }
+    return null;
+  }
 
   // -------- Helpers de parsing sûrs --------
   static double? _toDouble(dynamic v) {
@@ -172,6 +196,23 @@ class Commande {
       ),
       transporteurSecoursId: _pickTransporteurSecoursId(raw),
       idAmie: _toStringOrNull(_pick(raw, ['idAmie', 'id_amie'])),
+      partenaireId: _toStringOrNull(
+        _pick(raw, ['partenaireId', 'partenaire_id']),
+      ),
+      externalBusinessId: _toStringOrNull(
+        _pick(raw, ['externalBusinessId', 'external_business_id']),
+      ),
+      partenaireNom: _toStringOrNull(
+        _pick(raw, ['partenaireNom', 'partenaire_nom']),
+      ),
+      partenaireLogoUrl: _toStringOrNull(
+        _pick(raw, ['partenaireLogoUrl', 'partenaire_logo_url']),
+      ),
+      externalOrderId: _toStringOrNull(
+        _pick(raw, ['externalOrderId', 'external_order_id']),
+      ),
+      nomDepart: _toStringOrNull(_pick(raw, ['nomDepart', 'nom_depart'])),
+      nomArrivee: _toStringOrNull(_pick(raw, ['nomArrivee', 'nom_arrivee'])),
 
       // Localisation & géo
       localisationDepart: _toStringOrNull(
@@ -275,6 +316,13 @@ class Commande {
     'transporteurId': transporteurId,
     'transporteurSecoursId': transporteurSecoursId,
     'idAmie': idAmie,
+    'partenaireId': partenaireId,
+    'externalBusinessId': externalBusinessId,
+    'partenaireNom': partenaireNom,
+    'partenaireLogoUrl': partenaireLogoUrl,
+    'externalOrderId': externalOrderId,
+    'nomDepart': nomDepart,
+    'nomArrivee': nomArrivee,
 
     // Localisation & géo
     'localisationDepart': localisationDepart,
@@ -330,6 +378,13 @@ class Commande {
     String? transporteurId,
     String? transporteurSecoursId,
     String? idAmie,
+    String? partenaireId,
+    String? externalBusinessId,
+    String? partenaireNom,
+    String? partenaireLogoUrl,
+    String? externalOrderId,
+    String? nomDepart,
+    String? nomArrivee,
     String? localisationDepart,
     String? destination,
     double? latitudeDepart,
@@ -374,6 +429,13 @@ class Commande {
       transporteurSecoursId:
           transporteurSecoursId ?? this.transporteurSecoursId,
       idAmie: idAmie ?? this.idAmie,
+      partenaireId: partenaireId ?? this.partenaireId,
+      externalBusinessId: externalBusinessId ?? this.externalBusinessId,
+      partenaireNom: partenaireNom ?? this.partenaireNom,
+      partenaireLogoUrl: partenaireLogoUrl ?? this.partenaireLogoUrl,
+      externalOrderId: externalOrderId ?? this.externalOrderId,
+      nomDepart: nomDepart ?? this.nomDepart,
+      nomArrivee: nomArrivee ?? this.nomArrivee,
       localisationDepart: localisationDepart ?? this.localisationDepart,
       destination: destination ?? this.destination,
       latitudeDepart: latitudeDepart ?? this.latitudeDepart,

@@ -23,6 +23,7 @@ class AuthController {
     required String telephone,
     required String adresse,
     required String dateNaissance,
+    required String signupToken,
   }) async {
     loading.value = true;
     error.value = null;
@@ -35,8 +36,13 @@ class AuthController {
         telephone: telephone,
         adresse: adresse,
         dateNaissance: dateNaissance,
+        signupToken: signupToken,
       );
-      await TokenStorage.save(access: res.token, userId: res.user.id);
+      await TokenStorage.save(
+        access: res.token,
+        refresh: res.refreshToken,
+        userId: res.user.id,
+      );
       currentUser.value = res.user;
       _svc.currentUser.value = res.user;
       return true;
@@ -60,13 +66,22 @@ class AuthController {
     }
   }
 
+  Future<String> initiateSignup(String email) => _svc.initiateSignup(email);
+
+  Future<bool> isEmailVerified(String email, String signupToken) =>
+      _svc.isEmailVerified(email, signupToken);
+
   /// Login: récupère {token, user}, sauvegarde le token, met à jour l'état.
   Future<bool> login(String email, String password) async {
     loading.value = true;
     error.value = null;
     try {
       final res = await _svc.login(email: email, password: password);
-      await TokenStorage.save(access: res.token, userId: res.user.id);
+      await TokenStorage.save(
+        access: res.token,
+        refresh: res.refreshToken,
+        userId: res.user.id,
+      );
       currentUser.value = res.user;
       _svc.currentUser.value = res.user;
       return true;
@@ -295,6 +310,12 @@ class AuthController {
 
   /// Logout: efface les tokens et l'utilisateur courant.
   Future<void> logout() async {
+    final refreshToken = await TokenStorage.refresh();
+    if (refreshToken != null && refreshToken.isNotEmpty) {
+      try {
+        await _svc.logout(refreshToken);
+      } catch (_) {}
+    }
     await TokenStorage.clear();
     currentUser.value = null;
     _svc.currentUser.value = null;

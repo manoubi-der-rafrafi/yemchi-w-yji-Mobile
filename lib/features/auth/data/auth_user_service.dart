@@ -26,6 +26,7 @@ class AuthUserService {
 
   // ---- Register endpoints ----
   static const _register = '/utilisateur/register';
+  static const _verificationStatus = '/utilisateur/email-verification-status';
 
   // ---------- REGISTER ----------
   /// Crée un compte complet en une seule requête (POST /api/utilisateur/register).
@@ -38,6 +39,7 @@ class AuthUserService {
     required String telephone,
     required String adresse,
     required String dateNaissance, // format "YYYY-MM-DD"
+    required String signupToken,
   }) async {
     final r = await api.post(
       _register,
@@ -50,6 +52,7 @@ class AuthUserService {
         'adresse': adresse,
         'dateNaissance': dateNaissance,
       }),
+      extraHeaders: {'X-Signup-Token': signupToken},
       includeAuth: false,
     );
 
@@ -66,7 +69,34 @@ class AuthUserService {
             : m;
     final user = Utilisateur.fromJson(userMap);
 
-    return LoginResult(token: token, user: user);
+    return LoginResult(
+      token: token,
+      refreshToken: m['refreshToken']?.toString(),
+      user: user,
+    );
+  }
+
+  Future<String> initiateSignup(String email) async {
+    final r = await api.post(
+      '$_register/email',
+      body: json.encode({'email': email}),
+      includeAuth: false,
+    );
+    final decoded = json.decode(r.body) as Map<String, dynamic>;
+    final token = decoded['signupToken']?.toString();
+    if (token == null || token.isEmpty) {
+      throw ApiException(500, "Jeton d'inscription manquant");
+    }
+    return token;
+  }
+
+  Future<bool> isEmailVerified(String email, String signupToken) async {
+    final r = await api.get(
+      '$_verificationStatus?email=${Uri.encodeQueryComponent(email)}&signupToken=${Uri.encodeQueryComponent(signupToken)}',
+      includeAuth: false,
+    );
+    final decoded = json.decode(r.body);
+    return decoded is Map<String, dynamic> && decoded['verified'] == true;
   }
 
   // ---------- LOGIN ----------
@@ -93,7 +123,19 @@ class AuthUserService {
             : m;
     final user = Utilisateur.fromJson(userMap);
 
-    return LoginResult(token: token, user: user);
+    return LoginResult(
+      token: token,
+      refreshToken: m['refreshToken']?.toString(),
+      user: user,
+    );
+  }
+
+  Future<void> logout(String refreshToken) async {
+    await api.post(
+      '/auth/logout',
+      body: json.encode({'refreshToken': refreshToken}),
+      includeAuth: false,
+    );
   }
 
   // ---------- PROFIL / ME ----------
@@ -296,6 +338,11 @@ class AuthUserService {
 // ---------- DTO résultat de login ----------
 class LoginResult {
   final String token;
+  final String? refreshToken;
   final Utilisateur user;
-  LoginResult({required this.token, required this.user});
+  LoginResult({
+    required this.token,
+    required this.refreshToken,
+    required this.user,
+  });
 }

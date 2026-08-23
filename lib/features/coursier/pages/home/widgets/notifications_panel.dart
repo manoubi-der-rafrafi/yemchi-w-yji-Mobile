@@ -128,6 +128,14 @@ class _CommandeSelectionCardState extends State<_CommandeSelectionCard> {
       });
       return;
     }
+    if (widget.commande.isB2c) {
+      if (!mounted) return;
+      setState(() {
+        _client = null;
+        _isClientLoading = false;
+      });
+      return;
+    }
     final clientId = widget.commande.clientId;
     if (clientId == null || clientId.isEmpty) {
       if (!mounted) return;
@@ -619,6 +627,7 @@ class _ClientInfos extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isB2c = commande.isB2c && contactOverride == null;
     final parts =
         [user?.prenom, user?.nom]
             .whereType<String>()
@@ -628,6 +637,8 @@ class _ClientInfos extends StatelessWidget {
     final fullName =
         contactOverride?.displayName.trim().isNotEmpty == true
             ? contactOverride!.displayName.trim()
+            : isB2c
+            ? (commande.partenaireDisplayName ?? 'E-commerce')
             : (parts.isNotEmpty ? parts.join(' ') : 'Utilisateur inconnu');
 
     final telDepart = _fallback(
@@ -639,7 +650,10 @@ class _ClientInfos extends StatelessWidget {
       'Numero arrivee indisponible',
     );
 
-    final imageUrl = (contactOverride?.imageUrl ?? user?.image)?.trim();
+    final imageUrl =
+        (contactOverride?.imageUrl ??
+                (isB2c ? commande.partenaireLogoUrl : user?.image))
+            ?.trim();
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
 
     final avatar = Container(
@@ -667,14 +681,19 @@ class _ClientInfos extends StatelessWidget {
                     color: theme.colorScheme.primary,
                   ),
                 )
-                : Icon(Icons.person, color: theme.colorScheme.primary),
+                : Icon(
+                  isB2c ? Icons.storefront : Icons.person,
+                  color: theme.colorScheme.primary,
+                ),
       ),
     );
 
     final statusColor =
         contactOverride != null
             ? (contactOverride!.isActive ? Colors.green : Colors.redAccent)
-            : (user?.statut == Statut.actif ? Colors.green : Colors.redAccent);
+            : isB2c || user?.statut == Statut.actif
+            ? Colors.green
+            : Colors.redAccent;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,

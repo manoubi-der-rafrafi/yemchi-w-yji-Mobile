@@ -10,6 +10,7 @@ import 'package:yemchi_wyji/core/storage/token_storage.dart';
 class Api {
   Api({http.Client? client}) : _client = client ?? http.Client();
   final http.Client _client;
+  static Future<bool>? _refreshInFlight;
 
   Uri _u(String path) => Uri.parse('${Env.baseUrl}$path');
 
@@ -22,6 +23,7 @@ class Api {
     final headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'X-Client-Type': 'mobile',
     };
     if (includeAuth && token != null && token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
@@ -32,9 +34,10 @@ class Api {
   Future<http.Response> get(String path, {bool includeAuth = true}) async {
     final uri = _u(path);
     _log('REQ GET $uri includeAuth=$includeAuth');
-    final r = await _execute(
+    final r = await _sendWithRefresh(
       'GET',
       uri,
+      includeAuth,
       () async =>
           _client.get(uri, headers: await _headers(includeAuth: includeAuth)),
     );
@@ -46,16 +49,21 @@ class Api {
   Future<http.Response> post(
     String path, {
     Object? body,
+    Map<String, String>? extraHeaders,
     bool includeAuth = true,
   }) async {
     final uri = _u(path);
     _log('REQ POST $uri includeAuth=$includeAuth body=${_safeBody(body)}');
-    final r = await _execute(
+    final r = await _sendWithRefresh(
       'POST',
       uri,
+      includeAuth,
       () async => _client.post(
         uri,
-        headers: await _headers(includeAuth: includeAuth),
+        headers: {
+          ...await _headers(includeAuth: includeAuth),
+          ...?extraHeaders,
+        },
         body: body,
       ),
     );
@@ -71,9 +79,10 @@ class Api {
   }) async {
     final uri = _u(path);
     _log('REQ PUT $uri includeAuth=$includeAuth body=${_safeBody(body)}');
-    final r = await _execute(
+    final r = await _sendWithRefresh(
       'PUT',
       uri,
+      includeAuth,
       () async => _client.put(
         uri,
         headers: await _headers(includeAuth: includeAuth),
@@ -88,9 +97,10 @@ class Api {
   Future<http.Response> delete(String path, {bool includeAuth = true}) async {
     final uri = _u(path);
     _log('REQ DELETE $uri includeAuth=$includeAuth');
-    final r = await _execute(
+    final r = await _sendWithRefresh(
       'DELETE',
       uri,
+      includeAuth,
       () async => _client.delete(
         uri,
         headers: await _headers(includeAuth: includeAuth),
@@ -108,9 +118,10 @@ class Api {
   }) async {
     final uri = _u(path);
     _log('REQ PATCH $uri includeAuth=$includeAuth body=${_safeBody(body)}');
-    final r = await _execute(
+    final r = await _sendWithRefresh(
       'PATCH',
       uri,
+      includeAuth,
       () async => _client.patch(
         uri,
         headers: await _headers(includeAuth: includeAuth),
@@ -159,6 +170,83 @@ class Api {
       );
       rethrow;
     }
+  }
+
+  Future<http.Response> _sendWithRefresh(
+    String method,
+    Uri uri,
+    bool includeAuth,
+    Future<http.Response> Function() request,
+  ) async {
+    if (includeAuth &&
+        await TokenStorage.isAccessExpired() &&
+        await TokenStorage.hasRefresh()) {
+      await _refreshAccessToken();
+    }
+
+    var response = await _execute(method, uri, request);
+    if (includeAuth &&
+        response.statusCode == 401 &&
+        await _refreshAccessToken()) {
+      response = await _execute(method, uri, request);
+    }
+    return response;
+  }
+
+  Future<bool> _refreshAccessToken() {
+    final current = _refreshInFlight;
+    if (current != null) return current;
+    final operation = _performRefresh();
+    _refreshInFlight = operation;
+    operation.whenComplete(() {
+      if (identical(_refreshInFlight, operation)) _refreshInFlight = null;
+    });
+    return operation;
+  }
+
+  Future<bool> _performRefresh() async {
+    final refreshToken = await TokenStorage.refresh();
+    if (refreshToken == null || refreshToken.isEmpty) return false;
+    try {
+      final response = await _client.post(
+        _u('/auth/refresh'),
+        headers: await _headers(includeAuth: false),
+        body: json.encode({'refreshToken': refreshToken}),
+      );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        if (response.statusCode == 400 || response.statusCode == 401) {
+          await TokenStorage.clear();
+        }
+        return false;
+      }
+      final data = json.decode(response.body) as Map<String, dynamic>;
+      final access =
+          data['token']?.toString() ?? data['accessToken']?.toString();
+      final rotatedRefresh = data['refreshToken']?.toString();
+      if (access == null ||
+          access.isEmpty ||
+          rotatedRefresh == null ||
+          rotatedRefresh.isEmpty) {
+        await TokenStorage.clear();
+        return false;
+      }
+      await TokenStorage.save(
+        access: access,
+        refresh: rotatedRefresh,
+        userId: await TokenStorage.userId(),
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<String?> authenticatedAccessToken() async {
+    if (await TokenStorage.isAccessExpired() &&
+        await TokenStorage.hasRefresh()) {
+      await _refreshAccessToken();
+    }
+    return TokenStorage.access();
   }
 
   String _safeMsg(String body) {

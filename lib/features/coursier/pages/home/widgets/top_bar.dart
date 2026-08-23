@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:yemchi_wyji/core/network/api.dart';
 import 'package:yemchi_wyji/features/auth/controllers/auth_controller.dart';
 import 'package:yemchi_wyji/features/commande/data/commande_service.dart';
+import 'package:yemchi_wyji/features/coursier/pages/home/pages/mes_gains_page.dart';
 import '../controllers/home_controller.dart';
 
 class TopBar extends StatelessWidget {
@@ -25,14 +26,44 @@ class TopBar extends StatelessWidget {
               shape: const CircleBorder(),
               elevation: 1,
               child: Builder(
-                builder: (ctx) => IconButton(
-                  icon: const Icon(Icons.menu),
-                  onPressed: () => Scaffold.of(ctx).openDrawer(),
-                ),
+                builder:
+                    (ctx) => IconButton(
+                      icon: const Icon(Icons.menu),
+                      onPressed: () => Scaffold.of(ctx).openDrawer(),
+                    ),
               ),
             ),
             const SizedBox(width: 12),
-            if (ctrl.canResetCurrentIncident)
+            if (ctrl.isFinanciallyBlocked)
+              Expanded(
+                child: InkWell(
+                  onTap:
+                      () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const MesGainsPage()),
+                      ),
+                  borderRadius: BorderRadius.circular(18),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade700,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Text(
+                      'Nouvelles commandes bloquees · paiement restant ${ctrl.statutFinancier?.paiementRestant.toStringAsFixed(3) ?? '0.000'} DT',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            else if (ctrl.canResetCurrentIncident)
               Expanded(
                 child: FilledButton(
                   onPressed: () async {
@@ -96,20 +127,23 @@ class TopBar extends StatelessWidget {
                       const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                     ),
                     backgroundColor: MaterialStateProperty.resolveWith(
-                      (states) => states.contains(MaterialState.selected)
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.white,
+                      (states) =>
+                          states.contains(MaterialState.selected)
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.white,
                     ),
                     foregroundColor: MaterialStateProperty.resolveWith(
-                      (states) => states.contains(MaterialState.selected)
-                          ? Theme.of(context).colorScheme.onPrimary
-                          : Theme.of(context).colorScheme.onSurface,
+                      (states) =>
+                          states.contains(MaterialState.selected)
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : Theme.of(context).colorScheme.onSurface,
                     ),
                     side: MaterialStateProperty.resolveWith(
                       (states) => BorderSide(
-                        color: states.contains(MaterialState.selected)
-                            ? Theme.of(context).colorScheme.primary
-                            : Colors.transparent,
+                        color:
+                            states.contains(MaterialState.selected)
+                                ? Theme.of(context).colorScheme.primary
+                                : Colors.transparent,
                       ),
                     ),
                     shape: MaterialStateProperty.all(
